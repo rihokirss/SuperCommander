@@ -1,0 +1,20 @@
+[package]
+name = "supercommander"
+version = "0.1.0"
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+commander-core = { path = "../crates/core" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+notify = "8"
+open = "5"
+anyhow = "1"
+
+[target.'cfg(windows)'.dependencies]
+window-vibrancy = "0.6"

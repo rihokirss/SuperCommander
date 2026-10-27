@@ -1,0 +1,444 @@
+// Run with Windows Node against a SuperCommander WebView2 test instance.
+// Set WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9223
+// on that process only. Every file operation below targets a new temporary folder.
+import { chromium, expect } from "@playwright/test";
+import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+assert.equal(
+  process.platform,
+  "win32",
+  "Run this smoke test with Windows Node.",
+);
+const temp = await fs.mkdtemp(path.join(os.tmpdir(), "SuperCommander-smoke-"));
+const src = path.join(temp, "Source"),
+  dst = path.join(temp, "Destination");
+await fs.mkdir(src);
+await fs.mkdir(dst);
+await fs.writeFile(path.join(src, "Õunad.txt"), "Tere, maailm!");
+await fs.writeFile(path.join(src, "move-me.txt"), "move payload");
+await fs.writeFile(
+  path.join(src, "preview.html"),
+  "<script>window.SC_UNSAFE=true</script>",
+);
+await fs.writeFile(
+  path.join(src, "pixel.png"),
+  Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jNAAAAABJRU5ErkJggg==",
+    "base64",
+  ),
+);
+function pdf() {
+  const text = "BT /F1 18 Tf 50 700 Td (SuperCommander PDF preview) Tj ET";
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    `<< /Length ${text.length} >>\nstream\n${text}\nendstream`,
+  ];
+  let out = "%PDF-1.4\n";
+  const offsets = [0];
+  for (let i = 0; i < objects.length; i++) {
+    offsets.push(Buffer.byteLength(out));
+    out += `${i + 1} 0 obj\n${objects[i]}\nendobj\n`;
+  }
+  const start = Buffer.byteLength(out);
+  out += `xref\n0 6\n0000000000 65535 f \n${offsets
+    .slice(1)
+    .map((n) => String(n).padStart(10, "0") + " 00000 n \n")
+    .join("")}trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${start}\n%%EOF`;
+  return out;
+}
+await fs.writeFile(path.join(src, "test.pdf"), pdf());
+const browser = await chromium.connectOverCDP(
+  process.env.SC_CDP_URL || "http://127.0.0.1:9223",
+);
+const context = browser.contexts()[0];
+const page =
+  context.pages().find((p) => p.url().includes("tauri.localhost")) ||
+  context.pages()[0];
+const pageErrors = [];
+page.on("pageerror", (e) => pageErrors.push(e.message));
+const rpc = (command, args = {}) =>
+  page.evaluate(
+    ({ command, args }) => window.__TAURI_INTERNALS__.invoke(command, args),
+    { command, args },
+  );
+const originalSettings = (await rpc("bootstrap")).settings;
+async function choose(label, option) {
+  await page.getByRole("combobox", { name: label, exact: true }).click();
+  await page.getByRole("option", { name: option, exact: true }).click();
+}
+async function navigate(index, value) {
+  const pane = page.locator(`[data-pane="${index}"]`);
+  await pane.locator(".breadcrumbs").click();
+  await pane.locator(".path-form input").fill(value);
+  await pane.locator(".path-form input").press("Enter");
+  await expect(pane.locator(".breadcrumbs")).toHaveAttribute("title", value);
+  return pane;
+}
+async function finished(count) {
+  await expect(page.locator(".job-row.completed")).toHaveCount(count, {
+    timeout: 20000,
+  });
+  assert.equal(
+    await page.locator(".job-row.failed").count(),
+    0,
+    await page.locator(".queue-scroll").innerText(),
+  );
+}
+let completed = 0;
+try {
+  await page.reload();
+  await expect(page.locator(".app-shell")).toBeVisible({ timeout: 20000 });
+  // Keep the interaction assertions independent of the user's Windows language.
+  const settingsButton = page.locator(".toolbar-right .icon-button").last();
+  await settingsButton.click();
+  await page.getByRole("combobox", { name: /^(Language|Keel)$/ }).click();
+  await page.getByRole("option", { name: "English", exact: true }).click();
+  await choose("Row spacing", "Compact");
+  await page.keyboard.press("Escape");
+  const left = await navigate(0, src);
+  const right = await navigate(1, dst);
+  await expect(left.getByText("Õunad.txt", { exact: true })).toBeVisible();
+  assert.equal(await left.locator(".pane-error").count(), 0);
+  console.log("PASS native bootstrap, streamed listing, Unicode paths");
+  await left.getByRole("grid").focus();
+  await page.keyboard.press("Home");
+  await page.keyboard.press("ArrowDown");
+  const firstName = await left
+    .locator(".file-row:not(.parent-entry)")
+    .first()
+    .locator(".file-name")
+    .innerText();
+  await page.keyboard.press("Insert");
+  await expect(left.locator(".file-row.selected")).toHaveCount(1);
+  await expect(left.locator(".file-row.selected")).toContainText(firstName);
+  await expect(left.locator(".file-row.focused")).not.toContainText(firstName);
+  assert.equal(
+    (await left.locator(".file-row").first().boundingBox()).height,
+    32,
+  );
+  console.log(
+    "PASS MC Insert advances without losing marks; compact 32px rows",
+  );
+
+  await left.getByText("Õunad.txt", { exact: true }).click();
+  await page.keyboard.press("F5");
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Copy", exact: true })
+    .click();
+  await finished(++completed);
+  assert.equal(
+    await fs.readFile(path.join(dst, "Õunad.txt"), "utf8"),
+    "Tere, maailm!",
+  );
+  console.log("PASS copy through UI and real Rust IPC");
+  await fs.writeFile(path.join(src, "drag-me.txt"), "drag payload");
+  const dragRow = left.getByText("drag-me.txt", { exact: true });
+  await expect(dragRow).toBeVisible();
+  const dragBounds = await dragRow.boundingBox();
+  const dropBounds = await right.locator(".file-scroll").boundingBox();
+  await page.mouse.move(dragBounds.x + 5, dragBounds.y + 5);
+  await page.mouse.down();
+  await page.mouse.move(dropBounds.x + 80, dropBounds.y + 80, { steps: 12 });
+  await page.mouse.up();
+  await finished(++completed);
+  assert.equal(
+    await fs.readFile(path.join(dst, "drag-me.txt"), "utf8"),
+    "drag payload",
+  );
+  console.log("PASS native pointer drag between panes");
+
+  await left.getByText("move-me.txt", { exact: true }).click();
+  await page.keyboard.press("F6");
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Move", exact: true })
+    .click();
+  await finished(++completed);
+  assert.equal(
+    await fs.readFile(path.join(dst, "move-me.txt"), "utf8"),
+    "move payload",
+  );
+  await assert.rejects(fs.stat(path.join(src, "move-me.txt")));
+  console.log("PASS safe cross-folder move");
+
+  await left.getByText("Õunad.txt", { exact: true }).click();
+  await page.keyboard.press("F2");
+  await page
+    .getByRole("dialog")
+    .getByRole("textbox", { name: "New name" })
+    .fill("renamed.txt");
+  await expect(
+    page
+      .getByRole("dialog")
+      .getByRole("button", { name: "Apply", exact: true }),
+  ).toBeEnabled();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Apply", exact: true })
+    .click();
+  await expect(left.getByText("renamed.txt", { exact: true })).toBeVisible();
+  console.log("PASS rename preview and apply");
+
+  await left.getByText("preview.html", { exact: true }).click();
+  await page.keyboard.press("F3");
+  await expect(page.getByRole("dialog").locator("pre")).toContainText(
+    "<script>",
+  );
+  assert.equal(await page.evaluate(() => window.SC_UNSAFE), undefined);
+  await page.keyboard.press("Escape");
+  await left.getByText("pixel.png", { exact: true }).click();
+  await page.keyboard.press("F3");
+  await expect(
+    page.getByRole("dialog").locator(".preview-body>img"),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+  await left.getByText("test.pdf", { exact: true }).click();
+  await page.keyboard.press("F3");
+  await expect(page.getByRole("dialog").locator("canvas")).toBeVisible({
+    timeout: 20000,
+  });
+  await expect(page.getByRole("dialog").locator(".pdf-controls")).toContainText(
+    "1 / 1",
+  );
+  await page.keyboard.press("Escape");
+  console.log("PASS inert HTML, image and PDF previews");
+
+  await left.getByText("renamed.txt", { exact: true }).click();
+  await page.locator(".menu-anchor>button").click();
+  await page.getByRole("menuitem", { name: "Create ZIP", exact: true }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Create ZIP", exact: true })
+    .click();
+  await finished(++completed);
+  await expect(left.getByText("renamed.zip", { exact: true })).toBeVisible();
+  await left.getByText("renamed.zip", { exact: true }).click();
+  await page.locator(".menu-anchor>button").click();
+  await page
+    .getByRole("menuitem", { name: "Extract ZIP", exact: true })
+    .click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Extract ZIP", exact: true })
+    .click();
+  await finished(++completed);
+  assert.equal(
+    await fs.readFile(path.join(dst, "renamed.txt"), "utf8"),
+    "Tere, maailm!",
+  );
+  console.log("PASS ZIP creation and extraction");
+
+  await left.getByRole("grid").focus();
+  await page.keyboard.press("Control+f");
+  await page
+    .getByRole("dialog")
+    .getByRole("textbox", { name: "Filename contains" })
+    .fill("renamed");
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Search", exact: true })
+    .click();
+  await expect(page.getByRole("dialog").locator(".search-result")).toHaveCount(
+    2,
+  );
+  await page.keyboard.press("Escape");
+  console.log("PASS recursive filename search");
+
+  const fixtureFile = fileURLToPath(
+    new URL("../artifacts/sftp-fixture.json", import.meta.url),
+  );
+  let fixture;
+  try {
+    fixture = JSON.parse(await fs.readFile(fixtureFile, "utf8"));
+  } catch (e) {
+    if (e.code !== "ENOENT") throw e;
+  }
+  if (fixture) {
+    await right.locator(".breadcrumbs").click();
+    await right
+      .locator(".path-form input")
+      .fill(fixture.uri.replace("sftp://", "ssh://"));
+    await right.locator(".path-form input").press("Enter");
+    const dialog = page.getByRole("dialog");
+    await dialog
+      .getByLabel("SSH private key path (optional)", { exact: true })
+      .fill(fixture.keyPath);
+    await dialog.getByRole("button", { name: "Connect", exact: true }).click();
+    await expect(dialog.locator(".host-trust code")).toHaveText(
+      fixture.fingerprint,
+      { timeout: 20000 },
+    );
+    await dialog
+      .getByRole("button", { name: "Trust and connect", exact: true })
+      .click();
+    await expect(
+      right.getByText("remote-only.txt", { exact: true }),
+    ).toBeVisible({ timeout: 20000 });
+    await expect(left.locator(".breadcrumbs")).toHaveAttribute("title", src);
+    await expect(right.locator(".breadcrumbs")).toHaveAttribute(
+      "title",
+      fixture.uri,
+    );
+    await left.getByText("drag-me.txt", { exact: true }).click();
+    await page.keyboard.press("F5");
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: "Copy", exact: true })
+      .click();
+    await finished(++completed);
+    await expect(right.getByText("drag-me.txt", { exact: true })).toBeVisible();
+    await right.getByText("remote-only.txt", { exact: true }).click();
+    await page.keyboard.press("F5");
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: "Copy", exact: true })
+      .click();
+    await finished(++completed);
+    assert.equal(
+      await fs.readFile(path.join(src, "remote-only.txt"), "utf8"),
+      "A file from the SSH server",
+    );
+    await page.locator(".menu-anchor>button").click();
+    await page
+      .getByRole("menuitem", { name: "Disconnect", exact: true })
+      .click();
+    await expect(right.locator(".pane-context")).not.toContainText(
+      fixture.username + "@",
+    );
+    await navigate(1, dst);
+    console.log(
+      "PASS SSH path opens the requested panel; authenticated SFTP transfers in both directions",
+    );
+  }
+
+  await page
+    .locator(".queue-panel>header")
+    .getByRole("button", { name: "Close", exact: true })
+    .click();
+  await left.getByRole("grid").focus();
+  await page
+    .locator(".titlebar-tools")
+    .getByRole("button", { name: "Terminal", exact: true })
+    .click();
+  await expect(page.locator(".xterm-rows")).toContainText("PS ", {
+    timeout: 20000,
+  });
+  await page.locator(".xterm-helper-textarea").focus();
+  await page.keyboard.type("$v = 'SC_' + 'TERMINAL_OK'; Write-Output $v", {
+    delay: 5,
+  });
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".xterm-rows")).toContainText("SC_TERMINAL_OK", {
+    timeout: 20000,
+  });
+  await page
+    .locator(".terminal-panel>header")
+    .getByRole("button", { name: "Close", exact: true })
+    .click();
+  console.log("PASS real PowerShell via ConPTY");
+  await page.keyboard.press("Control+o");
+  await expect(page.locator(".terminal-fullscreen")).toBeVisible();
+  await expect(page.locator(".xterm-rows")).toContainText("PS ", {
+    timeout: 20000,
+  });
+  await page.locator(".xterm-helper-textarea").focus();
+  await page.keyboard.type("$scSession = 'SESSION_' + 'PRESERVED'", {
+    delay: 5,
+  });
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Control+o");
+  await expect(page.locator(".pane-layout")).toBeVisible();
+  await page.keyboard.press("Control+o");
+  await page.locator(".xterm-helper-textarea").focus();
+  await page.keyboard.type("Write-Output $scSession", { delay: 5 });
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".xterm-rows")).toContainText("SESSION_PRESERVED");
+  await page.keyboard.press("Control+o");
+  console.log(
+    "PASS Ctrl+O restores panels and preserves the live PowerShell session",
+  );
+
+  await left.getByText("renamed.txt", { exact: true }).click();
+  await page.keyboard.press("F8");
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Move to the Recycle Bin?", exact: true })
+    .click();
+  await finished(++completed);
+  await assert.rejects(fs.stat(path.join(src, "renamed.txt")));
+  console.log("PASS Windows Recycle Bin");
+  assert.ok(
+    (await page.locator(".job-row.completed").first().boundingBox()).height <=
+      34,
+  );
+  await page
+    .locator(".toolbar-right")
+    .getByRole("button", { name: "Settings", exact: true })
+    .click();
+  await choose("Theme", "Light");
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".app-shell")).toHaveAttribute(
+    "data-theme",
+    "light",
+  );
+  await expect(page.locator(".global-search")).toHaveCSS(
+    "color",
+    "rgb(109, 128, 157)",
+  );
+  console.log("PASS light theme and compact transfer rows");
+
+  const shot =
+    process.env.SC_SCREENSHOT ||
+    path.join(
+      path.dirname(fileURLToPath(import.meta.url)),
+      "..",
+      "artifacts",
+      "windows-smoke.png",
+    );
+  await fs.mkdir(path.dirname(shot), { recursive: true });
+  await page.screenshot({ path: shot });
+  console.log("SCREENSHOT", shot);
+  assert.deepEqual(pageErrors, []);
+  console.log("PASS no WebView JavaScript errors");
+  console.log("WINDOWS SMOKE PASSED");
+} finally {
+  await page.keyboard.press("Escape").catch(() => {});
+  if (await page.locator(".terminal-panel").count()) {
+    if (!(await page.locator(".terminal-panel").isVisible()))
+      await page
+        .locator(".titlebar-tools")
+        .getByRole("button", { name: "Terminal", exact: true })
+        .click();
+    await page
+      .locator(".terminal-panel>header")
+      .getByRole("button", { name: "Close", exact: true })
+      .click()
+      .catch(() => {});
+  }
+  // Navigate away before removing this test's exact temporary directory.
+  const bootstrap = await rpc("bootstrap").catch(() => null);
+  if (bootstrap) {
+    await navigate(0, bootstrap.home).catch(() => {});
+    await navigate(1, bootstrap.home).catch(() => {});
+  }
+  if (originalSettings) {
+    await rpc("save_settings", { value: originalSettings });
+    await page.reload();
+    await expect(page.locator(".app-shell")).toBeVisible();
+  }
+  await browser.close();
+  await fs.rm(temp, {
+    recursive: true,
+    force: true,
+    maxRetries: 10,
+    retryDelay: 200,
+  });
+}

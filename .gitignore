@@ -1,0 +1,14 @@
+node_modules/
+dist/
+target/
+test-results/
+playwright-report/
+*.log
+.env
+.xwin-cache/
+tsconfig.tsbuildinfo
+artifacts/
+src-tauri/gen/
+src-tauri/icons/android/
+src-tauri/icons/ios/
+src-tauri/icons/icon.icns

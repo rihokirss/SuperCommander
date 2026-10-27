@@ -1,0 +1,265 @@
+/* Light surfaces share the same geometry and restrained glass as the dark theme. */
+.app-shell[data-theme="light"] {
+  color-scheme: light;
+  --text: #43516a;
+  --bright: #1a2942;
+  --muted: #697b95;
+  --accent: #5672bc;
+  --line: #52688720;
+  --hover: #4d6b9c0b;
+  --panel: #ffffff85;
+  --glass: #f4f7fcbd;
+  color: var(--text);
+  background: linear-gradient(118deg, #ecf1f9ed, #f5f7fbe8 48%, #eaf0f8ed);
+}
+.app-shell[data-theme="light"].opaque {
+  --glass: #f3f6fb;
+  --panel: #fff;
+  background: #edf2f8;
+}
+.app-shell[data-theme="light"] .ambient {
+  opacity: 0.1;
+}
+.app-shell[data-theme="light"] .sidebar {
+  background: linear-gradient(150deg, #e1e9f580, #edf2f850);
+}
+.app-shell[data-theme="light"] input:not([type="checkbox"]),
+.app-shell[data-theme="light"] select {
+  background: #ffffff9c;
+  color: var(--bright);
+}
+.app-shell[data-theme="light"] .brand strong span,
+.app-shell[data-theme="light"] .workspace-label strong,
+.app-shell[data-theme="light"] .pane-tab.selected,
+.app-shell[data-theme="light"] .breadcrumbs,
+.app-shell[data-theme="light"] .file-row,
+.app-shell[data-theme="light"] .modal-heading h2,
+.app-shell[data-theme="light"] .job-main strong,
+.app-shell[data-theme="light"] .queue-empty strong,
+.app-shell[data-theme="light"] .host-trust h3,
+.app-shell[data-theme="light"] .search-result strong {
+  color: #344663;
+}
+.app-shell[data-theme="light"] .sidebar-item,
+.app-shell[data-theme="light"] .icon-button,
+.app-shell[data-theme="light"] .sidebar-item > svg,
+.app-shell[data-theme="light"] .global-search svg,
+.app-shell[data-theme="light"] .window-controls button,
+.app-shell[data-theme="light"] .palette-list button,
+.app-shell[data-theme="light"] .field,
+.app-shell[data-theme="light"] .checkbox-row label,
+.app-shell[data-theme="light"] .check-label,
+.app-shell[data-theme="light"] .shortcut-grid > div,
+.app-shell[data-theme="light"] .queue-panel > header,
+.app-shell[data-theme="light"] .terminal-panel > header,
+.app-shell[data-theme="light"] .pdf-controls,
+.app-shell[data-theme="light"] .terminal-notice,
+.app-shell[data-theme="light"] .job-main strong span,
+.app-shell[data-theme="light"] .file-size,
+.app-shell[data-theme="light"] .file-date,
+.app-shell[data-theme="light"] .file-type {
+  color: #5e7392;
+}
+.app-shell[data-theme="light"] .sidebar-group h2,
+.app-shell[data-theme="light"] .sidebar-item.muted,
+.app-shell[data-theme="light"] .drive-item small,
+.app-shell[data-theme="light"] .local-status,
+.app-shell[data-theme="light"] .breadcrumbs > span > span:not(:last-child),
+.app-shell[data-theme="light"] .pane-context > span,
+.app-shell[data-theme="light"] .folder-filter,
+.app-shell[data-theme="light"] .list-columns button,
+.app-shell[data-theme="light"] .pane-footer,
+.app-shell[data-theme="light"] .shortcut-bar > button,
+.app-shell[data-theme="light"] .statusbar,
+.app-shell[data-theme="light"] .statusbar button,
+.app-shell[data-theme="light"] .modal-heading p,
+.app-shell[data-theme="light"] .helper,
+.app-shell[data-theme="light"] .selection-summary small,
+.app-shell[data-theme="light"] .setting-row small,
+.app-shell[data-theme="light"] .search-result small,
+.app-shell[data-theme="light"] .search-summary,
+.app-shell[data-theme="light"] .empty-state p,
+.app-shell[data-theme="light"] .empty-state h3,
+.app-shell[data-theme="light"] .job-main small,
+.app-shell[data-theme="light"] .queue-panel > header small,
+.app-shell[data-theme="light"] .terminal-panel > header small,
+.app-shell[data-theme="light"] .text-button,
+.app-shell[data-theme="light"] .queue-empty p,
+.app-shell[data-theme="light"] .host-trust p,
+.app-shell[data-theme="light"] .conflict-actions label {
+  color: #6d7f99;
+}
+.app-shell[data-theme="light"] .sidebar-item.active {
+  color: #3f5e9e;
+  background: linear-gradient(90deg, #6b89c51b, #6b89c508);
+}
+.app-shell[data-theme="light"] .sidebar-item.active > svg,
+.app-shell[data-theme="light"] .pressed {
+  color: #4164a6 !important;
+}
+.app-shell[data-theme="light"] .workspace-mark {
+  color: #5d77af;
+  background: #6e8bc511;
+  border-color: #617fab25;
+}
+.app-shell[data-theme="light"] .version-pill,
+.app-shell[data-theme="light"] .pane-indicator {
+  color: #6c81a1;
+  border-color: var(--line);
+}
+.app-shell[data-theme="light"] .file-pane {
+  border-color: #617a9e25;
+}
+.app-shell[data-theme="light"] .file-pane.active {
+  border-color: #6d89b84c;
+}
+.app-shell[data-theme="light"] .file-row.selected {
+  background: #6d8cc31b;
+}
+.app-shell[data-theme="light"] .file-row.selected .file-name {
+  color: #284d89;
+}
+.app-shell[data-theme="light"] .file-row:hover {
+  background: #6784b009;
+}
+.app-shell[data-theme="light"] .file-icon.folder {
+  color: #6b89bb;
+}
+.app-shell[data-theme="light"] .file-icon.text {
+  color: #758aa6;
+}
+.app-shell[data-theme="light"] .file-icon.pdf {
+  color: #af747e;
+}
+.app-shell[data-theme="light"] .file-icon.code,
+.app-shell[data-theme="light"] .file-icon.sheet {
+  color: #608e84;
+}
+.app-shell[data-theme="light"] .file-icon.image,
+.app-shell[data-theme="light"] .file-icon.audio,
+.app-shell[data-theme="light"] .file-icon.video {
+  color: #8a7bad;
+}
+.app-shell[data-theme="light"] .file-icon.archive {
+  color: #9f8c61;
+}
+.app-shell[data-theme="light"] .file-check {
+  color: #fff;
+}
+.app-shell[data-theme="light"] .file-check.checked {
+  background: #7390c7;
+  border-color: #7390c7;
+}
+.app-shell[data-theme="light"] .global-search {
+  background: #ffffff70;
+  border-color: #617a9e22;
+  color: #6d809d;
+}
+.app-shell[data-theme="light"] .folder-filter input {
+  background: none;
+  color: #536b90;
+}
+.app-shell[data-theme="light"] .folder-filter input::placeholder {
+  color: #7a8ca6;
+}
+.app-shell[data-theme="light"] .shortcut-bar kbd {
+  background: #fff8;
+  color: #506b92;
+  border-color: var(--line);
+}
+.app-shell[data-theme="light"] .statusbar {
+  background: #e5edf85c;
+}
+.app-shell[data-theme="light"] .modal-overlay {
+  background: #31456535;
+}
+.app-shell[data-theme="light"] .modal {
+  background: linear-gradient(145deg, #fbfcfff5, #eef3fbf5);
+  border-color: #687fa33b;
+  box-shadow: 0 25px 100px #31456522;
+}
+.app-shell[data-theme="light"] .dropdown-menu {
+  background: #f5f8ffed;
+  border-color: var(--line);
+  box-shadow: 0 12px 36px #3145651a;
+  color: #506b92;
+}
+.app-shell[data-theme="light"] .primary {
+  background: #6987c41b;
+  color: #355a9f;
+  border-color: #6987c440;
+}
+.app-shell[data-theme="light"] .primary:hover {
+  background: #6987c42b;
+}
+.app-shell[data-theme="light"] .danger-button,
+.app-shell[data-theme="light"] .text-danger,
+.app-shell[data-theme="light"] .inline-error,
+.app-shell[data-theme="light"] .deletion-note.danger,
+.app-shell[data-theme="light"] .rename-preview .invalid span:nth-child(2) {
+  color: #a34558 !important;
+}
+.app-shell[data-theme="light"] .selection-summary,
+.app-shell[data-theme="light"] .search-input-row,
+.app-shell[data-theme="light"] .palette-search,
+.app-shell[data-theme="light"] .host-trust code {
+  background: #647fa909;
+}
+.app-shell[data-theme="light"] .search-input-row > input,
+.app-shell[data-theme="light"] .palette-search input {
+  background: none;
+}
+.app-shell[data-theme="light"] .rename-preview span:nth-child(2),
+.app-shell[data-theme="light"] .transfer-route,
+.app-shell[data-theme="light"] .deletion-note,
+.app-shell[data-theme="light"] .conflict-actions code,
+.app-shell[data-theme="light"] .host-trust code,
+.app-shell[data-theme="light"] .preview-body pre {
+  color: #496587;
+}
+.app-shell[data-theme="light"] .preview-body pre {
+  background: #617fab08;
+}
+.app-shell[data-theme="light"] .rename-preview .rename-heading,
+.app-shell[data-theme="light"] .settings-section h3 {
+  color: #6c83a5;
+}
+.app-shell[data-theme="light"] .palette-list .highlighted {
+  color: #355a9f;
+  background: #6987c41b;
+}
+.app-shell[data-theme="light"] .queue-panel,
+.app-shell[data-theme="light"] .terminal-panel {
+  background: #f7faffb3;
+}
+.app-shell[data-theme="light"] .job-row.completed > svg {
+  color: #548f80;
+}
+.app-shell[data-theme="light"] .job-row.failed > svg {
+  color: #b76e7e;
+}
+.app-shell[data-theme="light"] .job-row.conflict > svg {
+  color: #a78b50;
+}
+.app-shell[data-theme="light"] .progress-track {
+  background: #6c88b51a;
+}
+.app-shell[data-theme="light"] .progress-track > span {
+  background: #7b96c5;
+}
+.app-shell[data-theme="light"] .toast {
+  background: #eff4ffed;
+  border-color: #6d88b43b;
+  color: #405d86;
+  box-shadow: 0 12px 50px #31456522;
+}
+.app-shell[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background: #4b607d2a;
+}
+.app-shell[data-theme="light"] .ssh-config-editor {
+  background: #ffffff90;
+  color: #405774;
+}
+.app-shell[data-theme="light"] .config-warnings {
+  color: #8d764c;
+}
