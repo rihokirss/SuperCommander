@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { version } from "../package.json";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   ArrowDownToLine,
@@ -105,6 +106,7 @@ export function App() {
   const snapshots = useRef<PaneSnapshot[]>([emptySnapshot, emptySnapshot]);
   const remoteHomes = useRef(new Map<string, string>());
   const [catalog, setCatalog] = useState<SshCatalog>();
+  const [sessions, setSessions] = useState<SftpProfile[]>([]);
   const catalogRef = useRef(catalog);
   catalogRef.current = catalog;
   const stateRef = useRef(settings);
@@ -832,11 +834,8 @@ export function App() {
     path: string,
     destination?: { pane: number; path: string },
   ) {
+    setSessions((old) => [...old.filter((p) => p.id !== profile.id), profile]);
     update({
-      profiles: [
-        ...settings!.profiles.filter((p) => p.id !== profile.id),
-        profile,
-      ],
       trustedHosts: {
         ...settings!.trustedHosts,
         [`${profile.host}:${profile.port}`]: fingerprint,
@@ -848,6 +847,39 @@ export function App() {
       destination?.pane ?? activeRef.current,
     );
     notify(t.connectionSaved);
+  }
+  async function saveProfile(
+    profile: SftpProfile,
+    secret: string,
+    revision: string | null | undefined,
+  ) {
+    const current =
+      catalogRef.current || (await api.readSshCatalog(settings?.sshConfigPath));
+    const value = await api.command<SshCatalog>("save_ssh_host", {
+      path: current.path,
+      alias: profile.name || profile.host,
+      profile,
+      revision: revision === undefined ? current.revision : revision,
+    });
+    setCatalog(value);
+    const entry = value.hosts.find(
+      (h) =>
+        h.alias.toLowerCase() === (profile.name || profile.host).toLowerCase(),
+    );
+    if (!entry) throw new Error("Saved SSH alias could not be loaded");
+    update({
+      sshConfigPath: value.path,
+      profiles: settings!.profiles.filter((p) => p.id !== profile.id),
+    });
+    await api.command("save_connection_secret", {
+      id: entry.profile.id,
+      secret,
+      remember: profile.saveSecret,
+    });
+    return {
+      profile: { ...entry.profile, saveSecret: profile.saveSecret },
+      revision: value.revision,
+    };
   }
   function forget(id: string) {
     api
@@ -1039,7 +1071,12 @@ export function App() {
                   <span>{host.alias}</span>
                 </button>
               ))}
-              {settings.profiles
+              {[
+                ...settings.profiles,
+                ...sessions.filter(
+                  (p) => !settings.profiles.some((old) => old.id === p.id),
+                ),
+              ]
                 .filter((p) => !p.id.startsWith("config-"))
                 .map((p) => (
                   <button
@@ -1100,6 +1137,11 @@ export function App() {
                   state={state}
                   active={active === index}
                   settings={settings}
+                  profiles={[
+                    ...sessions,
+                    ...(catalog?.hosts.map((h) => h.profile) || []),
+                    ...settings.profiles,
+                  ]}
                   t={t}
                   refresh={refresh}
                   activate={() => setActive(index)}
@@ -1257,7 +1299,7 @@ export function App() {
             {settings.language === "en" ? "EN" : "ET"}
           </button>
           <span className="status-divider" />
-          <span>v0.1.0</span>
+          <span>v{version}</span>
         </div>
       </footer>
       {toast && (
@@ -1316,6 +1358,8 @@ export function App() {
             connected(profile, fingerprint, path, dialog.destination)
           }
           onForget={forget}
+          configRevision={catalog?.revision}
+          onSaveProfile={saveProfile}
         />
       )}
       {dialog?.kind === "palette" && (

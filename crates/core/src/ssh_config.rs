@@ -371,7 +371,12 @@ pub fn save(path: &str, text: &str, expected_revision: Option<&str>) -> Result<C
         }
         if let Err(e) = fs::rename(&temp, target) {
             if original.is_some() {
-                let _ = fs::rename(&backup, target);
+                if let Err(restore) = fs::rename(&backup, target) {
+                    bail!(
+                        "{e}; original configuration is preserved at {}; restore failed: {restore}",
+                        backup.display()
+                    );
+                }
             }
             return Err(e.into());
         }
@@ -382,4 +387,134 @@ pub fn save(path: &str, text: &str, expected_revision: Option<&str>) -> Result<C
     }
     result?;
     read(Some(path))
+}
+
+pub fn upsert(
+    path: Option<&str>,
+    alias: &str,
+    profile: &SftpProfile,
+    expected_revision: Option<&str>,
+) -> Result<Catalog> {
+    if alias.is_empty()
+        || alias
+            .chars()
+            .any(|c| c.is_whitespace() || c.is_control() || "*?!#\"=/\\".contains(c))
+    {
+        bail!("An SSH alias must not contain spaces, wildcards or path separators");
+    }
+    if profile.host.trim().is_empty()
+        || profile.username.trim().is_empty()
+        || profile.port == 0
+        || [&profile.host, &profile.username, &profile.key_path]
+            .iter()
+            .any(|s| s.contains(['\n', '\r', '\0']))
+    {
+        bail!("A host, username and valid port are required");
+    }
+    let catalog = read(path)?;
+    if catalog.revision.as_deref() != expected_revision {
+        bail!("SSH configuration changed outside SuperCommander. Reload before saving.");
+    }
+    let newline = if catalog.text.contains("\r\n") {
+        "\r\n"
+    } else {
+        "\n"
+    };
+    let mut lines: Vec<String> = catalog.text.lines().map(str::to_owned).collect();
+    let mut block = None;
+    for (index, line) in lines.iter().enumerate() {
+        let values = tokens(line)?;
+        if values
+            .first()
+            .is_some_and(|v| v.eq_ignore_ascii_case("host"))
+            && values[1..].iter().any(|v| v.eq_ignore_ascii_case(alias))
+        {
+            if values.len() != 2 {
+                bail!("This Host block contains multiple aliases. Edit the shared block in the SSH catalog editor.");
+            }
+            let end = (index + 1..lines.len())
+                .find(|i| {
+                    tokens(&lines[*i]).ok().is_some_and(|v| {
+                        v.first().is_some_and(|k| {
+                            k.eq_ignore_ascii_case("host") || k.eq_ignore_ascii_case("match")
+                        })
+                    })
+                })
+                .unwrap_or(lines.len());
+            block = Some((index, end));
+            break;
+        }
+    }
+    if block.is_none()
+        && catalog
+            .hosts
+            .iter()
+            .any(|h| h.alias.eq_ignore_ascii_case(alias))
+    {
+        bail!(
+            "This alias is defined in an included file. Open that file in the SSH catalog editor."
+        );
+    }
+    let quote = |value: &str| format!("\"{}\"", value.replace('"', "\\\""));
+    let directives = [
+        ("hostname", "HostName", Some(quote(&profile.host))),
+        ("user", "User", Some(quote(&profile.username))),
+        ("port", "Port", Some(profile.port.to_string())),
+        (
+            "identityfile",
+            "IdentityFile",
+            (!profile.key_path.is_empty()).then(|| quote(&profile.key_path.replace('\\', "/"))),
+        ),
+    ];
+    if let Some((start, end)) = block {
+        let mut replaced = HashSet::new();
+        let mut content = vec![lines[start].clone()];
+        for line in &lines[start + 1..end] {
+            let values = tokens(line)?;
+            let key = values.first().map(|v| v.to_lowercase()).unwrap_or_default();
+            if let Some((_, name, value)) =
+                directives.iter().find(|(key_name, _, _)| *key_name == key)
+            {
+                if replaced.insert(key) {
+                    if let Some(value) = value {
+                        content.push(format!("    {name} {value}"));
+                    }
+                }
+                let mut quoted = false;
+                let mut previous = '\0';
+                for (index, c) in line.char_indices() {
+                    if c == '"' && previous != '\\' {
+                        quoted = !quoted;
+                    }
+                    if c == '#' && !quoted {
+                        content.push(format!("    {}", &line[index..]));
+                        break;
+                    }
+                    previous = c;
+                }
+            } else {
+                content.push(line.clone());
+            }
+        }
+        for (key, name, value) in &directives {
+            if !replaced.contains(*key) {
+                if let Some(value) = value {
+                    content.insert(1, format!("    {name} {value}"));
+                }
+            }
+        }
+        lines.splice(start..end, content);
+    } else {
+        let mut stanza = vec![format!("Host {alias}")];
+        for (_, name, value) in &directives {
+            if let Some(value) = value {
+                stanza.push(format!("    {name} {value}"));
+            }
+        }
+        stanza.push(String::new());
+        stanza.extend(lines);
+        lines = stanza;
+    }
+    let text = lines.join(newline) + newline;
+    save(&catalog.path, &text, catalog.revision.as_deref())
 }

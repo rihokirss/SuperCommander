@@ -33,7 +33,13 @@ import {
   sortEntries,
 } from "../utils";
 import { FileIcon, IconButton } from "./Primitives";
-import type { Entry, Location, PaneState, Settings } from "../types";
+import type {
+  Entry,
+  Location,
+  PaneState,
+  Settings,
+  SftpProfile,
+} from "../types";
 import type { Text } from "../i18n";
 import { formatRemoteAddress } from "../address";
 
@@ -47,6 +53,7 @@ type Props = {
   state: PaneState;
   active: boolean;
   settings: Settings;
+  profiles: SftpProfile[];
   t: Text;
   refresh: number;
   activate: () => void;
@@ -70,7 +77,7 @@ export function FilePane(p: Props) {
   const { t, state, settings } = p;
   const tab = state.tabs.find((x) => x.id === state.activeTab) || state.tabs[0];
   const { location } = tab;
-  const remoteProfile = settings.profiles.find(
+  const remoteProfile = p.profiles.find(
     (p) => `sftp:${p.id}` === location.source,
   );
   const displayPath = remoteProfile

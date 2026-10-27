@@ -25,8 +25,8 @@ fn resolves_aliases_defaults_quoted_identity_paths_and_includes() {
     assert_eq!(build.profile.username, "alice");
     assert_eq!(build.profile.port, 2222);
     assert_eq!(
-        build.profile.key_path,
-        dir.join("key with spaces").to_string_lossy()
+        fs::canonicalize(&build.profile.key_path).unwrap(),
+        fs::canonicalize(dir.join("key with spaces")).unwrap()
     );
     assert_eq!(catalog.hosts[2].profile.username, "included-user");
     assert!(catalog.hosts.iter().all(|h| !h.disabled));
@@ -126,4 +126,66 @@ fn creates_new_catalogs_only_when_saved() {
     )
     .unwrap();
     assert_eq!(saved.hosts[0].profile.host, "example.com");
+}
+
+#[test]
+fn connection_form_updates_the_same_stanza_without_losing_other_options() {
+    let tmp = TempDir::new().unwrap();
+    let config = tmp.path().join("config");
+    let original="# catalog comment\nHost work\n HostName old.example\n User old-user\n Port 22 # keep this note\n ServerAliveInterval 15\n\nHost other\n HostName other.example\n";
+    fs::write(&config, original).unwrap();
+    let before = ssh_config::read(config.to_str()).unwrap();
+    let mut profile = before.hosts[0].profile.clone();
+    profile.host = "new.example".into();
+    profile.port = 2222;
+    let after = ssh_config::upsert(
+        config.to_str(),
+        "work",
+        &profile,
+        before.revision.as_deref(),
+    )
+    .unwrap();
+    assert_eq!(after.hosts.len(), 2);
+    assert_eq!(after.hosts[0].profile.host, "new.example");
+    assert_eq!(after.hosts[0].profile.port, 2222);
+    assert!(after.text.contains("ServerAliveInterval 15"));
+    assert!(after.text.contains("# keep this note"));
+    assert!(after.text.contains("Host other\n HostName other.example"));
+    let again =
+        ssh_config::upsert(config.to_str(), "work", &profile, after.revision.as_deref()).unwrap();
+    assert_eq!(again.text.matches("Host work").count(), 1);
+}
+
+#[test]
+fn new_form_connections_precede_general_defaults_and_check_revisions() {
+    let tmp = TempDir::new().unwrap();
+    let config = tmp.path().join("config");
+    fs::write(&config, "Host *\n User fallback\n Port 22\n").unwrap();
+    let before = ssh_config::read(config.to_str()).unwrap();
+    let profile = commander_core::SftpProfile {
+        id: "form".into(),
+        name: "new-host".into(),
+        host: "example.com".into(),
+        port: 2222,
+        username: "alice".into(),
+        key_path: String::new(),
+        save_secret: false,
+    };
+    let after = ssh_config::upsert(
+        config.to_str(),
+        "new-host",
+        &profile,
+        before.revision.as_deref(),
+    )
+    .unwrap();
+    assert_eq!(after.hosts[0].profile.username, "alice");
+    assert_eq!(after.hosts[0].profile.port, 2222);
+    assert!(ssh_config::upsert(
+        config.to_str(),
+        "new-host",
+        &profile,
+        before.revision.as_deref()
+    )
+    .is_err());
+    assert_eq!(fs::read_to_string(config).unwrap(), after.text);
 }

@@ -52,7 +52,13 @@ WSL-is/Linuxis töölauarakenduse arendamiseks on vaja ka `build-essential pkg-c
 
 ## Andmed ja tööde käitumine
 
-Seaded, vahelehed, ühenduste profiilid ja järjehoidjad salvestatakse kasutaja seadete kausta `SuperCommander/settings.json`. Windowsis on see `%APPDATA%/SuperCommander/`. Eelmine seadistus säilib varukoopiana. Saladusi seadete faili ei kirjutata.
+Seaded, vahelehed, serverite usaldatud sõrmejäljed ja järjehoidjad salvestatakse kasutaja seadete kausta `SuperCommander/settings.json`. Windowsis on see `%APPDATA%/SuperCommander/`. Eelmine seadistus säilib varukoopiana. Saladusi seadete faili ei kirjutata.
+
+Salvestatud ühenduste kataloog on OpenSSH `%USERPROFILE%/.ssh/config`. Külgriba ühenduste pealkirja juures olev faili nupp avab konfiguratsiooni redaktori. Sealt saab valida ka teise konfiguratsioonifaili, näiteks WSL-i faili UNC-tee kaudu. Ühenduse vormi **Salvesta ühendus** lisab või uuendab sama `Host`-kirje `HostName`, `User`, `Port` ja `IdentityFile` välju. **Ühenda** avab ühenduse ka salvestamata. Uusi ühendusprofiile ei dubleerita rakenduse seadete faili. Varasema versiooni rakendusesisesed profiilid on loetavad ning vormist salvestades liiguvad SSH konfiguratsiooni.
+
+Toetatud on konkreetsed `Host`-aliased, üldised `Host`-mustrid, esimesena leitud väärtuse eelistamine, `Include`, kasutajanimi, port ja võtmetee. Windowsi OpenSSH agenti ning vaikimisi võtmefaile proovitakse, kui võtmetee puudub. `Match`, `ProxyJump` ja `ProxyCommand` säilivad tekstis, kuid neid nõudvad kirjed märgitakse kataloogis mittetoetatuks; väliseid konfiguratsioonikäske ei käivitata. Jagatud mitme aliasiga plokke ja kaasatud failides määratud aliaseid saab muuta tekstiredaktorist. Salvestamine säilitab varukoopia ning keeldub väliselt vahepeal muudetud faili üle kirjutamast.
+
+Avatud SSH-paneeli lisamenüüst **Pordisuunamine** loob sama SSH-seansi kaudu kohaliku TCP-tunneli. Kohalik port kuulab üksnes `127.0.0.1` aadressil; port `0` valib vaba pordi. Tunnelit saab peatada ning SSH-ühenduse sulgemine sulgeb ka selle tunnelid. Tunneli vead kuvatakse dialoogis. Need tunnelid kestavad aktiivse seansi jooksul ega muuda automaatselt SSH konfiguratsiooni `LocalForward` kirjeid.
 
 Failitoimingud käivad ühes järjekorras. Koopia kirjutatakse kõigepealt ajutisse `.part` faili. Asendamisel säilib vana fail kuni uue koopia valmimiseni. Teisaldamisel eemaldatakse lähtefail pärast edukat kopeerimist. Vahele jäetud või ebaõnnestunud kataloogikoopia korral jääb lähtekataloog alles. Katkestamine eemaldab pooleli oleva ajutise koopia, kuid juba lõpetatud faile tagasi ei võta. Ühe kustutatava kataloogi eemaldamine ei ole poole pealt katkestatav.
 
@@ -85,3 +91,5 @@ Windowsi tegeliku rakenduse suitsutest: käivita rakendus protsessipõhise keskk
 SSH-paneeli liidesetesti kaasamiseks käivita WSL-is enne suitsutesti `node scripts/sftp-fixture.mjs`. See loob ajutise OpenSSH-serveri, võtmed ja testfaili. Windowsi suitsutest kontrollib serveri sõrmejälge ning kopeerib faile kohalikust paneelist SSH-paneeli ja tagasi. Testserver peatatakse Ctrl+C-ga; selle võtmed ja testandmed eemaldatakse. Windowsi suitsutest taastab algsed seaded.
 
 CI-töövoog `.github/workflows/windows.yml` kontrollib ja ehitab Windows x64 paigaldaja. Avaldamine või koodiallkirjastamine pole automaatne.
+
+Avalik lähtekood: [rihokirss/SuperCommander](https://github.com/rihokirss/SuperCommander).

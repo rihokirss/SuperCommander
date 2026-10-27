@@ -107,6 +107,37 @@ try {
   await expect(left.getByText("Õunad.txt", { exact: true })).toBeVisible();
   assert.equal(await left.locator(".pane-error").count(), 0);
   console.log("PASS native bootstrap, streamed listing, Unicode paths");
+  const paging = path.join(src, "Paging");
+  await fs.mkdir(paging);
+  await Promise.all(
+    Array.from({ length: 200 }, (_, i) =>
+      fs.writeFile(
+        path.join(paging, `file-${String(i).padStart(3, "0")}.txt`),
+        "",
+      ),
+    ),
+  );
+  await navigate(0, paging);
+  await expect(left.locator(".parent-entry")).toBeVisible();
+  await left.getByRole("grid").focus();
+  await page.keyboard.press("Home");
+  await page.keyboard.press("PageDown");
+  const pageIndex = Number(
+    await left.locator(".file-row.focused").getAttribute("aria-rowindex"),
+  );
+  assert.ok(pageIndex > 3 && pageIndex < 200);
+  await page.keyboard.press("End");
+  await expect(left.locator(".file-row.focused")).toContainText("file-199.txt");
+  await page.keyboard.press("Home");
+  await expect(left.locator(".parent-entry")).toHaveClass(/focused/);
+  await expect
+    .poll(() => left.locator(".file-scroll").evaluate((e) => e.scrollTop))
+    .toBe(0);
+  await page.keyboard.press("Enter");
+  await expect(left.locator(".breadcrumbs")).toHaveAttribute("title", src);
+  console.log(
+    "PASS parent navigation and immediate Page Up/Down, Home/End in a virtualized 200-file folder",
+  );
   await left.getByRole("grid").focus();
   await page.keyboard.press("Home");
   await page.keyboard.press("ArrowDown");
@@ -262,15 +293,72 @@ try {
     if (e.code !== "ENOENT") throw e;
   }
   if (fixture) {
+    const sshConfig = path.join(temp, "config");
+    await fs.writeFile(
+      sshConfig,
+      `# preserved fixture comment\nHost sc-test\n    HostName 127.0.0.1\n    User ${fixture.username}\n    Port ${fixture.port}\n    IdentityFile "${fixture.keyPath.replaceAll("\\", "/")}"\n`,
+    );
+    await page
+      .getByRole("button", { name: "SSH connection catalog", exact: true })
+      .click();
+    let editor = page.getByRole("dialog");
+    await editor
+      .getByRole("textbox", { name: "SSH config file", exact: true })
+      .fill(sshConfig);
+    await editor.getByRole("button", { name: "Load", exact: true }).click();
+    await expect(
+      editor.getByRole("textbox", {
+        name: "SSH connection catalog",
+        exact: true,
+      }),
+    ).toHaveValue(/Host sc-test/);
+    const initial = await editor
+      .getByRole("textbox", { name: "SSH connection catalog", exact: true })
+      .inputValue();
+    await editor
+      .getByRole("textbox", { name: "SSH connection catalog", exact: true })
+      .fill(initial + "\n# edited in SuperCommander\n");
+    await editor
+      .getByRole("button", { name: "Save changes", exact: true })
+      .click();
+    await expect(
+      editor.getByRole("button", { name: "Save changes", exact: true }),
+    ).toBeDisabled();
+    await expect(
+      editor.getByRole("button", { name: "Use this catalog", exact: true }),
+    ).toBeEnabled();
+    assert.ok(
+      (await fs.readFile(sshConfig, "utf8")).includes(
+        "# edited in SuperCommander",
+      ),
+    );
+    assert.ok((await fs.readdir(temp)).some((name) => name.endsWith(".bak")));
+    await page.keyboard.press("Escape");
+    await expect(
+      page
+        .locator(".sidebar")
+        .getByRole("button", { name: "sc-test", exact: true }),
+    ).toBeVisible();
+    console.log(
+      "PASS SSH catalog editor saves only the temporary config and preserves a backup",
+    );
     await right.locator(".breadcrumbs").click();
     await right
       .locator(".path-form input")
       .fill(fixture.uri.replace("sftp://", "ssh://"));
     await right.locator(".path-form input").press("Enter");
     const dialog = page.getByRole("dialog");
+    await dialog.getByLabel("Connection name", { exact: true }).fill("sc-form");
     await dialog
       .getByLabel("SSH private key path (optional)", { exact: true })
       .fill(fixture.keyPath);
+    await dialog
+      .getByRole("button", { name: "Save connection", exact: true })
+      .click();
+    await expect(dialog).toContainText("Connection saved in SSH config");
+    const savedConfig = await fs.readFile(sshConfig, "utf8");
+    assert.equal(savedConfig.match(/^Host sc-form$/gm)?.length, 1);
+    assert.ok(savedConfig.includes("# preserved fixture comment"));
     await dialog.getByRole("button", { name: "Connect", exact: true }).click();
     await expect(dialog.locator(".host-trust code")).toHaveText(
       fixture.fingerprint,
@@ -286,6 +374,42 @@ try {
     await expect(right.locator(".breadcrumbs")).toHaveAttribute(
       "title",
       fixture.uri,
+    );
+    await right.locator(".breadcrumbs").click();
+    await right
+      .locator(".path-form input")
+      .fill(`ssh://sc-form${fixture.path}`);
+    await right.locator(".path-form input").press("Enter");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(
+      right.getByText("remote-only.txt", { exact: true }),
+    ).toBeVisible();
+    await page.locator(".menu-anchor>button").click();
+    await page
+      .getByRole("menuitem", { name: "Port forwarding", exact: true })
+      .click();
+    let forward = page.getByRole("dialog");
+    await forward
+      .getByLabel("Target port", { exact: true })
+      .fill(String(fixture.targetPort));
+    await forward
+      .getByRole("button", { name: "Create tunnel", exact: true })
+      .click();
+    await expect(forward.locator(".forward-row")).toHaveCount(1);
+    const localPort = Number(
+      await forward.locator(".forward-row").getAttribute("data-local-port"),
+    );
+    assert.equal(
+      await (
+        await fetch(`http://127.0.0.1:${localPort}/`, {
+          signal: AbortSignal.timeout(5000),
+        })
+      ).text(),
+      "SUPERCOMMANDER_TUNNEL_OK",
+    );
+    await page.keyboard.press("Escape");
+    console.log(
+      "PASS connection form uses SSH config as its only profile store; alias reuses the live SSH connection; localhost tunnel carries HTTP",
     );
     await left.getByText("drag-me.txt", { exact: true }).click();
     await page.keyboard.press("F5");
@@ -306,6 +430,19 @@ try {
       await fs.readFile(path.join(src, "remote-only.txt"), "utf8"),
       "A file from the SSH server",
     );
+    await page.locator(".menu-anchor>button").click();
+    await page
+      .getByRole("menuitem", { name: "Port forwarding", exact: true })
+      .click();
+    forward = page.getByRole("dialog");
+    await forward.getByRole("button", { name: "Stop", exact: true }).click();
+    await expect(forward.locator(".forward-row")).toHaveCount(0);
+    await assert.rejects(
+      fetch(`http://127.0.0.1:${localPort}/`, {
+        signal: AbortSignal.timeout(2000),
+      }),
+    );
+    await page.keyboard.press("Escape");
     await page.locator(".menu-anchor>button").click();
     await page
       .getByRole("menuitem", { name: "Disconnect", exact: true })

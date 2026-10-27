@@ -749,6 +749,8 @@ export function ConnectDialog({
   onClose,
   onConnected,
   onForget,
+  configRevision,
+  onSaveProfile,
 }: {
   profile?: SftpProfile;
   settings: Settings;
@@ -760,6 +762,12 @@ export function ConnectDialog({
     path: string,
   ) => void;
   onForget: (id: string) => void;
+  configRevision?: string | null;
+  onSaveProfile: (
+    profile: SftpProfile,
+    secret: string,
+    revision: string | null | undefined,
+  ) => Promise<{ profile: SftpProfile; revision: string | null }>;
 }) {
   const [value, setValue] = useState<SftpProfile>(
     profile || {
@@ -776,10 +784,28 @@ export function ConnectDialog({
   const [fingerprint, setFingerprint] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [saved, setSaved] = useState(false);
+  const revision = useRef(configRevision);
+  const secretTouched = useRef(false);
+  useEffect(() => {
+    if (!api.desktop) return;
+    let active = true;
+    api
+      .command<boolean>("has_connection_secret", { id: value.id })
+      .then((exists) => {
+        if (active && !secretTouched.current)
+          setValue((v) => ({ ...v, saveSecret: exists }));
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [value.id]);
   const known = settings.trustedHosts[`${value.host}:${value.port}`];
   function update(patch: Partial<SftpProfile>) {
     setValue((p) => ({ ...p, ...patch }));
     setFingerprint("");
+    setSaved(false);
   }
   async function connect(trust?: string) {
     setBusy(true);
@@ -833,6 +859,7 @@ export function ConnectDialog({
             placeholder="My server"
           />
         </label>
+        <p className="helper">{t.aliasHint}</p>
         <div className="form-grid host-grid">
           <label className="field">
             {t.host}
@@ -884,7 +911,10 @@ export function ConnectDialog({
           <input
             type="checkbox"
             checked={value.saveSecret}
-            onChange={(e) => update({ saveSecret: e.target.checked })}
+            onChange={(e) => {
+              secretTouched.current = true;
+              update({ saveSecret: e.target.checked });
+            }}
           />
           {t.remember}
         </label>
@@ -913,6 +943,7 @@ export function ConnectDialog({
             {error}
           </p>
         )}
+        {saved && <p className="helper">{t.connectionSavedConfig}</p>}
         <footer className="modal-actions">
           {profile && settings.profiles.some((p) => p.id === profile.id) && (
             <button
@@ -928,6 +959,31 @@ export function ConnectDialog({
           )}
           <button type="button" onClick={onClose}>
             {t.cancel}
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={async (e) => {
+              if (!e.currentTarget.closest("form")?.reportValidity()) return;
+              setBusy(true);
+              setError("");
+              try {
+                const result = await onSaveProfile(
+                  { ...value, name: value.name || value.host },
+                  secret,
+                  revision.current,
+                );
+                revision.current = result.revision;
+                setValue(result.profile);
+                setSaved(true);
+              } catch (e) {
+                setError(String(e));
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            {t.saveConnection}
           </button>
           <button className="primary" type="submit" disabled={busy}>
             {busy ? (

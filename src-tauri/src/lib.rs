@@ -187,6 +187,36 @@ async fn save_ssh_config(
 ) -> Reply<core::ssh_config::Catalog> {
     blocking(move || core::ssh_config::save(&path, &text, revision.as_deref())).await
 }
+#[tauri::command]
+async fn save_ssh_host(
+    path: Option<String>,
+    alias: String,
+    profile: SftpProfile,
+    revision: Option<String>,
+) -> Reply<core::ssh_config::Catalog> {
+    blocking(move || {
+        core::ssh_config::upsert(path.as_deref(), &alias, &profile, revision.as_deref())
+    })
+    .await
+}
+#[tauri::command]
+async fn has_connection_secret(id: String) -> Reply<bool> {
+    blocking(move || Ok(core::settings::secret(&id)?.is_some())).await
+}
+#[tauri::command]
+async fn save_connection_secret(id: String, secret: String, remember: bool) -> Reply<()> {
+    blocking(move || {
+        if remember {
+            if !secret.is_empty() {
+                core::settings::save_secret(&id, &secret)?;
+            }
+        } else {
+            core::settings::delete_secret(&id)?;
+        }
+        Ok(())
+    })
+    .await
+}
 
 #[tauri::command]
 async fn start_forward(
@@ -237,7 +267,7 @@ async fn connect_sftp(
     secret: String,
     expected: Option<String>,
 ) -> Reply<core::remote::ConnectionResult> {
-    let secret = if secret.is_empty() && profile.save_secret {
+    let secret = if secret.is_empty() {
         let id = profile.id.clone();
         blocking(move || Ok(core::settings::secret(&id)?.unwrap_or_default())).await?
     } else {
@@ -251,13 +281,6 @@ async fn connect_sftp(
             let id = profile.id.clone();
             blocking(move || {
                 core::settings::save_secret(&id, &secret)?;
-                Ok(())
-            })
-            .await?;
-        } else {
-            let id = profile.id.clone();
-            blocking(move || {
-                core::settings::delete_secret(&id)?;
                 Ok(())
             })
             .await?;
@@ -394,6 +417,9 @@ pub fn run() {
             bootstrap,
             read_ssh_config,
             save_ssh_config,
+            save_ssh_host,
+            has_connection_secret,
+            save_connection_secret,
             start_forward,
             list_forwards,
             stop_forward,
