@@ -1,17 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  ArrowRight,
   Check,
   ClipboardCopy,
   LoaderCircle,
   Plus,
   RefreshCw,
   Server,
-  X,
+  Play,
+  Square,
+  Trash2,
 } from "lucide-react";
 import { command, readSshCatalog } from "../api";
 import { IconButton, Modal } from "./Primitives";
-import type { ForwardInfo, SshCatalog } from "../types";
+import type { ForwardInfo, SavedForward, SshCatalog } from "../types";
 import type { Text } from "../i18n";
 
 export function SshCatalogDialog({
@@ -33,22 +34,25 @@ export function SshCatalogDialog({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const editor = useRef<HTMLTextAreaElement>(null);
+  const loadId = useRef(0);
   const dirty = !!catalog && text !== catalog.text;
   const starter =
     "Host new-server\n    HostName example.com\n    User username\n    Port 22\n    IdentityFile ~/.ssh/id_ed25519\n\n";
   async function load(initial = false) {
     if (dirty && !confirm(t.unsavedConfig)) return;
+    const request = ++loadId.current;
     setBusy(true);
     setError("");
     try {
       const value = await readSshCatalog(filePath);
+      if (request !== loadId.current) return;
       setCatalog(value);
       setFilePath(value.path);
       setText(initial && add ? starter + value.text : value.text);
     } catch (e) {
-      setError(String(e));
+      if (request === loadId.current) setError(String(e));
     } finally {
-      setBusy(false);
+      if (request === loadId.current) setBusy(false);
     }
   }
   useEffect(() => {
@@ -73,7 +77,11 @@ export function SshCatalogDialog({
           <input
             aria-label={t.configPath}
             value={filePath}
-            onChange={(e) => setFilePath(e.target.value)}
+            onChange={(e) => {
+              ++loadId.current;
+              setBusy(false);
+              setFilePath(e.target.value);
+            }}
           />
         </label>
         <button type="submit" disabled={busy}>
@@ -213,21 +221,68 @@ export function SshCatalogDialog({
 export function ForwardDialog({
   source,
   title,
+  catalog,
   t,
   onClose,
+  onCatalog,
+  onSaveConnection,
 }: {
   source: string;
   title: string;
+  catalog?: SshCatalog;
   t: Text;
   onClose: () => void;
+  onCatalog: (catalog: SshCatalog) => void;
+  onSaveConnection: () => void;
 }) {
   const [forwards, setForwards] = useState<ForwardInfo[]>([]);
   const [localPort, setLocalPort] = useState("0");
   const [remoteHost, setRemoteHost] = useState("127.0.0.1");
   const [remotePort, setRemotePort] = useState("80");
   const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState("");
   const [copied, setCopied] = useState("");
+  const host = catalog?.hosts.find((h) => `sftp:${h.profile.id}` === source);
+  const saved = host?.forwards || [];
+  const key = (f: SavedForward) =>
+    `${f.localPort}/${f.remoteHost}/${f.remotePort}`;
+  const active = new Map(forwards.map((f) => [key(f), f]));
+  const rows: (SavedForward & { live?: ForwardInfo; saved: boolean })[] = [
+    ...saved.map((f) => ({ ...f, saved: true, live: active.get(key(f)) })),
+    ...forwards
+      .filter((f) => !saved.some((s) => key(s) === key(f)))
+      .map((f) => ({ ...f, saved: false, live: f })),
+  ];
+  async function refresh() {
+    setForwards(await command<ForwardInfo[]>("list_forwards", { source }));
+  }
+  async function changeSaved(forward: SavedForward, enabled: boolean) {
+    if (!catalog || !host) throw new Error(t.saveConnectionFirst);
+    const value = await command<SshCatalog>("save_ssh_forward", {
+      path: catalog.path,
+      alias: host.alias,
+      forward: {
+        localPort: forward.localPort,
+        remoteHost: forward.remoteHost,
+        remotePort: forward.remotePort,
+      },
+      enabled,
+      revision: catalog.revision,
+    });
+    onCatalog(value);
+  }
+  async function action(id: string, run: () => Promise<void>) {
+    setBusy(id);
+    setError("");
+    try {
+      await run();
+      await refresh();
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy("");
+    }
+  }
   useEffect(() => {
     let active = true;
     const refresh = () =>
@@ -252,121 +307,190 @@ export function ForwardDialog({
       onClose={onClose}
       wide
     >
+      <div className="forward-list">
+        <table className="forward-table">
+          <thead>
+            <tr>
+              <th>{t.localAddress}</th>
+              <th>{t.forwardTarget}</th>
+              <th>{t.status}</th>
+              <th>{t.rememberForward}</th>
+              <th>
+                <span className="sr-only">{t.actions}</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr
+                className="forward-row"
+                key={key(row)}
+                data-forward-id={row.live?.id}
+                data-local-port={row.localPort}
+              >
+                <td>
+                  <code>127.0.0.1:{row.localPort}</code>
+                </td>
+                <td>
+                  <code>
+                    {row.remoteHost.includes(":")
+                      ? `[${row.remoteHost}]`
+                      : row.remoteHost}
+                    :{row.remotePort}
+                  </code>
+                </td>
+                <td>
+                  <span
+                    className={`forward-state ${row.live?.error ? "failed" : row.live ? "running" : ""}`}
+                    data-tooltip={row.live?.error}
+                  >
+                    <span className="status-led" />
+                    {row.live?.error
+                      ? t.failed
+                      : row.live
+                        ? t.running
+                        : t.stopped}
+                  </span>
+                </td>
+                <td className="forward-remember">
+                  <input
+                    type="checkbox"
+                    aria-label={`${t.rememberForward} ${row.localPort}`}
+                    data-tooltip={
+                      host ? t.rememberForwardHint : t.saveConnectionFirst
+                    }
+                    checked={row.saved}
+                    disabled={!!busy || !host}
+                    onChange={(e) => {
+                      void action(key(row), () =>
+                        changeSaved(row, e.target.checked),
+                      );
+                    }}
+                  />
+                </td>
+                <td>
+                  <div className="forward-actions">
+                    <IconButton
+                      title={copied === key(row) ? t.copied : t.copyAddress}
+                      onClick={() => {
+                        navigator.clipboard
+                          .writeText(`127.0.0.1:${row.localPort}`)
+                          .then(() => setCopied(key(row)))
+                          .catch((e) => setError(String(e)));
+                      }}
+                    >
+                      <ClipboardCopy size={13} />
+                    </IconButton>
+                    <IconButton
+                      title={row.live ? t.stopForward : t.startForward}
+                      disabled={!!busy}
+                      onClick={() => {
+                        void action(key(row), async () => {
+                          if (row.live)
+                            await command("stop_forward", {
+                              source,
+                              id: row.live.id,
+                            });
+                          else
+                            await command("start_forward", {
+                              source,
+                              localPort: row.localPort,
+                              remoteHost: row.remoteHost,
+                              remotePort: row.remotePort,
+                            });
+                        });
+                      }}
+                    >
+                      {busy === key(row) ? (
+                        <LoaderCircle size={13} className="spin" />
+                      ) : row.live ? (
+                        <Square size={12} />
+                      ) : (
+                        <Play size={13} />
+                      )}
+                    </IconButton>
+                    <IconButton
+                      title={t.removeForward}
+                      disabled={!!busy}
+                      onClick={() => {
+                        void action(key(row), async () => {
+                          if (row.saved) await changeSaved(row, false);
+                          if (row.live)
+                            await command("stop_forward", {
+                              source,
+                              id: row.live.id,
+                            });
+                        });
+                      }}
+                    >
+                      <Trash2 size={13} />
+                    </IconButton>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {!rows.length && <p className="helper">{t.noForwards}</p>}
+      </div>
       <form
-        onSubmit={async (e) => {
+        className="forward-add"
+        onSubmit={(e) => {
           e.preventDefault();
-          setBusy(true);
-          setError("");
-          try {
-            const value = await command<ForwardInfo>("start_forward", {
+          void action("add", async () => {
+            await command("start_forward", {
               source,
               localPort: Number(localPort),
               remoteHost,
               remotePort: Number(remotePort),
             });
-            setForwards((old) => [...old, value]);
-          } catch (e) {
-            setError(String(e));
-          } finally {
-            setBusy(false);
-          }
+          });
         }}
       >
-        <div className="forward-form">
-          <label className="field">
-            {t.localPort}
-            <input
-              aria-label={t.localPort}
-              type="number"
-              min={0}
-              max={65535}
-              required
-              value={localPort}
-              onChange={(e) => setLocalPort(e.target.value)}
-            />
-          </label>
-          <ArrowRight size={17} />
-          <label className="field">
-            {t.remoteHost}
-            <input
-              aria-label={t.remoteHost}
-              required
-              value={remoteHost}
-              onChange={(e) => setRemoteHost(e.target.value)}
-            />
-          </label>
-          <label className="field">
-            {t.remotePort}
-            <input
-              aria-label={t.remotePort}
-              required
-              type="number"
-              min={1}
-              max={65535}
-              value={remotePort}
-              onChange={(e) => setRemotePort(e.target.value)}
-            />
-          </label>
-          <button className="primary" type="submit" disabled={busy}>
-            {busy ? (
-              <LoaderCircle size={14} className="spin" />
-            ) : (
-              <Plus size={14} />
-            )}{" "}
-            {t.createForward}
-          </button>
-        </div>
+        <input
+          aria-label={t.localPort}
+          data-tooltip={t.localPort}
+          type="number"
+          min={0}
+          max={65535}
+          required
+          value={localPort}
+          onChange={(e) => setLocalPort(e.target.value)}
+        />
+        <input
+          aria-label={t.remoteHost}
+          placeholder={t.remoteHost}
+          required
+          value={remoteHost}
+          onChange={(e) => setRemoteHost(e.target.value)}
+        />
+        <input
+          aria-label={t.remotePort}
+          data-tooltip={t.remotePort}
+          type="number"
+          min={1}
+          max={65535}
+          required
+          value={remotePort}
+          onChange={(e) => setRemotePort(e.target.value)}
+        />
+        <button className="primary" type="submit" disabled={!!busy}>
+          {busy === "add" ? (
+            <LoaderCircle size={13} className="spin" />
+          ) : (
+            <Plus size={13} />
+          )}{" "}
+          {t.createForward}
+        </button>
       </form>
-      <div className="forward-list">
-        {!forwards.length ? (
-          <p className="helper">{t.noForwards}</p>
-        ) : (
-          forwards.map((forward) => (
-            <div
-              className="forward-row"
-              key={forward.id}
-              data-forward-id={forward.id}
-              data-local-port={forward.localPort}
-            >
-              <div>
-                <span className="status-led" />
-                <code>127.0.0.1:{forward.localPort}</code>
-                <ArrowRight size={13} />
-                <code>
-                  {forward.remoteHost}:{forward.remotePort}
-                </code>
-                <IconButton
-                  title={copied === forward.id ? t.copied : t.copyAddress}
-                  onClick={() =>
-                    navigator.clipboard
-                      .writeText(`127.0.0.1:${forward.localPort}`)
-                      .then(() => setCopied(forward.id))
-                      .catch((e) => setError(String(e)))
-                  }
-                >
-                  <ClipboardCopy size={13} />
-                </IconButton>
-                <button
-                  onClick={async () => {
-                    try {
-                      await command("stop_forward", { source, id: forward.id });
-                      setForwards((old) =>
-                        old.filter((f) => f.id !== forward.id),
-                      );
-                    } catch (e) {
-                      setError(String(e));
-                    }
-                  }}
-                >
-                  <X size={13} />
-                  {t.stopForward}
-                </button>
-              </div>
-              {forward.error && <p className="inline-error">{forward.error}</p>}
-            </div>
-          ))
+      <p className="helper forward-hint">
+        {t.rememberForwardHint}{" "}
+        {!host && (
+          <button className="text-button" onClick={onSaveConnection}>
+            {t.saveConnectionFirst}
+          </button>
         )}
-      </div>
+      </p>
       {error && (
         <p className="inline-error" role="alert">
           {error}

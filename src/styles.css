@@ -1,5 +1,7 @@
 @import url("./theme.css");
 @import url("./light.css");
+@import url("./controls.css");
+@import url("./workbench.css");
 * {
   box-sizing: border-box;
 }
@@ -131,7 +133,12 @@ p {
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: linear-gradient(118deg, #111722e8, #131724e6 48%, #151a27e8);
+  background: linear-gradient(
+    118deg,
+    rgb(17 23 34 / var(--surface-opacity, 0.85)),
+    rgb(19 23 36 / var(--surface-opacity, 0.85)) 48%,
+    rgb(21 26 39 / var(--surface-opacity, 0.85))
+  );
   overflow: hidden;
 }
 .pane-layout[hidden],
@@ -193,6 +200,7 @@ p {
   background: var(--glass);
 }
 .frosted .glass {
+  background-color: rgb(25 34 53 / var(--surface-opacity, 0.85));
   backdrop-filter: blur(24px) saturate(115%);
   -webkit-backdrop-filter: blur(24px) saturate(115%);
 }
@@ -432,23 +440,9 @@ p {
 .config-warnings p {
   margin-top: 7px;
 }
-.forward-form {
-  display: grid;
-  grid-template-columns: 130px 18px minmax(0, 1fr) 90px auto;
-  align-items: end;
-  gap: 12px;
-}
-.forward-form > svg {
-  margin-bottom: 26px;
-  color: var(--muted);
-}
-.forward-form > button {
-  margin-bottom: 14px;
-}
 .forward-list {
-  border-top: 1px solid var(--line);
-  margin-top: 12px;
-  padding-top: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
   max-height: 310px;
   overflow: auto;
 }
@@ -456,25 +450,106 @@ p {
   padding: 20px 10px;
   text-align: center;
 }
-.forward-row {
-  padding: 7px 0;
+.forward-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  text-align: left;
+}
+.forward-table th {
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--muted);
+  background: var(--panel);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+.forward-table th,
+.forward-table td {
+  padding: 0 10px;
+  height: 32px;
   border-bottom: 1px solid var(--line);
 }
-.forward-row > div {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+.forward-table tr:last-child td {
+  border-bottom: 0;
+}
+.forward-row:hover {
+  background: #819ad309;
+}
+.forward-table code {
+  color: var(--text);
   font-size: 11px;
 }
-.forward-row code {
-  color: var(--text);
+.forward-table td:nth-child(4),
+.forward-table th:nth-child(4) {
+  text-align: center;
 }
-.forward-row > div > .icon-button {
-  margin-left: auto;
+.forward-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
 }
-.forward-row button {
+.forward-actions .icon-button {
+  width: 23px;
+  height: 24px;
+}
+.forward-state {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  color: var(--muted);
   font-size: 10px;
-  padding: 5px 8px;
+}
+.forward-state .status-led {
+  background: #71819b;
+  box-shadow: none;
+}
+.forward-state.running .status-led {
+  background: #8fbaa5;
+}
+.forward-state.failed .status-led {
+  background: #c68e8e;
+}
+.forward-add {
+  display: grid;
+  grid-template-columns: 100px minmax(100px, 1fr) 90px auto;
+  gap: 8px;
+  margin-top: 12px;
+}
+.forward-add input,
+.forward-add button {
+  min-width: 0;
+  height: 30px;
+  font-size: 11px;
+  padding: 4px 9px;
+}
+.forward-hint {
+  margin-top: 10px;
+  line-height: 1.6;
+  font-size: 10px;
+}
+.forward-hint .text-button {
+  color: var(--accent);
+  font-size: 10px;
+  display: inline;
+  padding: 0;
+  text-decoration: underline;
+}
+@media (max-width: 640px) {
+  .forward-table th,
+  .forward-table td {
+    padding: 0 6px;
+  }
+  .forward-table td:nth-child(3),
+  .forward-table th:nth-child(3) {
+    display: none;
+  }
+  .forward-table code {
+    font-size: 10px;
+  }
 }
 .app-tooltip {
   position: fixed;
@@ -582,7 +657,7 @@ p {
   width: 100%;
 }
 .sidebar-item {
-  height: 35px;
+  height: 40px;
   display: flex;
   width: 100%;
   justify-content: flex-start;
@@ -591,7 +666,7 @@ p {
   color: #8e9bb3;
   font-size: 11px;
   position: relative;
-  margin: 2px 0;
+  margin: 0;
 }
 .sidebar-item > svg {
   color: #7d8ba5;
@@ -633,7 +708,7 @@ p {
   font-size: 10px;
 }
 .drive-item {
-  height: 43px;
+  height: 40px;
 }
 .drive-item span {
   display: flex;
@@ -644,6 +719,28 @@ p {
   font-size: 8px;
   color: #5e6e89;
 }
+.app-shell[data-density="compact"] .sidebar-item {
+  height: 32px;
+}
+.app-shell[data-density="compact"] .sidebar-group {
+  margin-bottom: 14px;
+}
+.app-shell[data-density="compact"] .sidebar-group h2 {
+  margin-bottom: 5px;
+}
+.app-shell[data-density="compact"] .sidebar-item > svg {
+  width: 14px;
+  height: 14px;
+}
+.app-shell[data-density="compact"] .drive-item span {
+  flex-direction: row;
+  align-items: baseline;
+  gap: 7px;
+}
+.app-shell[data-density="compact"] .drive-item small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .sidebar-bottom {
   padding: 10px 0 0;
   border-top: 1px solid var(--line);
@@ -651,7 +748,7 @@ p {
 .sidebar-bottom kbd {
   border: 0;
   background: transparent;
-  font-size: 13px;
+  font-size: 9px;
 }
 .local-status {
   display: flex;
@@ -1096,9 +1193,48 @@ p {
   background: #9aaff2;
   border-radius: 3px;
 }
-.file-grid:focus-visible .file-row.focused {
-  outline: 1px solid #aabcf133;
-  outline-offset: -1px;
+.active .file-row.focused {
+  background: #809ce930;
+  box-shadow:
+    inset 0 1px #b3c5f012,
+    inset 0 -1px #b3c5f00c;
+}
+.active .file-row.focused::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 5px;
+  bottom: 5px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: #b0c4f4;
+}
+.active .file-row.focused .file-name {
+  color: #e1e9fb;
+}
+.active .file-row.focused.selected {
+  background: #809ce943;
+}
+.file-pane:not(.active) .file-row.focused {
+  background: #8294b50c;
+}
+.app-shell[data-theme="light"] .active .file-row.focused {
+  background: #7398d331;
+  box-shadow:
+    inset 0 1px #6489c315,
+    inset 0 -1px #6489c30c;
+}
+.app-shell[data-theme="light"] .active .file-row.focused.selected {
+  background: #7398d346;
+}
+.app-shell[data-theme="light"] .active .file-row.focused::after {
+  background: #6789c2;
+}
+.app-shell[data-theme="light"] .active .file-row.focused .file-name {
+  color: #234b83;
+}
+.app-shell[data-theme="light"] .file-pane:not(.active) .file-row.focused {
+  background: #7398d312;
 }
 .file-name {
   display: flex;
@@ -2129,7 +2265,6 @@ p {
   }
   .sidebar-item {
     font-size: 12px;
-    height: 38px;
   }
 }
 @media (max-width: 1150px) {

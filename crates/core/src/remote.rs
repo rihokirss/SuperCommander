@@ -39,6 +39,7 @@ pub struct ConnectionResult {
     pub fingerprint: String,
     pub needs_trust: bool,
     pub path: String,
+    pub forward_errors: Vec<String>,
 }
 
 pub async fn connect(
@@ -78,6 +79,7 @@ pub async fn connect(
                     fingerprint: fingerprint.clone(),
                     needs_trust: true,
                     path: String::new(),
+                    forward_errors: vec![],
                 },
                 None,
             ));
@@ -165,12 +167,14 @@ pub async fn connect(
         fingerprint: fingerprint.context("Server did not provide a key")?,
         needs_trust: false,
         path,
+        forward_errors: vec![],
     };
     let fs = RemoteFs {
         sftp,
         runtime: Handle::current(),
         _ssh: ssh,
         forwards: Mutex::new(HashMap::new()),
+        terminals: Mutex::new(HashMap::new()),
     };
     Ok((result, Some(Arc::new(fs))))
 }
@@ -180,6 +184,11 @@ pub struct RemoteFs {
     runtime: Handle,
     _ssh: client::Handle<Verify>,
     forwards: Mutex<HashMap<String, Forward>>,
+    terminals: Mutex<HashMap<String, RemoteTerminal>>,
+}
+struct RemoteTerminal {
+    writer: Arc<russh::ChannelWriteHalf<client::Msg>>,
+    task: tokio::task::JoinHandle<()>,
 }
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -196,6 +205,89 @@ struct Forward {
     error: Arc<Mutex<Option<String>>>,
 }
 impl RemoteFs {
+    pub async fn open_terminal(
+        &self,
+        output: Arc<dyn Fn(Vec<u8>) + Send + Sync>,
+    ) -> Result<String> {
+        let mut channel = self._ssh.channel_open_session().await?;
+        // Wait for the replies: sending a request alone does not mean the server accepted it.
+        channel
+            .request_pty(true, "xterm-256color", 100, 24, 0, 0, &[])
+            .await?;
+        async fn accepted(channel: &mut russh::Channel<client::Msg>) -> Result<()> {
+            tokio::time::timeout(Duration::from_secs(15), async {
+                loop {
+                    match channel.wait().await {
+                        Some(russh::ChannelMsg::Success) => return Ok(()),
+                        Some(russh::ChannelMsg::Failure) | None => {
+                            bail!("The SSH server denied an interactive shell or PTY")
+                        }
+                        _ => {}
+                    }
+                }
+            })
+            .await
+            .context("SSH shell request timed out")?
+        }
+        if let Err(e) = accepted(&mut channel).await {
+            let _ = channel.close().await;
+            return Err(e);
+        }
+        channel.request_shell(true).await?;
+        if let Err(e) = accepted(&mut channel).await {
+            let _ = channel.close().await;
+            return Err(e);
+        }
+        let (mut reader, writer) = channel.split();
+        let writer = Arc::new(writer);
+        let close_writer = writer.clone();
+        let task = tokio::spawn(async move {
+            while let Some(message) = reader.wait().await {
+                match message {
+                    russh::ChannelMsg::Data { data }
+                    | russh::ChannelMsg::ExtendedData { data, .. } => output(data.to_vec()),
+                    russh::ChannelMsg::ExitStatus { exit_status } => {
+                        output(format!("\r\n[SSH shell exited: {exit_status}]\r\n").into_bytes());
+                    }
+                    russh::ChannelMsg::Close => break,
+                    _ => {}
+                }
+            }
+            let _ = close_writer.close().await;
+        });
+        let id = uuid::Uuid::new_v4().to_string();
+        self.terminals
+            .lock()
+            .unwrap()
+            .insert(id.clone(), RemoteTerminal { writer, task });
+        Ok(id)
+    }
+    fn terminal_writer(&self, id: &str) -> Result<Arc<russh::ChannelWriteHalf<client::Msg>>> {
+        self.terminals
+            .lock()
+            .unwrap()
+            .get(id)
+            .map(|s| s.writer.clone())
+            .context("SSH terminal closed")
+    }
+    pub async fn write_terminal(&self, id: &str, data: Vec<u8>) -> Result<()> {
+        self.terminal_writer(id)?.data_bytes(data).await?;
+        Ok(())
+    }
+    pub async fn resize_terminal(&self, id: &str, rows: u16, cols: u16) -> Result<()> {
+        self.terminal_writer(id)?
+            .window_change(cols.max(1) as u32, rows.max(1) as u32, 0, 0)
+            .await?;
+        Ok(())
+    }
+    pub async fn close_terminal(&self, id: &str) -> Result<()> {
+        let session = self.terminals.lock().unwrap().remove(id);
+        if let Some(session) = session {
+            session.task.abort();
+            let _ = session.writer.close().await;
+        }
+        Ok(())
+    }
     pub async fn start_forward(
         self: &Arc<Self>,
         local_port: u16,
@@ -275,6 +367,10 @@ impl RemoteFs {
         Ok(())
     }
     pub async fn close(&self) -> Result<()> {
+        let terminals: Vec<_> = self.terminals.lock().unwrap().keys().cloned().collect();
+        for id in terminals {
+            self.close_terminal(&id).await?;
+        }
         let ids: Vec<_> = self.forwards.lock().unwrap().keys().cloned().collect();
         for id in ids {
             self.stop_forward(&id).await?;
@@ -316,6 +412,15 @@ impl Write for RemoteFile {
     }
 }
 impl FileSystem for RemoteFs {
+    fn copy_permissions(&self, from: &str, to: &str) -> Result<()> {
+        let original = self.runtime.block_on(self.sftp.metadata(from))?;
+        let meta = russh_sftp::client::fs::Metadata {
+            permissions: original.permissions,
+            ..Default::default()
+        };
+        self.runtime.block_on(self.sftp.set_metadata(to, meta))?;
+        Ok(())
+    }
     fn close(&self) -> Result<()> {
         self.runtime.block_on(RemoteFs::close(self))
     }

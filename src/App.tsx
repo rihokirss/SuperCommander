@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import { version } from "../package.json";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
@@ -27,6 +34,9 @@ import {
   Monitor,
   Music2,
   Plus,
+  PanelLeftClose,
+  PanelLeftOpen,
+  RefreshCw,
   Search,
   Settings2,
   Square,
@@ -38,7 +48,7 @@ import {
 } from "lucide-react";
 import * as api from "./api";
 import { dictionary } from "./i18n";
-import { basename, pane, tab, uid } from "./utils";
+import { basename, parent, pane, tab, uid } from "./utils";
 import { FilePane, type PaneSnapshot } from "./components/FilePane";
 import { IconButton } from "./components/Primitives";
 import {
@@ -52,6 +62,7 @@ import {
   type PaletteAction,
 } from "./components/Dialogs";
 import { PreviewDialog } from "./components/PreviewDialog";
+import { TextWorkbench } from "./components/TextWorkbench";
 import { QueuePanel } from "./components/QueuePanel";
 import { TerminalPanel } from "./components/TerminalPanel";
 import { WorkspaceTools } from "./components/WorkspaceTools";
@@ -75,6 +86,7 @@ type Dialog =
   | { kind: "action"; data: ActionData }
   | { kind: "rename"; entries: Entry[]; source: string }
   | { kind: "preview"; location: Location }
+  | { kind: "edit"; location: Location }
   | {
       kind: "connect";
       profile?: SftpProfile;
@@ -93,7 +105,10 @@ export function App() {
   const [dialog, setDialog] = useState<Dialog>();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [queueOpen, setQueueOpen] = useState(false);
-  const [terminal, setTerminal] = useState<string>();
+  const [terminals, setTerminals] = useState<
+    Record<string, Location & { label: string }>
+  >({});
+  const [terminalSource, setTerminalSource] = useState("local");
   const [terminalView, setTerminalView] = useState<
     "hidden" | "docked" | "full"
   >("hidden");
@@ -121,6 +136,19 @@ export function App() {
         ? "dark"
         : "light"
       : settings?.theme || "dark";
+  useEffect(() => {
+    if (!api.desktop || !settings) return;
+    const timer = setTimeout(() => {
+      void api
+        .command("set_window_appearance", {
+          glass: settings.glass,
+          transparency: settings.transparency ?? 15,
+          light: resolvedTheme === "light",
+        })
+        .catch((e) => notify(String(e)));
+    }, 120);
+    return () => clearTimeout(timer);
+  }, [settings?.glass, settings?.transparency, resolvedTheme]);
   useEffect(() => {
     const media = matchMedia("(prefers-color-scheme: dark)");
     const changed = () => setSystemDark(media.matches);
@@ -539,25 +567,46 @@ export function App() {
   }
   function edit() {
     const entry = selectedFile();
-    if (!entry || !current) {
+    if (!entry || entry.isDir || !current) {
       notify(t.selectFiles);
       return;
     }
-    if (current.source !== "local") {
-      preview();
+    if (current.source.startsWith("zip:")) {
+      notify(t.readOnly);
       return;
     }
-    api
-      .command("open_file", { path: entry.path, edit: true })
-      .catch((e) => notify(String(e)));
+    setDialog({ kind: "edit", location: { ...current, path: entry.path } });
   }
   function toggleTerminal() {
-    if (!terminal && current?.source !== "local") {
-      notify(t.localTerminal);
-      return;
-    }
-    if (!terminal) setTerminal(current!.path);
-    setTerminalView((v) => (v === "docked" ? "hidden" : "docked"));
+    const source = ensureTerminal();
+    if (!source) return;
+    setTerminalView((v) =>
+      v === "docked" && source === terminalSource ? "hidden" : "docked",
+    );
+  }
+  function ensureTerminal() {
+    if (!current) return;
+    const location = current.source.startsWith("zip:")
+      ? { source: "local", path: parent(current.source.slice(4)) }
+      : current;
+    const profile = [
+      ...(catalog?.hosts.map((h) => h.profile) || []),
+      ...sessions,
+      ...(settings?.profiles || []),
+    ].find((p) => `sftp:${p.id}` === location.source);
+    const label =
+      location.source === "local"
+        ? location.path
+        : profile
+          ? `${profile.username}@${profile.host}:${profile.port}`
+          : location.source;
+    setTerminals((old) =>
+      old[location.source]
+        ? old
+        : { ...old, [location.source]: { ...location, label } },
+    );
+    setTerminalSource(location.source);
+    return location.source;
   }
   function toggleFullTerminal() {
     if (terminalView === "full") {
@@ -570,11 +619,7 @@ export function App() {
         );
       return;
     }
-    if (!terminal && current?.source !== "local") {
-      notify(t.localTerminal);
-      return;
-    }
-    if (!terminal) setTerminal(current!.path);
+    if (!ensureTerminal()) return;
     terminalReturnView.current = terminalView;
     setTerminalView("full");
   }
@@ -601,6 +646,12 @@ export function App() {
       .command("disconnect_sftp", { source })
       .then(() => {
         remoteHomes.current.delete(source);
+        setTerminals((old) => {
+          const next = { ...old };
+          delete next[source];
+          return next;
+        });
+        if (terminalSource === source) setTerminalView("hidden");
         setSettings((s) =>
           s && boot
             ? {
@@ -716,8 +767,11 @@ export function App() {
             kind: "forward",
             source: current.source,
             title:
-              settings?.profiles.find((p) => `sftp:${p.id}` === current.source)
-                ?.name || "SSH",
+              [
+                ...(catalog?.hosts.map((h) => h.profile) || []),
+                ...sessions,
+                ...(settings?.profiles || []),
+              ].find((p) => `sftp:${p.id}` === current.source)?.name || "SSH",
           }),
       },
       {
@@ -754,6 +808,9 @@ export function App() {
       } else if (ctrl && e.key.toLowerCase() === "u" && settings) {
         e.preventDefault();
         update({ panes: [settings.panes[1], settings.panes[0]] });
+      } else if (ctrl && e.key.toLowerCase() === "b" && settings) {
+        e.preventDefault();
+        update({ workspaceCollapsed: !settings.workspaceCollapsed });
       } else if (ctrl && e.key.toLowerCase() === "h" && settings) {
         e.preventDefault();
         update({ showHidden: !settings.showHidden });
@@ -895,10 +952,31 @@ export function App() {
     if (path) navigate({ source, path });
     else setDialog({ kind: "connect", profile: host.profile });
   }
+  function groupProps(id: string, title: string) {
+    return {
+      title,
+      collapsed: settings!.collapsedGroups?.includes(id) || false,
+      onToggle: () =>
+        update({
+          collapsedGroups: settings!.collapsedGroups?.includes(id)
+            ? settings!.collapsedGroups.filter((g) => g !== id)
+            : [...(settings!.collapsedGroups || []), id],
+        }),
+    };
+  }
   return (
     <div
       className={`app-shell ${settings.glass ? "frosted" : "opaque"}`}
       data-theme={resolvedTheme}
+      data-density={settings.density}
+      data-workspace-collapsed={!!settings.workspaceCollapsed}
+      style={
+        {
+          "--surface-opacity": settings.glass
+            ? 1 - Math.max(0, Math.min(70, settings.transparency ?? 15)) / 100
+            : 1,
+        } as CSSProperties
+      }
     >
       <div className="ambient ambient-one" />
       <div className="ambient ambient-two" />
@@ -962,11 +1040,26 @@ export function App() {
               <strong>{t.workspace}</strong>
               <small>SuperCommander</small>
             </div>
-            <ChevronDown size={13} />
+            <IconButton
+              title={
+                settings.workspaceCollapsed
+                  ? t.expandWorkspace
+                  : t.collapseWorkspace
+              }
+              shortcut="Ctrl+B"
+              onClick={() =>
+                update({ workspaceCollapsed: !settings.workspaceCollapsed })
+              }
+            >
+              {settings.workspaceCollapsed ? (
+                <PanelLeftOpen size={15} />
+              ) : (
+                <PanelLeftClose size={15} />
+              )}
+            </IconButton>
           </div>
           <div className="sidebar-scroll">
-            <div className="sidebar-group">
-              <h2>{t.workspace}</h2>
+            <WorkspaceGroup {...groupProps("places", t.workspace)}>
               {boot.places.map((place) => {
                 const Icon = placeIcons[place.kind] || Folder;
                 return (
@@ -985,10 +1078,10 @@ export function App() {
                   </button>
                 );
               })}
-            </div>
-            <div className="sidebar-group">
-              <h2>
-                {t.favorites}
+            </WorkspaceGroup>
+            <WorkspaceGroup
+              {...groupProps("favorites", t.favorites)}
+              actions={
                 <button
                   title={t.addFavorite}
                   aria-label={t.addFavorite}
@@ -996,7 +1089,8 @@ export function App() {
                 >
                   <Plus size={13} />
                 </button>
-              </h2>
+              }
+            >
               {!settings.bookmarks.length ? (
                 <button
                   className="sidebar-item muted"
@@ -1017,28 +1111,76 @@ export function App() {
                   </button>
                 ))
               )}
-            </div>
-            <div className="sidebar-group">
-              <h2>{t.devices}</h2>
-              {boot.drives.map((drive) => (
+            </WorkspaceGroup>
+            <WorkspaceGroup {...groupProps("devices", t.devices)}>
+              {boot.drives
+                .filter((d) => !boot.network?.some((n) => n.path === d.path))
+                .map((drive) => (
+                  <button
+                    key={drive.path}
+                    className="sidebar-item drive-item"
+                    onClick={() =>
+                      navigate({ source: "local", path: drive.path })
+                    }
+                  >
+                    <HardDrive size={16} />
+                    <span>
+                      {drive.name}
+                      <small>{drive.path}</small>
+                    </span>
+                  </button>
+                ))}
+            </WorkspaceGroup>
+            <WorkspaceGroup
+              {...groupProps("network", t.network)}
+              actions={
                 <button
-                  key={drive.path}
-                  className="sidebar-item drive-item"
+                  title={t.refresh}
+                  aria-label={t.refresh}
+                  onClick={() => {
+                    void api
+                      .bootstrap()
+                      .then((data) =>
+                        setBoot((old) =>
+                          old
+                            ? {
+                                ...old,
+                                drives: data.drives,
+                                network: data.network,
+                                networkError: data.networkError,
+                              }
+                            : data,
+                        ),
+                      )
+                      .catch((e) => notify(String(e)));
+                  }}
+                >
+                  <RefreshCw size={12} />
+                </button>
+              }
+            >
+              {boot.network?.map((place) => (
+                <button
+                  className={`sidebar-item ${current.source === "local" && current.path === place.path ? "active" : ""}`}
+                  key={place.path}
+                  title={place.path}
                   onClick={() =>
-                    navigate({ source: "local", path: drive.path })
+                    navigate({ source: "local", path: place.path })
                   }
                 >
-                  <HardDrive size={16} />
-                  <span>
-                    {drive.name}
-                    <small>{drive.path}</small>
-                  </span>
+                  <Wifi size={15} />
+                  <span>{place.name}</span>
                 </button>
               ))}
-            </div>
-            <div className="sidebar-group">
-              <h2>
-                {t.connections}
+              {!boot.network?.length && (
+                <p className="sidebar-empty">
+                  {boot.networkError || t.networkEmpty}
+                </p>
+              )}
+            </WorkspaceGroup>
+            <WorkspaceGroup
+              {...groupProps("connections", t.connections)}
+              actions={
                 <span className="catalog-buttons">
                   <button
                     title={t.sshCatalog}
@@ -1055,7 +1197,8 @@ export function App() {
                     <Plus size={13} />
                   </button>
                 </span>
-              </h2>
+              }
+            >
               {catalog?.hosts.map((host) => (
                 <button
                   className={`sidebar-item ${current.source === `sftp:${host.profile.id}` ? "active" : ""}`}
@@ -1101,7 +1244,7 @@ export function App() {
                 <span>{t.connect}</span>
                 <Plus size={12} />
               </button>
-            </div>
+            </WorkspaceGroup>
           </div>
           <div className="sidebar-bottom">
             <button
@@ -1110,7 +1253,7 @@ export function App() {
             >
               <Settings2 size={16} />
               <span>{t.settings}</span>
-              <kbd>⌘</kbd>
+              <kbd>Ctrl+,</kbd>
             </button>
             <div className="local-status">
               <span className="status-led" />
@@ -1221,20 +1364,29 @@ export function App() {
                   : [element],
               )}
           </div>
-          {terminal && (
+          {Object.values(terminals).map((terminal) => (
             <TerminalPanel
-              path={terminal}
+              key={terminal.source}
+              path={terminal.path}
+              source={terminal.source}
+              label={terminal.label}
               t={t}
               theme={resolvedTheme}
-              hidden={terminalView === "hidden"}
+              hidden={
+                terminalView === "hidden" || terminalSource !== terminal.source
+              }
               fullscreen={terminalView === "full"}
               onToggleFullscreen={toggleFullTerminal}
               onClose={() => {
-                setTerminal(undefined);
+                setTerminals((old) => {
+                  const next = { ...old };
+                  delete next[terminal.source];
+                  return next;
+                });
                 setTerminalView("hidden");
               }}
             />
-          )}
+          ))}
           {queueOpen && terminalView !== "full" && (
             <QueuePanel
               jobs={jobs}
@@ -1329,7 +1481,25 @@ export function App() {
         />
       )}
       {dialog?.kind === "preview" && (
-        <PreviewDialog location={dialog.location} t={t} onClose={closeDialog} />
+        <PreviewDialog
+          location={dialog.location}
+          t={t}
+          onClose={closeDialog}
+          onEdit={
+            dialog.location.source.startsWith("zip:")
+              ? undefined
+              : () => setDialog({ kind: "edit", location: dialog.location })
+          }
+        />
+      )}
+      {dialog?.kind === "edit" && (
+        <TextWorkbench
+          location={dialog.location}
+          t={t}
+          editable
+          onClose={closeDialog}
+          onSaved={() => setRefresh((v) => v + 1)}
+        />
       )}
       {dialog?.kind === "search" && (
         <SearchDialog
@@ -1354,9 +1524,11 @@ export function App() {
           settings={settings}
           t={t}
           onClose={closeDialog}
-          onConnected={(profile, fingerprint, path) =>
-            connected(profile, fingerprint, path, dialog.destination)
-          }
+          onConnected={(profile, fingerprint, path, forwardErrors) => {
+            connected(profile, fingerprint, path, dialog.destination);
+            if (forwardErrors.length)
+              notify(`${t.forwarding}: ${forwardErrors.join("; ")}`);
+          }}
           onForget={forget}
           configRevision={catalog?.revision}
           onSaveProfile={saveProfile}
@@ -1381,6 +1553,14 @@ export function App() {
         <ForwardDialog
           source={dialog.source}
           title={dialog.title}
+          catalog={catalog}
+          onCatalog={setCatalog}
+          onSaveConnection={() =>
+            setDialog({
+              kind: "connect",
+              profile: sessions.find((p) => `sftp:${p.id}` === dialog.source),
+            })
+          }
           t={t}
           onClose={closeDialog}
         />
@@ -1391,6 +1571,40 @@ export function App() {
 }
 function ServerIcon() {
   return <Cloud size={16} />;
+}
+function WorkspaceGroup({
+  title,
+  collapsed,
+  onToggle,
+  actions,
+  children,
+}: {
+  title: string;
+  collapsed: boolean;
+  onToggle: () => void;
+  actions?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <section className="sidebar-group">
+      <h2>
+        <button
+          className="group-toggle"
+          aria-label={title}
+          aria-expanded={!collapsed}
+          onClick={onToggle}
+        >
+          <ChevronDown
+            size={11}
+            className={collapsed ? "group-collapsed" : ""}
+          />
+          <span>{title}</span>
+        </button>
+        {actions}
+      </h2>
+      <div hidden={collapsed}>{children}</div>
+    </section>
+  );
 }
 function LockIcon() {
   return (

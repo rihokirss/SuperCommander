@@ -1,6 +1,6 @@
 use crate::SftpProfile;
 use anyhow::{bail, Context, Result};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
     collections::{HashMap, HashSet},
@@ -17,6 +17,49 @@ pub struct ConfigHost {
     pub profile: SftpProfile,
     pub warnings: Vec<String>,
     pub disabled: bool,
+    pub forwards: Vec<LocalForward>,
+}
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalForward {
+    pub local_port: u16,
+    pub remote_host: String,
+    pub remote_port: u16,
+}
+impl LocalForward {
+    pub fn validate(&self) -> Result<()> {
+        if self.local_port == 0
+            || self.remote_port == 0
+            || self.remote_host.is_empty()
+            || self
+                .remote_host
+                .chars()
+                .any(|c| c.is_whitespace() || c.is_control() || "#\"[]".contains(c))
+        {
+            bail!("A saved forward needs valid ports and a target host");
+        }
+        Ok(())
+    }
+}
+fn parse_forward(values: &[String]) -> Result<LocalForward> {
+    if values.len() != 3 {
+        bail!("Only TCP LocalForward entries are supported");
+    }
+    let local = &values[1];
+    let (bind, port) = local.rsplit_once(':').unwrap_or(("127.0.0.1", local));
+    if !["127.0.0.1", "localhost", "[::1]"].contains(&bind) {
+        bail!("Only loopback LocalForward bindings are supported");
+    }
+    let (host, port_target) = values[2]
+        .rsplit_once(':')
+        .context("Invalid LocalForward target")?;
+    let forward = LocalForward {
+        local_port: port.parse()?,
+        remote_host: host.trim_start_matches('[').trim_end_matches(']').into(),
+        remote_port: port_target.parse()?,
+    };
+    forward.validate()?;
+    Ok(forward)
 }
 #[derive(Serialize)]
 pub struct Catalog {
@@ -199,6 +242,8 @@ fn resolve(path: &Path, text: &str) -> Result<(Vec<ConfigHost>, Vec<String>)> {
         let mut applies = true;
         let mut values = HashMap::<String, String>::new();
         let mut identities = Vec::new();
+        let mut forwards = Vec::new();
+        let mut forward_warnings = Vec::new();
         for line in &lines {
             let key = line[0].to_lowercase();
             if key == "host" {
@@ -212,13 +257,24 @@ fn resolve(path: &Path, text: &str) -> Result<(Vec<ConfigHost>, Vec<String>)> {
             if !applies || line.len() < 2 {
                 continue;
             }
-            if key == "identityfile" {
+            if key == "localforward" {
+                match parse_forward(line) {
+                    Ok(f) => {
+                        if !forwards.contains(&f) {
+                            forwards.push(f);
+                        }
+                    }
+                    Err(e) => {
+                        forward_warnings.push(format!("LocalForward preserved but not opened: {e}"))
+                    }
+                }
+            } else if key == "identityfile" {
                 identities.push(line[1].clone());
             } else {
                 values.entry(key).or_insert_with(|| line[1..].join(" "));
             }
         }
-        let mut issues = Vec::new();
+        let mut issues = forward_warnings;
         let mut disabled = false;
         for key in ["proxyjump", "proxycommand"] {
             if values.get(key).is_some_and(|v| v != "none") {
@@ -284,9 +340,95 @@ fn resolve(path: &Path, text: &str) -> Result<(Vec<ConfigHost>, Vec<String>)> {
             },
             warnings: issues,
             disabled,
+            forwards,
         });
     }
     Ok((hosts, warnings))
+}
+
+/// Change only one forward in one unshared Host block; never rewrite inherited/include options.
+pub fn set_forward(
+    path: &str,
+    alias: &str,
+    forward: &LocalForward,
+    enabled: bool,
+    revision: Option<&str>,
+) -> Result<Catalog> {
+    forward.validate()?;
+    let catalog = read(Some(path))?;
+    if catalog.revision.as_deref() != revision {
+        bail!("SSH configuration changed outside SuperCommander. Reload before saving.");
+    }
+    let host = catalog
+        .hosts
+        .iter()
+        .find(|h| h.alias == alias)
+        .context("Save the SSH connection in the catalog first")?;
+    let mut lines: Vec<String> = catalog.text.lines().map(str::to_owned).collect();
+    let mut block = None;
+    for (i, line) in lines.iter().enumerate() {
+        let v = tokens(line)?;
+        if v.first().is_some_and(|k| k.eq_ignore_ascii_case("host"))
+            && v[1..].iter().any(|a| a.eq_ignore_ascii_case(alias))
+        {
+            if v.len() != 2 {
+                bail!("Edit forwards for shared Host blocks in the SSH catalog editor");
+            }
+            let end = (i + 1..lines.len())
+                .find(|j| {
+                    tokens(&lines[*j]).is_ok_and(|v| {
+                        v.first().is_some_and(|k| {
+                            k.eq_ignore_ascii_case("host") || k.eq_ignore_ascii_case("match")
+                        })
+                    })
+                })
+                .unwrap_or(lines.len());
+            block = Some((i, end));
+            break;
+        }
+    }
+    let (start, end) = block
+        .context("This Host is in an included file. Open that file in the SSH catalog editor.")?;
+    let found = (start + 1..end)
+        .filter(|i| {
+            tokens(&lines[*i]).is_ok_and(|v| {
+                v.first()
+                    .is_some_and(|k| k.eq_ignore_ascii_case("localforward"))
+                    && parse_forward(&v).is_ok_and(|f| f == *forward)
+            })
+        })
+        .collect::<Vec<_>>();
+    if !enabled && found.is_empty() && host.forwards.contains(forward) {
+        bail!("This forward is inherited. Edit its original Host or Include block in the SSH catalog editor.");
+    }
+    if enabled && !host.forwards.contains(forward) {
+        let target = if forward.remote_host.contains(':') {
+            format!("[{}]", forward.remote_host)
+        } else {
+            forward.remote_host.clone()
+        };
+        lines.insert(
+            start + 1,
+            format!(
+                "    LocalForward 127.0.0.1:{} {}:{}",
+                forward.local_port, target, forward.remote_port
+            ),
+        );
+    } else if !enabled {
+        for i in found.into_iter().rev() {
+            let line = lines.remove(i);
+            // Keep inline comments when removing the directive.
+            if let Some((_, comment)) = line.split_once('#') {
+                lines.insert(i, format!("    #{comment}"));
+            }
+        }
+    }
+    let newline = if catalog.text.contains("\r\n") {
+        "\r\n"
+    } else {
+        "\n"
+    };
+    save(path, &(lines.join(newline) + newline), revision)
 }
 
 pub fn read(path: Option<&str>) -> Result<Catalog> {

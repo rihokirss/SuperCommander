@@ -9,6 +9,8 @@ import type { Text } from "../i18n";
 import "@xterm/xterm/css/xterm.css";
 export function TerminalPanel({
   path,
+  source,
+  label,
   t,
   onClose,
   theme,
@@ -17,6 +19,8 @@ export function TerminalPanel({
   onToggleFullscreen,
 }: {
   path: string;
+  source: string;
+  label: string;
   t: Text;
   onClose: () => void;
   theme: "dark" | "light";
@@ -66,21 +70,22 @@ export function TerminalPanel({
     channel.onmessage = (data) => {
       if (!disposed) term.write(Uint8Array.from(data));
     };
-    command<string>("terminal_open", { path, channel })
+    command<string>("terminal_open", { source, path, channel })
       .then((session) => {
         if (disposed) {
-          command("terminal_close", { id: session }).catch(() => {});
+          command("terminal_close", { source, id: session }).catch(() => {});
           return;
         }
         id = session;
         command("terminal_resize", {
+          source,
           id,
           rows: term.rows,
           cols: term.cols,
         }).catch((e) => setError(String(e)));
         if (pendingInput) {
-          command("terminal_write", { id, data: pendingInput }).catch((e) =>
-            setError(String(e)),
+          command("terminal_write", { source, id, data: pendingInput }).catch(
+            (e) => setError(String(e)),
           );
           pendingInput = "";
         }
@@ -91,7 +96,7 @@ export function TerminalPanel({
       });
     const input = term.onData((data) => {
       if (id)
-        command("terminal_write", { id, data }).catch((e) =>
+        command("terminal_write", { source, id, data }).catch((e) =>
           setError(String(e)),
         );
       else pendingInput += data;
@@ -101,6 +106,7 @@ export function TerminalPanel({
       fit.fit();
       if (id)
         command("terminal_resize", {
+          source,
           id,
           rows: term.rows,
           cols: term.cols,
@@ -113,9 +119,9 @@ export function TerminalPanel({
       input.dispose();
       term.dispose();
       instance.current = null;
-      if (id) command("terminal_close", { id }).catch(() => {});
+      if (id) command("terminal_close", { source, id }).catch(() => {});
     };
-  }, [path]);
+  }, [path, source]);
   useEffect(() => {
     if (!hidden) requestAnimationFrame(() => instance.current?.focus());
   }, [hidden, fullscreen]);
@@ -123,12 +129,13 @@ export function TerminalPanel({
     <section
       className={`terminal-panel glass ${fullscreen ? "terminal-fullscreen" : ""}`}
       hidden={hidden}
+      data-terminal-source={source}
     >
       <header>
         <span>
           <TerminalSquare size={14} />
           {t.terminal}
-          <small>{path}</small>
+          <small>{label}</small>
         </span>
         <div className="terminal-controls">
           <small>Ctrl+O</small>

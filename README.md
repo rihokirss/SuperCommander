@@ -1,31 +1,51 @@
 # SuperCommander
 
-Kahe paneeliga Windowsi failihaldur: Rusti tuum, Tauri 2 ja React/TypeScript. Tasapinnaline tume kujundus, õrn jäätunud klaasi efekt ning eesti ja inglise kasutajaliides.
+A modern dual-pane file manager for Windows, inspired by Midnight Commander. Built with a Rust core, Tauri 2, React and TypeScript, with a flat interface, subtle frosted glass, dark and light themes, and English and Estonian translations.
 
-Seadetes saab valida tumeda või heleda teema, järgida Windowsi teemavalikut ning muuta klaasiefekti ja reavahet. Failiridade vaikekõrgus on 32 px. Failitoimingute loend kasutab samuti kompaktseid ridu; konflikti- ja veadetailid avanevad nende alla.
+Browse local drives, UNC paths, ZIP archives and SSH/SFTP servers. Work with familiar keyboard shortcuts, edit files directly, open the server's shell, and keep SSH connections and port forwards in your existing OpenSSH config.
 
-## Käivitamine
+## Screenshots
 
-Vaja on Node.js 24 LTS-i ja Rusti stable-tööriistu. Windowsis on lisaks vaja Visual Studio C++ Build Toolsi koos Windows SDK-ga ning WebView2 käituskeskkonda.
+Dark theme with sample files. The keyboard cursor and marked files have separate highlights:
+
+![Dark theme with two independent file panes](docs/screenshots/dark.png)
+
+Light theme:
+
+![Light theme](docs/screenshots/light.png)
+
+Compact port forwarding table, using a local test server:
+
+![Multiple remembered SSH port forwards](docs/screenshots/port-forwarding.png)
+
+## Run locally
+
+Requirements: Node.js 24 LTS and stable Rust. On Windows, install Visual Studio C++ Build Tools with the Windows SDK and the WebView2 runtime.
 
 ```sh
 npm ci
 npm run tauri dev
 ```
 
-Brauseris saab kujundust ja navigeerimist vaadata käsuga `npm run dev` aadressil `http://127.0.0.1:1420`. Brauserirežiim kuvab selgelt märgistatud näidisfaile; päris failitoimingud, SFTP ja terminal töötavad töölauarakenduses.
+For a browser-only design preview, run `npm run dev` and visit `http://127.0.0.1:1420`. This mode clearly labels its fictional sample files. Real file operations, SSH and terminals run in the desktop app.
 
-## Windowsi ehitamine
+Linux/WSL desktop development also needs:
 
-Windowsis:
+```sh
+sudo apt-get install build-essential pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev librsvg2-dev libayatana-appindicator3-dev
+```
+
+## Build for Windows
+
+On Windows:
 
 ```sh
 npm run tauri build
 ```
 
-NSIS-paigaldaja tekib kausta `target/release/bundle/nsis/`. Paigaldus on kasutajapõhine ning WebView2 puudumisel laadib paigaldaja selle alla. Paigaldaja ei ole digitaalselt allkirjastatud. Automaatuuendusi ei ole.
+The per-user NSIS installer is written to `target/release/bundle/nsis/`. It downloads WebView2 when needed. Builds are currently unsigned; automatic application updates are not implemented.
 
-WSL-is saab ehitada MSVC sihtplatvormile ilma Windowsi Rusti paigalduseta:
+Cross-compile from WSL without installing Rust on Windows:
 
 ```sh
 sudo apt-get install clang lld llvm nsis
@@ -34,62 +54,144 @@ cargo install --locked cargo-xwin
 npm run build:windows
 ```
 
-`cargo-xwin` laadib alla Windows SDK ja CRT. Väljund: `target/x86_64-pc-windows-msvc/release/supercommander.exe` ning sama kausta `bundle/nsis/` paigaldaja. Ristkompileerimise õnnestumine ei asenda Windowsis käivitamise kontrolli.
+`cargo-xwin` downloads the Windows SDK and CRT. Outputs:
 
-WSL-is/Linuxis töölauarakenduse arendamiseks on vaja ka `build-essential pkg-config libgtk-3-dev libwebkit2gtk-4.1-dev librsvg2-dev libayatana-appindicator3-dev` pakette.
+- `target/x86_64-pc-windows-msvc/release/supercommander.exe`
+- `target/x86_64-pc-windows-msvc/release/bundle/nsis/SuperCommander_0.2.0_x64-setup.exe`
 
-## Kasutamine
+A successful cross-build does not replace testing the application on Windows.
 
-- Kummalgi paneelil on oma vahelehed, ajalugu, sortimine ja filter. Asukoharibale klõpsates saab sisestada ketta-, kausta- või UNC-tee. Ctrl+T avab vahelehe, Ctrl+W sulgeb selle.
-- Klõps valib faili; Ctrl-klõps muudab mitmikvalikut, Shift valib vahemiku. Insert märgib praeguse faili või eemaldab märgistuse ning viib kursori järgmisele reale, nagu Midnight Commanderis. Viimasel real jääb kursor paigale. Nooleklahvid säilitavad märgistused. Faililoendis vahetab Tab paneeli; Enter avab kursori all oleva faili või kausta.
-- F2 nimetab ümber, F3 avab eelvaate, F4 välise redaktori, F5 kopeerib teise paneeli, F6 teisaldab ja F7 loob kausta. F8 ja Delete kasutavad prügikasti; Shift+F8 ja Shift+Delete küsivad jäädava kustutamise kinnitust. Kaugserveris tähendab kustutamine jäädavat kustutamist ja küsib kinnitust.
-- Faili saab lohistada teise paneeli. Shift-lohistamine teisaldab. Explorerist rakendusse lohistamine kopeerib.
-- Ctrl+F avab rekursiivse nimeotsingu koos suuruse ja kuupäeva filtritega. Ctrl+P või Ctrl+K avab käsupaleti.
-- ZIP-i loomine ja lahtipakkimine asuvad lisatoimingute menüüs. ZIP-i topeltklõps avab kirjutuskaitstud sisu; ülemise kausta nupp väljub arhiivi juurkaustast.
-- SFTP profiil luuakse külgribalt või sisestatakse paneeli asukoharibale `sftp://kasutaja@server:2222/tee`, `ssh://kasutaja@server/tee` või `kasutaja@server:/tee`. SSH-teed avanevad SFTP kaudu samas paneelis. Avatud ühendust saab kasutada mõlemas paneelis; teise serveri või kasutaja jaoks avaneb eraldi autentimine. Esimesel ühendamisel tuleb serverivõtme SHA-256 sõrmejälg üle kontrollida. Salvestatud parool või võtme parool läheb Windows Credential Managerisse, mitte seadete faili.
-- Tab vahetab tavavaates paneeli ka tööriistaribalt. Dialoogides liigub Tab väljade vahel ja terminalis täiendab käsurida.
-- Ctrl+` näitab või peidab kohalikku interaktiivset terminali. Ctrl+O vahetab failipaneelid täissuuruses terminali vastu ja tagasi, säilitades sama shelliseansi. X sulgeb terminaliseansi. Kasutatakse PowerShell 7-t või selle puudumisel Windows PowerShelli. Terminal säilitab oma töökataloogi; paneelis navigeerimine sinna automaatselt käske ei saada.
+## Keyboard and navigation
 
-## Andmed ja tööde käitumine
+Each pane has independent tabs, history, sorting and filtering. Click its location bar to enter a local path, UNC path, SSH URL or SSH config alias. Click selects a file; Ctrl-click toggles a mark and Shift-click selects a range. Drag between panes to copy, or hold Shift to move. Dragging from Explorer copies into the destination pane.
 
-Seaded, vahelehed, serverite usaldatud sõrmejäljed ja järjehoidjad salvestatakse kasutaja seadete kausta `SuperCommander/settings.json`. Windowsis on see `%APPDATA%/SuperCommander/`. Eelmine seadistus säilib varukoopiana. Saladusi seadete faili ei kirjutata.
+| Shortcut | Action |
+| --- | --- |
+| Tab | Switch panes; dialogs keep normal field navigation |
+| Arrows | Move the cursor without clearing marks |
+| Insert | Toggle the current mark and advance to the next row |
+| Home / End | First / last row |
+| Page Up / Page Down | Move by one visible page |
+| Enter | Open the current file or folder |
+| F2 | Rename, including bulk rename |
+| F3 | View file |
+| F4 | Quick edit, locally or over SFTP |
+| F5 / F6 | Copy / move to the other pane |
+| F7 | Create folder |
+| F8 / Delete | Recycle; remote deletion is permanent and requires confirmation |
+| Shift+F8 / Shift+Delete | Confirm permanent deletion |
+| Ctrl+T / Ctrl+W | Open / close a pane tab |
+| Ctrl+U | Swap panes |
+| Ctrl+H | Toggle hidden files |
+| Ctrl+F | Recursive filename search with size and date filters |
+| Ctrl+K / Ctrl+P | Command palette |
+| Ctrl+B | Collapse / expand Workspace |
+| Ctrl+O | Full terminal / file panes, preserving the shell session |
+| Ctrl+backtick | Show / hide the docked terminal |
+| Ctrl+, / F1 | Settings and shortcut reference |
 
-Salvestatud ühenduste kataloog on OpenSSH `%USERPROFILE%/.ssh/config`. Külgriba ühenduste pealkirja juures olev faili nupp avab konfiguratsiooni redaktori. Sealt saab valida ka teise konfiguratsioonifaili, näiteks WSL-i faili UNC-tee kaudu. Ühenduse vormi **Salvesta ühendus** lisab või uuendab sama `Host`-kirje `HostName`, `User`, `Port` ja `IdentityFile` välju. **Ühenda** avab ühenduse ka salvestamata. Uusi ühendusprofiile ei dubleerita rakenduse seadete faili. Varasema versiooni rakendusesisesed profiilid on loetavad ning vormist salvestades liiguvad SSH konfiguratsiooni.
+The `..` row opens the parent folder; at a ZIP root it returns to the archive's local parent. ZIP creation and extraction are available in the Actions menu. Double-click a ZIP to browse its read-only contents. Buttons expose tooltips with their shortcuts.
 
-Toetatud on konkreetsed `Host`-aliased, üldised `Host`-mustrid, esimesena leitud väärtuse eelistamine, `Include`, kasutajanimi, port ja võtmetee. Windowsi OpenSSH agenti ning vaikimisi võtmefaile proovitakse, kui võtmetee puudub. `Match`, `ProxyJump` ja `ProxyCommand` säilivad tekstis, kuid neid nõudvad kirjed märgitakse kataloogis mittetoetatuks; väliseid konfiguratsioonikäske ei käivitata. Jagatud mitme aliasiga plokke ja kaasatud failides määratud aliaseid saab muuta tekstiredaktorist. Salvestamine säilitab varukoopia ning keeldub väliselt vahepeal muudetud faili üle kirjutamast.
+### Viewer and quick editor
 
-Avatud SSH-paneeli lisamenüüst **Pordisuunamine** loob sama SSH-seansi kaudu kohaliku TCP-tunneli. Kohalik port kuulab üksnes `127.0.0.1` aadressil; port `0` valib vaba pordi. Tunnelit saab peatada ning SSH-ühenduse sulgemine sulgeb ka selle tunnelid. Tunneli vead kuvatakse dialoogis. Need tunnelid kestavad aktiivse seansi jooksul ega muuda automaatselt SSH konfiguratsiooni `LocalForward` kirjeid.
+Text files open in a spacious viewer with line numbers, search and optional word wrap. Image and PDF previews are also available. F4 opens the built-in editor; ZIP contents remain read-only.
 
-Failitoimingud käivad ühes järjekorras. Koopia kirjutatakse kõigepealt ajutisse `.part` faili. Asendamisel säilib vana fail kuni uue koopia valmimiseni. Teisaldamisel eemaldatakse lähtefail pärast edukat kopeerimist. Vahele jäetud või ebaõnnestunud kataloogikoopia korral jääb lähtekataloog alles. Katkestamine eemaldab pooleli oleva ajutise koopia, kuid juba lõpetatud faile tagasi ei võta. Ühe kustutatava kataloogi eemaldamine ei ole poole pealt katkestatav.
+| Shortcut | In the viewer or editor |
+| --- | --- |
+| F2 / Ctrl+S | Save in the editor |
+| F4 | Switch from viewer to editor |
+| F6 | Go to line |
+| F7 / Ctrl+F | Find text |
+| Ctrl+G / Shift+F7 | Next / previous match |
+| F8 | Toggle word wrap |
+| Ctrl+H | Find and replace in the editor |
+| Ctrl+Z / Ctrl+Y | Undo / redo |
+| Ctrl+C / Ctrl+V | Copy / paste |
+| Tab | Insert a tab in the editor |
+| F10 / Esc | Close; confirm before discarding unsaved edits |
 
-Sümboolseid linke ja Windowsi junction'eid ei kopeerita ega järgita rekursiivses otsingus. ZIP-i lahtipakkimine kontrollib teid ja tõkestab sümboolsete linkide kaudu sihtkaustast väljumise. ZIP-vaatest üle 128 MiB üksikfaili kopeerimise asemel kasuta arhiivi lahtipakkimist.
+The editor supports local and SFTP text files up to 4 MiB. It preserves UTF-8/UTF-16 encoding, BOM and LF/CRLF line endings, stages replacements in a temporary file, and rejects saves if the original content changed externally. Binary files, unsupported encodings, mixed line endings and symbolic links are not editable. Text previews of larger files are limited to the first 256 KiB.
 
-Esimese versiooni arhiivitoimingud töötavad kohalike ZIP-failidega. SFTP-failid liiguvad kliendi kaudu; serveritevaheline otseülekanne, serveripoolne prügikast, 7z/RAR, kataloogide sünkroonimine ja sisseehitatud tekstiredaktor ei kuulu sellesse versiooni. Kaugfaili saab eelvaadata või kopeerida kohalikule kettale välise rakendusega avamiseks.
+### Workspace and appearance
 
-## Kontrollid
+Workspace collapses into an icon rail. Each section can also be collapsed independently; these choices persist. **Network** lists Windows mapped network drives and saved File Explorer network locations. Its refresh button reloads them. UNC paths can also be entered directly; the app does not scan the network for devices.
+
+Settings offer dark, light or Windows-following themes, a glass toggle and a transparency slider. Compact mode uses 32 px rows for both files and Workspace; Comfortable uses 40 px. Transfers use dense rows, expanding details only when needed. Select menus, checkboxes and switches follow the app's theme.
+
+## SSH connections and port forwarding
+
+The connection catalog uses `%USERPROFILE%/.ssh/config` as its source of truth. The file button beside **Connections** opens its editor; you can choose another config file, including a WSL file through a UNC path.
+
+**Save connection** adds or updates `HostName`, `User`, `Port` and `IdentityFile` in the corresponding `Host` block. **Connect** can open a session without saving. New profiles are not duplicated in application settings. Legacy application profiles remain readable and migrate to SSH config when saved from the connection form.
+
+Supported address examples:
+
+```text
+sftp://user@server:2222/path
+ssh://user@server/path
+user@server:/path
+ssh://my-config-alias/path
+```
+
+SSH locations open as SFTP in the requested pane. Both panes can reuse an open connection. Different servers or users authenticate separately. Verify the server's SHA-256 fingerprint before trusting it. Remembered passwords and key passphrases use Windows Credential Manager, not the settings file.
+
+The catalog resolves concrete aliases, Host patterns, first-value-wins defaults, Include files, usernames, ports and identity files. With no explicit key, authentication tries the Windows OpenSSH agent and default key files. Comments and other options are preserved. Saving creates a backup and checks for external config changes.
+
+`Match`, `ProxyJump` and `ProxyCommand` are preserved but not executed; affected connections are marked unsupported. Shared multi-alias blocks and aliases defined in included files can be edited in the config text editor.
+
+### Server shells
+
+The terminal follows the active pane when opened. Local panes use PowerShell 7, falling back to Windows PowerShell. SSH panes open the server's interactive shell with a PTY through the existing authenticated SSH connection. Local and per-server shell sessions remain separate and survive Ctrl+O toggling. Closing a shell leaves SFTP connected; disconnecting SSH closes its shells and tunnels.
+
+A remote shell starts in the server's default home directory. Pane navigation does not inject commands into an existing shell. If a server denies a shell or PTY, the error is shown.
+
+### Remembered port forwards
+
+Open **Actions → Port forwarding** from an SSH pane. Add multiple tunnels to the same connection. The compact table shows local addresses, destinations, status and whether each port is remembered. Each row supports copying its address, starting/stopping and removing the forward.
+
+Listeners bind to `127.0.0.1` only. Local port `0` selects a free port. **Remember** writes a `LocalForward` directive with the actual local port into the connection's SSH config block. Remembered ports reopen automatically on the next connection. Stopping preserves the saved entry; removing deletes it. Binding and tunnel errors are displayed, and disconnecting closes active tunnels.
+
+Inherited or shared forwarding directives can be changed in the config text editor. Unsupported bindings are preserved in the file and are not opened by the app.
+
+## Data and operation behavior
+
+Settings, pane tabs, bookmarks and trusted fingerprints are stored in `%APPDATA%/SuperCommander/settings.json`, with a backup of the previous settings. Secrets are stored separately in Windows Credential Manager.
+
+File operations run in a queue. Copies are staged in temporary `.part` files, preserving the old destination until replacement is ready. A move removes its source only after the copy succeeds. Skipped or failed directory moves retain their source. Cancellation removes the current partial copy but does not undo completed files. Removing one directory cannot be interrupted halfway through.
+
+Recursive searches and copies do not follow symbolic links or Windows junctions. ZIP extraction validates paths and prevents escapes through symbolic links. Extract an archive instead of copying an individual file larger than 128 MiB from the ZIP browser.
+
+Current archive operations support local ZIP files. Server-to-server direct transfers, a remote recycle bin, 7z/RAR and directory synchronization are not implemented; SFTP transfers pass through the client.
+
+## Tests
 
 ```sh
 npm test
+npx playwright install chromium
 npm run test:ui
 npm run build
 cargo test -p commander-core
 cargo test -p commander-core streams_one_hundred -- --ignored
 ```
 
-Liidesetestid kasutavad Playwrighti Chromiumit: `npx playwright install chromium`. Testitakse sõltumatuid paneele, ajalugu, filtreid, otseteid, dialooge, keelevahetust ja paigutust 960–1920 px laiustel. Rusti testid kontrollivad päris ajutiste failidega kopeerimist, teisaldamist, katkestamist, konflikte, ZIP-i, eelvaateid ja ümbernimetamist.
+Playwright covers independent panes, navigation, selection, shortcuts, dialogs, themes, settings persistence and layouts from 960 to 1920 px. Rust tests use real temporary files for transfers, cancellation, conflicts, ZIP handling, previews, renaming, editor encoding and concurrent-change detection, and SSH config preservation.
 
-Päris OpenSSH integratsioonitest WSL-is (vaja `openssh-server` ja `ssh-keygen`):
+For a real OpenSSH integration test on WSL, install `openssh-server` and `ssh-keygen`, then run:
 
 ```sh
 cargo test -p commander-core --test sftp -- --ignored --nocapture
 ```
 
-Test käivitab ajutiste võtmetega serveri ainult aadressil `127.0.0.1` juhuslikul pordil. Kontrollitakse tundmatut ja muutunud serverivõtit, võtmega autentimist, valet parooli, failiedastust ja suletud ühenduse veakäsitlust.
+The test starts an isolated loopback server with temporary keys and verifies host keys, key authentication, wrong credentials, file transfers, tunnels, an interactive shell and disconnection behavior.
 
-Windowsi tegeliku rakenduse suitsutest: käivita rakendus protsessipõhise keskkonnamuutujaga `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9223`, seejärel käivita **Windowsi Node'iga** `node scripts/windows-smoke.mjs`. Ära määra silumismuutujat süsteemiüleselt. Test loob oma ajutise kataloogi, teeb liidese kaudu failitoimingud ning kontrollib PDF-i, pildieelvaadet, prügikasti ja PowerShelli/ConPTY-t. Testkataloog eemaldatakse lõpus. Vali püsiv kuvatõmmise asukoht muutujaga `SC_SCREENSHOT`.
+### Native Windows smoke test
 
-SSH-paneeli liidesetesti kaasamiseks käivita WSL-is enne suitsutesti `node scripts/sftp-fixture.mjs`. See loob ajutise OpenSSH-serveri, võtmed ja testfaili. Windowsi suitsutest kontrollib serveri sõrmejälge ning kopeerib faile kohalikust paneelist SSH-paneeli ja tagasi. Testserver peatatakse Ctrl+C-ga; selle võtmed ja testandmed eemaldatakse. Windowsi suitsutest taastab algsed seaded.
+Launch a test instance with the **process-only** environment variable `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9223`, then run `node scripts/windows-smoke.mjs` with **Windows Node**. Do not set the debugging variable system-wide. The script exercises real Rust IPC, file operations, editor saves, previews, the recycle bin and PowerShell/ConPTY in its own temporary directory. It restores the original settings and removes its test files. Use `SC_SCREENSHOT` to choose the final diagnostic screenshot path.
 
-CI-töövoog `.github/workflows/windows.yml` kontrollib ja ehitab Windows x64 paigaldaja. Avaldamine või koodiallkirjastamine pole automaatne.
+To include SSH UI checks, first run `node scripts/sftp-fixture.mjs` in WSL. This creates a temporary loopback SSH server and test keys. The Windows smoke test edits only a temporary SSH config, transfers files both ways, edits a remote file, exercises the server shell, and saves and reopens multiple forwards. It closes its own SSH sessions afterward. Stop the fixture with Ctrl+C to remove its keys and files.
 
-Avalik lähtekood: [rihokirss/SuperCommander](https://github.com/rihokirss/SuperCommander).
+Generate public design screenshots from the running Vite preview with `node scripts/screenshots.mjs`. Only fictional sample data is used. The native Windows smoke test captures the forwarding dialog against its local test server.
+
+The Windows GitHub Actions workflow runs checks and produces an x64 executable and NSIS installer as build artifacts. Publishing releases and signing builds are not automatic.
+
+Source: [rihokirss/SuperCommander](https://github.com/rihokirss/SuperCommander).

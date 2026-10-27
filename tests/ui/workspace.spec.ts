@@ -212,6 +212,80 @@ test("tooltips expose shortcuts and themed choices support the keyboard", async 
   await expect(page.getByRole("listbox")).toHaveCount(0);
   await expect(page.getByRole("dialog")).toBeVisible();
 });
+test("workspace groups, rail, density and transparency persist", async ({
+  page,
+}) => {
+  const group = page
+    .locator(".sidebar-group")
+    .filter({
+      has: page.getByRole("button", { name: "Workspace", exact: true }),
+    });
+  await group.getByRole("button", { name: "Workspace", exact: true }).click();
+  await expect(group.locator(":scope>div")).toBeHidden();
+  await page
+    .getByRole("button", { name: "Collapse workspace", exact: true })
+    .click();
+  await expect(page.locator(".sidebar")).toHaveCSS("width", "54px");
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          JSON.parse(localStorage.getItem("supercommander-preview") || "{}")
+            .workspaceCollapsed,
+      ),
+    )
+    .toBe(true);
+  await page.reload();
+  await expect(page.locator(".sidebar")).toHaveCSS("width", "54px");
+  await page
+    .getByRole("button", { name: "Expand workspace", exact: true })
+    .click();
+  await expect(group.locator(":scope>div")).toBeHidden();
+  await group.getByRole("button", { name: "Workspace", exact: true }).click();
+  await expect(group.locator(".sidebar-item").first()).toHaveCSS(
+    "height",
+    "32px",
+  );
+  await page
+    .locator(".toolbar-right")
+    .getByRole("button", { name: "Settings", exact: true })
+    .click();
+  await choose(page, "Row spacing", "Comfortable");
+  await expect(group.locator(".sidebar-item").first()).toHaveCSS(
+    "height",
+    "40px",
+  );
+  const slider = page.getByRole("slider", {
+    name: "Transparency",
+    exact: true,
+  });
+  await slider.fill("45");
+  await expect(page.locator(".transparency-control output")).toHaveText("45%");
+  await expect(page.locator(".app-shell")).toHaveCSS(
+    "--surface-opacity",
+    "0.55",
+  );
+  await page.keyboard.press("Escape");
+  await page.locator('[data-pane="0"] .file-grid').focus();
+  await page.keyboard.press("Control+b");
+  await expect(page.locator(".sidebar")).toHaveCSS("width", "54px");
+});
+test("keyboard cursor has a filled row while Insert marks remain distinct", async ({
+  page,
+}) => {
+  const pane = page.locator('[data-pane="0"]');
+  await pane.getByRole("grid").focus();
+  await page.keyboard.press("Home");
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Insert");
+  const cursor = pane.locator(".file-row.focused");
+  expect(
+    await cursor.evaluate((el) => getComputedStyle(el).backgroundColor),
+  ).not.toBe("rgba(0, 0, 0, 0)");
+  await expect(pane.locator(".file-row.selected")).toHaveCount(1);
+  await expect(cursor).not.toHaveClass(/selected/);
+  await expect(cursor).not.toHaveCSS("outline-style", "solid");
+});
 test("layout stays within the window at supported sizes", async ({ page }) => {
   for (const width of [960, 1280, 1920]) {
     await page.setViewportSize({ width, height: 800 });

@@ -42,6 +42,9 @@ struct Bootstrap {
     home: String,
     places: Vec<Place>,
     drives: Vec<Place>,
+    network: Vec<Place>,
+    #[serde(rename = "networkError")]
+    network_error: Option<String>,
     settings: Option<serde_json::Value>,
     locale: String,
 }
@@ -50,15 +53,46 @@ struct Bootstrap {
 async fn bootstrap() -> Reply<Bootstrap> {
     blocking(|| {
         let (home, places, drives) = filesystem::local_places();
+        let (network, network_error) = match filesystem::network_places() {
+            Ok(v) => (v, None),
+            Err(e) => (vec![], Some(error(e))),
+        };
         Ok(Bootstrap {
             home,
             places,
             drives,
+            network,
+            network_error,
             settings: core::settings::load()?,
             locale: std::env::var("LANG").unwrap_or_else(|_| "en".into()),
         })
     })
     .await
+}
+#[tauri::command]
+fn set_window_appearance(
+    window: tauri::Window,
+    glass: bool,
+    transparency: u8,
+    light: bool,
+) -> Reply<()> {
+    #[cfg(windows)]
+    {
+        let alpha = if glass {
+            (190.0 * (1.0 - transparency.min(70) as f32 / 100.0)) as u8
+        } else {
+            255
+        };
+        let color = if light {
+            (239, 244, 252, alpha)
+        } else {
+            (16, 20, 31, alpha)
+        };
+        window_vibrancy::apply_acrylic(&window, Some(color)).map_err(error)?;
+    }
+    #[cfg(not(windows))]
+    let _ = (window, glass, transparency, light);
+    Ok(())
 }
 
 #[tauri::command]
@@ -167,6 +201,24 @@ async fn get_preview(state: State<'_, AppState>, location: Location) -> Reply<Pr
     blocking(move || filesystem::preview(fs.as_ref(), &location.path)).await
 }
 #[tauri::command]
+async fn read_document(
+    state: State<'_, AppState>,
+    location: Location,
+) -> Reply<core::editor::Document> {
+    let fs = state.sources.get(&location.source).map_err(error)?;
+    blocking(move || core::editor::read(fs.as_ref(), &location.path)).await
+}
+#[tauri::command]
+async fn save_document(
+    state: State<'_, AppState>,
+    location: Location,
+    text: String,
+    revision: String,
+) -> Reply<core::editor::Document> {
+    let fs = state.sources.get(&location.source).map_err(error)?;
+    blocking(move || core::editor::save(fs.as_ref(), &location.path, &text, &revision)).await
+}
+#[tauri::command]
 async fn save_settings(value: serde_json::Value) -> Reply<()> {
     blocking(move || {
         core::settings::save(&value)?;
@@ -196,6 +248,19 @@ async fn save_ssh_host(
 ) -> Reply<core::ssh_config::Catalog> {
     blocking(move || {
         core::ssh_config::upsert(path.as_deref(), &alias, &profile, revision.as_deref())
+    })
+    .await
+}
+#[tauri::command]
+async fn save_ssh_forward(
+    path: String,
+    alias: String,
+    forward: core::ssh_config::LocalForward,
+    enabled: bool,
+    revision: Option<String>,
+) -> Reply<core::ssh_config::Catalog> {
+    blocking(move || {
+        core::ssh_config::set_forward(&path, &alias, &forward, enabled, revision.as_deref())
     })
     .await
 }
@@ -266,6 +331,7 @@ async fn connect_sftp(
     profile: SftpProfile,
     secret: String,
     expected: Option<String>,
+    config_path: Option<String>,
 ) -> Reply<core::remote::ConnectionResult> {
     let secret = if secret.is_empty() {
         let id = profile.id.clone();
@@ -273,7 +339,7 @@ async fn connect_sftp(
     } else {
         secret
     };
-    let (result, fs) = core::remote::connect(&profile, &secret, expected)
+    let (mut result, fs) = core::remote::connect(&profile, &secret, expected)
         .await
         .map_err(error)?;
     if let Some(fs) = fs {
@@ -291,7 +357,38 @@ async fn connect_sftp(
             let _ = previous.close().await;
         }
         state.sources.insert(id.clone(), fs.clone());
-        state.connections.lock().unwrap().insert(id, fs);
+        state.connections.lock().unwrap().insert(id, fs.clone());
+        let saved_profile = profile.clone();
+        let saved = blocking(move || {
+            let catalog = core::ssh_config::read(config_path.as_deref())?;
+            Ok(catalog
+                .hosts
+                .into_iter()
+                .find(|h| {
+                    h.profile.id == saved_profile.id
+                        && h.profile.host == saved_profile.host
+                        && h.profile.port == saved_profile.port
+                        && h.profile.username == saved_profile.username
+                })
+                .map(|h| h.forwards)
+                .unwrap_or_default())
+        })
+        .await;
+        match saved {
+            Ok(forwards) => {
+                for forward in forwards {
+                    if let Err(e) = fs
+                        .start_forward(forward.local_port, forward.remote_host, forward.remote_port)
+                        .await
+                    {
+                        result
+                            .forward_errors
+                            .push(format!("127.0.0.1:{}: {e:#}", forward.local_port));
+                    }
+                }
+            }
+            Err(e) => result.forward_errors.push(e),
+        }
     }
     Ok(result)
 }
@@ -314,28 +411,78 @@ async fn forget_secret(id: String) -> Reply<()> {
 async fn terminal_open(
     state: State<'_, AppState>,
     path: String,
+    source: String,
     channel: Channel<Vec<u8>>,
 ) -> Reply<String> {
-    state
-        .terminals
-        .open(
-            &path,
-            Arc::new(move |data| {
-                let _ = channel.send(data);
-            }),
-        )
-        .map_err(error)
+    let output: Arc<dyn Fn(Vec<u8>) + Send + Sync> = Arc::new(move |data| {
+        let _ = channel.send(data);
+    });
+    if source != "local" {
+        let connection = state
+            .connections
+            .lock()
+            .unwrap()
+            .get(&source)
+            .cloned()
+            .ok_or("SSH connection is not active")?;
+        return connection.open_terminal(output).await.map_err(error);
+    }
+    state.terminals.open(&path, output).map_err(error)
 }
 #[tauri::command]
-fn terminal_write(state: State<AppState>, id: String, data: String) -> Reply<()> {
+async fn terminal_write(
+    state: State<'_, AppState>,
+    source: String,
+    id: String,
+    data: String,
+) -> Reply<()> {
+    if source != "local" {
+        let connection = state
+            .connections
+            .lock()
+            .unwrap()
+            .get(&source)
+            .cloned()
+            .ok_or("SSH connection is not active")?;
+        return connection
+            .write_terminal(&id, data.into_bytes())
+            .await
+            .map_err(error);
+    }
     state.terminals.write(&id, data.as_bytes()).map_err(error)
 }
 #[tauri::command]
-fn terminal_resize(state: State<AppState>, id: String, rows: u16, cols: u16) -> Reply<()> {
+async fn terminal_resize(
+    state: State<'_, AppState>,
+    source: String,
+    id: String,
+    rows: u16,
+    cols: u16,
+) -> Reply<()> {
+    if source != "local" {
+        let connection = state
+            .connections
+            .lock()
+            .unwrap()
+            .get(&source)
+            .cloned()
+            .ok_or("SSH connection is not active")?;
+        return connection
+            .resize_terminal(&id, rows, cols)
+            .await
+            .map_err(error);
+    }
     state.terminals.resize(&id, rows, cols).map_err(error)
 }
 #[tauri::command]
-fn terminal_close(state: State<AppState>, id: String) -> Reply<()> {
+async fn terminal_close(state: State<'_, AppState>, source: String, id: String) -> Reply<()> {
+    if source != "local" {
+        let connection = state.connections.lock().unwrap().get(&source).cloned();
+        if let Some(connection) = connection {
+            return connection.close_terminal(&id).await.map_err(error);
+        }
+        return Ok(());
+    }
     state.terminals.close(&id).map_err(error)
 }
 
@@ -415,9 +562,11 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             bootstrap,
+            set_window_appearance,
             read_ssh_config,
             save_ssh_config,
             save_ssh_host,
+            save_ssh_forward,
             has_connection_secret,
             save_connection_secret,
             start_forward,
@@ -433,6 +582,8 @@ pub fn run() {
             rename_preview,
             rename_apply,
             get_preview,
+            read_document,
+            save_document,
             save_settings,
             connect_sftp,
             disconnect_sftp,

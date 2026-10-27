@@ -21,6 +21,10 @@ await fs.mkdir(dst);
 await fs.writeFile(path.join(src, "Õunad.txt"), "Tere, maailm!");
 await fs.writeFile(path.join(src, "move-me.txt"), "move payload");
 await fs.writeFile(
+  path.join(src, "quick-edit.txt"),
+  Buffer.from("\ufeffFirst line\r\nSecond line\r\n"),
+);
+await fs.writeFile(
   path.join(src, "preview.html"),
   "<script>window.SC_UNSAFE=true</script>",
 );
@@ -69,6 +73,11 @@ const rpc = (command, args = {}) =>
     { command, args },
   );
 const originalSettings = (await rpc("bootstrap")).settings;
+assert.equal(
+  (await rpc("bootstrap")).networkError,
+  null,
+  "Windows saved network locations should load without an error",
+);
 async function choose(label, option) {
   await page.getByRole("combobox", { name: label, exact: true }).click();
   await page.getByRole("option", { name: option, exact: true }).click();
@@ -92,6 +101,7 @@ async function finished(count) {
   );
 }
 let completed = 0;
+const ownedSources = new Set();
 try {
   await page.reload();
   await expect(page.locator(".app-shell")).toBeVisible({ timeout: 20000 });
@@ -217,12 +227,46 @@ try {
     .click();
   await expect(left.getByText("renamed.txt", { exact: true })).toBeVisible();
   console.log("PASS rename preview and apply");
+  await left.getByText("quick-edit.txt", { exact: true }).click();
+  await page.keyboard.press("F4");
+  let fileEditor = page.getByRole("dialog");
+  await expect(
+    fileEditor.getByRole("textbox", { name: "File contents", exact: true }),
+  ).toHaveValue("First line\nSecond line\n");
+  await fileEditor
+    .getByRole("textbox", { name: "File contents", exact: true })
+    .fill("Õunad\nSecond line\nEdited in SuperCommander\n");
+  await page.keyboard.press("F2");
+  await expect(fileEditor).toContainText("Saved");
+  assert.equal(
+    await fs.readFile(path.join(src, "quick-edit.txt"), "utf8"),
+    "\ufeffÕunad\r\nSecond line\r\nEdited in SuperCommander\r\n",
+  );
+  await page.keyboard.press("Control+f");
+  await fileEditor
+    .getByRole("textbox", { name: "Find text", exact: true })
+    .fill("Second");
+  await page.keyboard.press("Enter");
+  assert.equal(
+    await fileEditor
+      .locator("textarea")
+      .evaluate((el) => el.value.slice(el.selectionStart, el.selectionEnd)),
+    "Second",
+  );
+  await page.keyboard.press("F8");
+  await expect(fileEditor.locator(".text-surface")).toHaveClass(/wrapped/);
+  await page.keyboard.press("F10");
+  console.log(
+    "PASS F4 editor, F2 atomic save, UTF-8 BOM/CRLF preservation, find, word wrap and F10",
+  );
 
   await left.getByText("preview.html", { exact: true }).click();
   await page.keyboard.press("F3");
-  await expect(page.getByRole("dialog").locator("pre")).toContainText(
-    "<script>",
-  );
+  await expect(
+    page
+      .getByRole("dialog")
+      .getByRole("textbox", { name: "File viewer", exact: true }),
+  ).toHaveValue(/<script>/);
   assert.equal(await page.evaluate(() => window.SC_UNSAFE), undefined);
   await page.keyboard.press("Escape");
   await left.getByText("pixel.png", { exact: true }).click();
@@ -357,6 +401,9 @@ try {
       .click();
     await expect(dialog).toContainText("Connection saved in SSH config");
     const savedConfig = await fs.readFile(sshConfig, "utf8");
+    const savedCatalog = await rpc("read_ssh_config", { path: sshConfig });
+    for (const host of savedCatalog.hosts)
+      ownedSources.add(`sftp:${host.profile.id}`);
     assert.equal(savedConfig.match(/^Host sc-form$/gm)?.length, 1);
     assert.ok(savedConfig.includes("# preserved fixture comment"));
     await dialog.getByRole("button", { name: "Connect", exact: true }).click();
@@ -384,6 +431,52 @@ try {
     await expect(
       right.getByText("remote-only.txt", { exact: true }),
     ).toBeVisible();
+    await right.getByText("remote-only.txt", { exact: true }).click();
+    await page.keyboard.press("F4");
+    fileEditor = page.getByRole("dialog");
+    await expect(
+      fileEditor.getByRole("textbox", { name: "File contents", exact: true }),
+    ).toHaveValue("A file from the SSH server");
+    await fileEditor
+      .getByRole("textbox", { name: "File contents", exact: true })
+      .fill("Edited through the existing SSH connection");
+    await page.keyboard.press("Control+s");
+    await expect(fileEditor).toContainText("Saved");
+    await page.keyboard.press("F10");
+    await right.getByRole("grid").focus();
+    await page.keyboard.press("Control+o");
+    const sshTerminal = page.locator(
+      '.terminal-panel[data-terminal-source^="sftp:"]',
+    );
+    await expect(sshTerminal).toBeVisible();
+    await sshTerminal.locator(".xterm-helper-textarea").focus();
+    await page.keyboard.type(
+      "sc_session=SSH_PRESERVED; printf 'SC_REMOTE_%s\\n' \"$(uname -s)\"",
+      { delay: 3 },
+    );
+    await page.keyboard.press("Enter");
+    await expect(sshTerminal.locator(".xterm-rows")).toContainText(
+      "SC_REMOTE_Linux",
+      { timeout: 15000 },
+    );
+    await page.keyboard.press("Control+o");
+    await page.keyboard.press("Control+o");
+    await sshTerminal.locator(".xterm-helper-textarea").focus();
+    await page.keyboard.type("printf '%s\\n' \"$sc_session\"");
+    await page.keyboard.press("Enter");
+    await expect(sshTerminal.locator(".xterm-rows")).toContainText(
+      "SSH_PRESERVED",
+    );
+    await sshTerminal
+      .locator("header")
+      .getByRole("button", { name: "Close", exact: true })
+      .click();
+    await expect(
+      right.getByText("remote-only.txt", { exact: true }),
+    ).toBeVisible();
+    console.log(
+      "PASS remote quick edit and the server's persistent interactive shell on the same SSH session",
+    );
     await page.locator(".menu-anchor>button").click();
     await page
       .getByRole("menuitem", { name: "Port forwarding", exact: true })
@@ -407,7 +500,84 @@ try {
       ).text(),
       "SUPERCOMMANDER_TUNNEL_OK",
     );
+    await forward
+      .getByRole("button", { name: "Create tunnel", exact: true })
+      .click();
+    await expect(forward.locator(".forward-row")).toHaveCount(2);
+    await forward.getByRole("checkbox").nth(0).click();
+    await expect(forward.getByRole("checkbox").nth(0)).toBeChecked();
+    await expect
+      .poll(
+        async () =>
+          (await fs.readFile(sshConfig, "utf8")).match(/LocalForward/g)
+            ?.length || 0,
+      )
+      .toBe(1);
+    await expect(forward.getByRole("checkbox").nth(1)).toBeEnabled();
+    await forward.getByRole("checkbox").nth(1).click();
+    await expect
+      .poll(
+        async () =>
+          (await fs.readFile(sshConfig, "utf8")).match(/LocalForward/g)
+            ?.length || 0,
+      )
+      .toBe(2);
+    const ports = await forward
+      .locator(".forward-row")
+      .evaluateAll((rows) => rows.map((r) => Number(r.dataset.localPort)));
+    await expect(
+      forward.getByRole("button", { name: "Stop", exact: true }).first(),
+    ).toBeEnabled();
+    await forward
+      .getByRole("button", { name: "Stop", exact: true })
+      .first()
+      .click();
+    await expect(
+      forward.getByRole("button", { name: "Start", exact: true }),
+    ).toBeVisible();
+    await forward.getByRole("button", { name: "Start", exact: true }).click();
+    await expect(
+      forward.getByRole("button", { name: "Stop", exact: true }),
+    ).toHaveCount(2);
+    const docs = path.join(
+      path.dirname(fileURLToPath(import.meta.url)),
+      "..",
+      "docs",
+      "screenshots",
+    );
+    await fs.mkdir(docs, { recursive: true });
+    await forward.screenshot({ path: path.join(docs, "port-forwarding.png") });
     await page.keyboard.press("Escape");
+    await page.locator(".menu-anchor>button").click();
+    await page
+      .getByRole("menuitem", { name: "Disconnect", exact: true })
+      .click();
+    await page.locator(".sidebar-item").filter({ hasText: "sc-form" }).click();
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: "Connect", exact: true })
+      .click();
+    await expect(right.locator(".pane-context")).toContainText(
+      fixture.username + "@",
+      { timeout: 20000 },
+    );
+    for (const port of ports)
+      assert.equal(
+        await (
+          await fetch(`http://127.0.0.1:${port}/`, {
+            signal: AbortSignal.timeout(5000),
+          })
+        ).text(),
+        "SUPERCOMMANDER_TUNNEL_OK",
+      );
+    await right.locator(".breadcrumbs").click();
+    await right
+      .locator(".path-form input")
+      .fill(`ssh://sc-form${fixture.path}`);
+    await right.locator(".path-form input").press("Enter");
+    await expect(
+      right.getByText("remote-only.txt", { exact: true }),
+    ).toBeVisible();
     console.log(
       "PASS connection form uses SSH config as its only profile store; alias reuses the live SSH connection; localhost tunnel carries HTTP",
     );
@@ -428,14 +598,24 @@ try {
     await finished(++completed);
     assert.equal(
       await fs.readFile(path.join(src, "remote-only.txt"), "utf8"),
-      "A file from the SSH server",
+      "Edited through the existing SSH connection",
     );
     await page.locator(".menu-anchor>button").click();
     await page
       .getByRole("menuitem", { name: "Port forwarding", exact: true })
       .click();
     forward = page.getByRole("dialog");
-    await forward.getByRole("button", { name: "Stop", exact: true }).click();
+    await forward
+      .getByRole("button", { name: "Remove port", exact: true })
+      .first()
+      .click();
+    await expect(forward.locator(".forward-row")).toHaveCount(1);
+    await expect(
+      forward.getByRole("button", { name: "Remove port", exact: true }),
+    ).toBeEnabled();
+    await forward
+      .getByRole("button", { name: "Remove port", exact: true })
+      .click();
     await expect(forward.locator(".forward-row")).toHaveCount(0);
     await assert.rejects(
       fetch(`http://127.0.0.1:${localPort}/`, {
@@ -548,6 +728,8 @@ try {
   console.log("WINDOWS SMOKE PASSED");
 } finally {
   await page.keyboard.press("Escape").catch(() => {});
+  for (const source of ownedSources)
+    await rpc("disconnect_sftp", { source }).catch(() => {});
   if (await page.locator(".terminal-panel").count()) {
     if (!(await page.locator(".terminal-panel").isVisible()))
       await page

@@ -12,14 +12,17 @@ import { IconButton, Modal } from "./Primitives";
 import type { Location, Preview } from "../types";
 import type { Text } from "../i18n";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+import { TextWorkbench } from "./TextWorkbench";
 export function PreviewDialog({
   location,
   t,
   onClose,
+  onEdit,
 }: {
   location: Location;
   t: Text;
   onClose: () => void;
+  onEdit?: () => void;
 }) {
   const [data, setData] = useState<Preview>();
   const [error, setError] = useState("");
@@ -39,12 +42,34 @@ export function PreviewDialog({
       alive = false;
     };
   }, [location.source, location.path]);
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => {
+      if (e.key === "F10" || e.key === "F3") {
+        e.preventDefault();
+        onClose();
+      }
+    };
+    document.addEventListener("keydown", key);
+    return () => document.removeEventListener("keydown", key);
+  }, [onClose]);
+  if (data?.kind === "text")
+    return (
+      <TextWorkbench
+        location={location}
+        t={t}
+        initial={data.data}
+        truncated={data.truncated}
+        onClose={onClose}
+        onEdit={onEdit}
+      />
+    );
   return (
     <Modal
       title={basename(location.path)}
       subtitle={data ? `${size(data.size)} · ${data.mime}` : location.path}
       onClose={onClose}
       wide
+      full
     >
       <div className="preview-body">
         {error ? (
@@ -53,11 +78,6 @@ export function PreviewDialog({
           <div className="empty-state">
             <LoaderCircle className="spin" />
           </div>
-        ) : data.kind === "text" ? (
-          <>
-            <pre>{data.data}</pre>
-            {data.truncated && <p className="preview-note">{t.truncated}</p>}
-          </>
         ) : data.kind === "image" ? (
           <img
             alt={basename(location.path)}
@@ -86,6 +106,13 @@ export function PreviewDialog({
           </div>
         )}
       </div>
+      <footer className="workbench-keys">
+        <button onClick={onClose}>
+          <kbd>F10</kbd>
+          {t.close}
+          <small>Esc / F3</small>
+        </button>
+      </footer>
     </Modal>
   );
 }

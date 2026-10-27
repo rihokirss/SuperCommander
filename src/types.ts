@@ -26,6 +26,9 @@ export type Settings = {
   bookmarks: Place[];
   showHidden: boolean;
   glass: boolean;
+  transparency?: number;
+  workspaceCollapsed?: boolean;
+  collapsedGroups?: string[];
   density: "comfortable" | "compact";
   profiles: SftpProfile[];
   trustedHosts: Record<string, string>;
@@ -36,6 +39,12 @@ export type CatalogHost = {
   profile: SftpProfile;
   warnings: string[];
   disabled: boolean;
+  forwards: SavedForward[];
+};
+export type SavedForward = {
+  localPort: number;
+  remoteHost: string;
+  remotePort: number;
 };
 export type SshCatalog = {
   path: string;
@@ -62,7 +71,12 @@ export type SftpProfile = {
 };
 export type Conflict = "ask" | "replace" | "skip" | "keepBoth";
 export type Operation =
-  "copy" | "move" | "delete" | "trash" | "zip" | "extract";
+  | "copy"
+  | "move"
+  | "delete"
+  | "trash"
+  | "zip"
+  | "extract";
 export type JobRequest = {
   id: string;
   operation: Operation;
@@ -74,7 +88,12 @@ export type JobRequest = {
 export type JobEvent = {
   id: string;
   state:
-    "queued" | "running" | "conflict" | "completed" | "cancelled" | "failed";
+    | "queued"
+    | "running"
+    | "conflict"
+    | "completed"
+    | "cancelled"
+    | "failed";
   current: string;
   bytes: number;
   total: number;
@@ -109,6 +128,8 @@ export type Bootstrap = {
   home: string;
   places: Place[];
   drives: Place[];
+  network?: Place[];
+  networkError?: string;
   settings: Settings | null;
   locale: string;
 };

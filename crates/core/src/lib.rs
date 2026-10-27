@@ -1,4 +1,5 @@
 pub mod archive;
+pub mod editor;
 pub mod engine;
 pub mod filesystem;
 pub mod remote;

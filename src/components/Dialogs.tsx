@@ -669,6 +669,27 @@ export function SettingsDialog({
           />
         </label>
         <label className="setting-row">
+          <span>
+            <strong>{t.transparency}</strong>
+            <small>{t.transparencyHint}</small>
+          </span>
+          <span className="transparency-control">
+            <input
+              aria-label={t.transparency}
+              type="range"
+              min={0}
+              max={70}
+              step={1}
+              disabled={!settings.glass}
+              value={settings.transparency ?? 15}
+              onChange={(e) => update({ transparency: Number(e.target.value) })}
+            />
+            <output>
+              {settings.glass ? (settings.transparency ?? 15) : 0}%
+            </output>
+          </span>
+        </label>
+        <label className="setting-row">
           <span>{t.density}</span>
           <Select
             label={t.density}
@@ -760,6 +781,7 @@ export function ConnectDialog({
     profile: SftpProfile,
     fingerprint: string,
     path: string,
+    forwardErrors: string[],
   ) => void;
   onForget: (id: string) => void;
   configRevision?: string | null;
@@ -815,10 +837,12 @@ export function ConnectDialog({
         fingerprint: string;
         needsTrust: boolean;
         path: string;
+        forwardErrors: string[];
       }>("connect_sftp", {
         profile: { ...value, name: value.name || value.host },
         secret,
         expected: trust || known || null,
+        configPath: settings.sshConfigPath || null,
       });
       if (result.needsTrust) setFingerprint(result.fingerprint);
       else {
@@ -826,6 +850,7 @@ export function ConnectDialog({
           { ...value, name: value.name || value.host },
           result.fingerprint,
           result.path,
+          result.forwardErrors,
         );
         onClose();
       }

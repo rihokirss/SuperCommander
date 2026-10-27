@@ -349,6 +349,21 @@ fn preview_limits_text_and_does_not_execute_html() {
     assert_eq!(preview.kind, "text");
     assert!(preview.truncated);
     assert_eq!(preview.data.len(), 256 * 1024);
+    let no_extension = tmp.path().join("config");
+    fs::write(&no_extension, "Host example\n User alice\n").unwrap();
+    assert_eq!(
+        filesystem::preview(&LocalFs, &path(&no_extension))
+            .unwrap()
+            .kind,
+        "text"
+    );
+    fs::write(&no_extension, b"binary\0payload").unwrap();
+    assert_eq!(
+        filesystem::preview(&LocalFs, &path(&no_extension))
+            .unwrap()
+            .kind,
+        "unsupported"
+    );
 }
 #[test]
 #[ignore = "Explicit large-directory acceptance check"]

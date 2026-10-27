@@ -166,6 +166,40 @@ async fn verifies_host_authenticates_and_transfers_over_real_sftp() {
         .start_forward(0, "127.0.0.1".into(), echo_port)
         .await
         .unwrap();
+    // A PTY shell shares the authenticated SSH connection with SFTP and both tunnels.
+    let output = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let received = output.clone();
+    let shell = fs
+        .open_terminal(std::sync::Arc::new(move |data| {
+            received.lock().unwrap().extend(data)
+        }))
+        .await
+        .unwrap();
+    fs.resize_terminal(&shell, 30, 120).await.unwrap();
+    fs.write_terminal(
+        &shell,
+        b"printf 'SC_SHELL_%s\\n' \"$(uname -s)\"\r".to_vec(),
+    )
+    .await
+    .unwrap();
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            if String::from_utf8_lossy(&output.lock().unwrap()).contains("SC_SHELL_Linux") {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(30)).await;
+        }
+    })
+    .await
+    .unwrap();
+    fs.close_terminal(&shell).await.unwrap();
+    let sftp = fs.clone();
+    assert!(!tokio::task::spawn_blocking(move || sftp.list("/"))
+        .await
+        .unwrap()
+        .unwrap()
+        .is_empty());
+    assert_eq!(fs.forwards().len(), 1);
     fs.close().await.unwrap();
     assert!(
         tokio::net::TcpStream::connect(("127.0.0.1", second.local_port))

@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useLayoutEffect, useRef, type ReactNode } from "react";
 import {
   X,
   Folder,
@@ -82,28 +82,26 @@ export function Modal({
   children,
   onClose,
   wide = false,
+  full = false,
 }: {
   title: string;
   subtitle?: string;
   children: ReactNode;
   onClose: () => void;
   wide?: boolean;
+  full?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
-  useEffect(() => {
+  useLayoutEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
     const node = ref.current;
-    const timer = setTimeout(
-      () =>
-        (
-          node?.querySelector<HTMLElement>(
-            'input:not([type="checkbox"]),textarea,select',
-          ) || node?.querySelector<HTMLElement>("button")
-        )?.focus(),
-      30,
-    );
+    (
+      node?.querySelector<HTMLElement>(
+        'button[role="combobox"],input:not([type="checkbox"]),textarea,select',
+      ) || node?.querySelector<HTMLElement>("button")
+    )?.focus();
     const key = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         if (document.querySelector('[data-select-open="true"]')) return;
@@ -129,7 +127,6 @@ export function Modal({
     };
     document.addEventListener("keydown", key, true);
     return () => {
-      clearTimeout(timer);
       document.removeEventListener("keydown", key, true);
       previous?.focus();
     };
@@ -143,7 +140,7 @@ export function Modal({
     >
       <div
         ref={ref}
-        className={`modal glass ${wide ? "wide" : ""}`}
+        className={`modal glass ${wide ? "wide" : ""} ${full ? "file-workbench" : ""}`}
         role="dialog"
         aria-modal="true"
         aria-label={title}

@@ -54,6 +54,9 @@ pub trait FileSystem: Send + Sync {
     fn writable(&self) -> bool {
         true
     }
+    fn copy_permissions(&self, _from: &str, _to: &str) -> Result<()> {
+        Ok(())
+    }
     fn close(&self) -> Result<()> {
         Ok(())
     }
@@ -92,6 +95,14 @@ impl LocalFs {
     }
 }
 impl FileSystem for LocalFs {
+    fn copy_permissions(&self, from: &str, to: &str) -> Result<()> {
+        let permissions = fs::metadata(from)?.permissions();
+        if permissions.readonly() {
+            bail!("The file is read-only");
+        }
+        fs::set_permissions(to, permissions)?;
+        Ok(())
+    }
     fn list(&self, path: &str) -> Result<Vec<Entry>> {
         fs::read_dir(path)?
             .map(|e| Self::entry(&e?.path()))
@@ -314,6 +325,7 @@ pub fn preview(fs: &dyn FileSystem, path: &str) -> Result<Preview> {
         .unwrap_or_default()
         .to_string_lossy()
         .to_lowercase();
+    let mut detect_text = false;
     let (kind, mime, limit) = match ext.as_str() {
         "png" => ("image", "image/png", 24 * 1024 * 1024),
         "jpg" | "jpeg" => ("image", "image/jpeg", 24 * 1024 * 1024),
@@ -324,7 +336,10 @@ pub fn preview(fs: &dyn FileSystem, path: &str) -> Result<Preview> {
         "txt" | "md" | "rs" | "js" | "ts" | "tsx" | "jsx" | "json" | "toml" | "yaml" | "yml"
         | "xml" | "html" | "css" | "csv" | "log" | "ini" | "cfg" | "sh" | "ps1" | "py" | "c"
         | "h" | "cpp" | "sql" | "gitignore" => ("text", "text/plain", 256 * 1024),
-        _ => ("unsupported", "application/octet-stream", 0),
+        _ => {
+            detect_text = true;
+            ("text", "text/plain", 256 * 1024)
+        }
     };
     let mut out = Preview {
         kind: kind.into(),
@@ -341,14 +356,31 @@ pub fn preview(fs: &dyn FileSystem, path: &str) -> Result<Preview> {
     }
     let mut bytes = Vec::new();
     fs.reader(path)?.take(limit).read_to_end(&mut bytes)?;
+    if detect_text
+        && !bytes.starts_with(&[0xff, 0xfe])
+        && !bytes.starts_with(&[0xfe, 0xff])
+        && (bytes.contains(&0)
+            || std::str::from_utf8(&bytes).is_err_and(|e| e.error_len().is_some()))
+    {
+        out.kind = "unsupported".into();
+        out.mime = "application/octet-stream".into();
+        return Ok(out);
+    }
     out.data = if kind == "text" {
-        if bytes.starts_with(&[0xff, 0xfe]) {
+        if bytes.starts_with(&[0xff, 0xfe]) || bytes.starts_with(&[0xfe, 0xff]) {
+            let le = bytes[0] == 0xff;
             String::from_utf16_lossy(
                 &bytes[2..]
                     .as_chunks::<2>()
                     .0
                     .iter()
-                    .map(|b| u16::from_le_bytes([b[0], b[1]]))
+                    .map(|b| {
+                        if le {
+                            u16::from_le_bytes([b[0], b[1]])
+                        } else {
+                            u16::from_be_bytes([b[0], b[1]])
+                        }
+                    })
                     .collect::<Vec<_>>(),
             )
         } else {
@@ -401,4 +433,56 @@ pub fn local_places() -> (String, Vec<crate::Place>, Vec<crate::Place>) {
         kind: "drive".into(),
     }];
     (home.to_string_lossy().into(), places, drives)
+}
+
+/// Read Explorer's saved locations; this does not scan the network or contact remote hosts.
+pub fn network_places() -> Result<Vec<crate::Place>> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        let script = r#"
+$ErrorActionPreference='Stop'
+[Console]::OutputEncoding=[System.Text.UTF8Encoding]::new($false)
+$items=[System.Collections.Generic.List[object]]::new()
+$network=New-Object -ComObject WScript.Network
+$drives=$network.EnumNetworkDrives()
+for($i=0;$i -lt $drives.Count();$i+=2){$letter=[string]$drives.Item($i);$target=[string]$drives.Item($i+1);$items.Add(@{name="$letter $target";path="$letter\";kind='network'})}
+$shell=New-Object -ComObject WScript.Shell
+$folder=Join-Path $env:APPDATA 'Microsoft\Windows\Network Shortcuts'
+if(Test-Path -LiteralPath $folder){
+foreach($item in Get-ChildItem -LiteralPath $folder -Force){
+$links=if($item.PSIsContainer){@(Get-ChildItem -LiteralPath $item.FullName -Filter '*.lnk' -Force)}elseif($item.Extension -eq '.lnk'){@($item)}else{@()}
+foreach($link in $links){$target=$shell.CreateShortcut($link.FullName).TargetPath;if($target.StartsWith('\\')){$items.Add(@{name=$item.BaseName;path=$target;kind='network'})}}
+}}
+ConvertTo-Json -InputObject @($items.ToArray()) -Compress
+"#;
+        let output = std::process::Command::new("powershell.exe")
+            .args(["-NoProfile", "-NonInteractive", "-Command", script])
+            .creation_flags(0x08000000)
+            .output()?;
+        if !output.status.success() {
+            bail!(
+                "Cannot read Windows network locations: {}",
+                String::from_utf8_lossy(&output.stderr).trim()
+            );
+        }
+        let values: Vec<serde_json::Value> = serde_json::from_slice(&output.stdout)?;
+        let mut seen = std::collections::HashSet::new();
+        return Ok(values
+            .into_iter()
+            .filter_map(|v| {
+                let path = v.get("path")?.as_str()?.to_string();
+                if !seen.insert(path.to_lowercase()) {
+                    return None;
+                }
+                Some(crate::Place {
+                    name: v.get("name")?.as_str()?.into(),
+                    path,
+                    kind: "network".into(),
+                })
+            })
+            .collect());
+    }
+    #[cfg(not(windows))]
+    Ok(vec![])
 }

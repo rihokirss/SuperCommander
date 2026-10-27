@@ -10,7 +10,15 @@
   --panel: #ffffff85;
   --glass: #f4f7fcbd;
   color: var(--text);
-  background: linear-gradient(118deg, #ecf1f9ed, #f5f7fbe8 48%, #eaf0f8ed);
+  background: linear-gradient(
+    118deg,
+    rgb(236 241 249 / var(--surface-opacity, 0.85)),
+    rgb(245 247 251 / var(--surface-opacity, 0.85)) 48%,
+    rgb(234 240 248 / var(--surface-opacity, 0.85))
+  );
+}
+.app-shell[data-theme="light"].frosted .glass {
+  background-color: rgb(244 247 252 / var(--surface-opacity, 0.85));
 }
 .app-shell[data-theme="light"].opaque {
   --glass: #f3f6fb;
