@@ -1508,6 +1508,10 @@ export function App() {
     destination?: { pane: number; path: string },
   ) {
     setSessions((old) => [...old.filter((p) => p.id !== profile.id), profile]);
+    setFileClipboard((value) =>
+      value?.source === `sftp:${profile.id}` ? null : value,
+    );
+    clipboardRevision.current = -1;
     update({
       trustedHosts: {
         ...settings!.trustedHosts,

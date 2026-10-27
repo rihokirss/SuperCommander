@@ -9,10 +9,15 @@
   },
   "currentBatch": {
     "features": ["Windows file clipboard copy/cut/paste and full paths", "Same-folder file/tree duplication", "File identity checks before moves", "Canonical SFTP destination checks", "SSH clipboard and queue connection binding", "Single tooltip owner including inherited native titles"],
-    "checks": { "javascriptUnitTests": "14 passed", "browserTests": "25 passed", "coreTests": "platform-independent suites passed", "realOpenSshIntegration": "2 passed, including alias safety and queued reconnection isolation", "windowsCompilation": "workspace and all test targets passed", "nativeWindowsClipboard": "native core test passed in CI run 40586689666; full native UI test pending", "nativeWindows": "Full scripts/windows-smoke.mjs and windows-network-smoke.mjs passed on d2e2a4b build" },
+    "checks": { "javascriptUnitTests": "14 passed", "browserTests": "25 passed", "coreTests": "platform-independent suites passed", "realOpenSshIntegration": "2 passed, including alias safety and queued reconnection isolation", "windowsCompilation": "workspace and all test targets passed", "nativeWindowsClipboard": "native core test passed in CI runs 40586689666 and 40587488883; full native UI test pending", "nativeWindows": "Full scripts/windows-smoke.mjs and windows-network-smoke.mjs passed on 783b189 build" },
     "visualEvidence": ["artifacts/clipboard-menu-dark.png", "artifacts/clipboard-menu-light.png"],
     "completion": "in_progress; native clipboard integration evidence is still required"
   },
+  "followUpFindings": [
+    "Transfer safety still needs an audit of physical aliases reached through different protocols (for example UNC and SFTP), cancellation/rollback and metadata preservation.",
+    "New-file editing, Save As and unsaved editor protection on application close remain unimplemented.",
+    "Bookmark management, file properties, content search and directory comparison remain in the full scope below."
+  ],
   "completionRule": "Implementation plus current functional, keyboard and visual evidence is required; source inspection or an older release alone does not prove completion.",
   "requirements": [
     { "id": "navigation", "status": "in_progress", "scope": "Independent panes, history, parent entries, roots, path editing, tabs, closed-tab restoration, refresh and keyboard access", "evidence": ["tests/ui/workspace.spec.ts", "tests/ui/keyboard.spec.ts"] },
