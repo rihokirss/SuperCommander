@@ -301,6 +301,15 @@ test("collapsed workspace uses one tooltip owner for icons and labels", async ({
   await page.mouse.move(500, 500);
   await icon.hover();
   await expect(page.getByRole("tooltip")).toHaveText(label);
+
+  // Focusing the button must not add a custom hint over its hovered icon's title.
+  await icon.evaluate(el => el.setAttribute("title", "Native icon hint"));
+  await page.mouse.move(500, 500);
+  await icon.hover();
+  await item.focus();
+  await page.waitForTimeout(500);
+  await expect(page.getByRole("tooltip")).toHaveCount(0);
+  await icon.evaluate(el => el.removeAttribute("title"));
   await page.getByRole("button", { name: "Expand workspace", exact: true }).click();
   await expect(page.getByRole("tooltip")).toHaveCount(0);
 });

@@ -18,6 +18,14 @@ export function Tooltips() {
       setTip(undefined);
       target = null;
     };
+    const hasNativeTip = (element: Element, node: HTMLElement) => {
+      const titled = (item: Element) =>
+        !!item.closest("[title]")?.getAttribute("title");
+      // Focus events target the button even when its icon owns the pointer's
+      // native hint. Check the deepest hovered descendant as well.
+      const hovered = Array.from(node.querySelectorAll(":hover")).at(-1);
+      return titled(element) || (!!hovered && titled(hovered));
+    };
     const show = (event: Event) => {
       const element = event.target;
       if (!(element instanceof Element)) return;
@@ -31,7 +39,7 @@ export function Tooltips() {
       }
       // Native titles can also come from an icon, label or ancestor of the button.
       // An empty title explicitly stops native title inheritance.
-      if (element.closest("[title]")?.getAttribute("title")) {
+      if (hasNativeTip(element, node)) {
         hide();
         return;
       }
@@ -49,7 +57,7 @@ export function Tooltips() {
         node.textContent?.trim();
       if (!text) return;
       timer = setTimeout(() => {
-        if (!node.isConnected) return;
+        if (!node.isConnected || hasNativeTip(element, node)) return;
         const rect = node.getBoundingClientRect();
         const above = rect.bottom > innerHeight - 55;
         setTip({
