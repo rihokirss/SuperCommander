@@ -12,6 +12,41 @@ export type Entry = {
 };
 export type Listing = { entries: Entry[]; done: boolean; error?: string };
 export type Place = { name: string; path: string; kind: string };
+export type Bookmark = Place & { source?: string };
+export type FileProperties = {
+  file: Entry;
+  created: number | null;
+  accessed: number | null;
+  readonly: boolean | null;
+  hidden: boolean | null;
+  system: boolean | null;
+  compressed: boolean | null;
+  encrypted: boolean | null;
+  mode: number | null;
+  uid: number | null;
+  gid: number | null;
+  linkTarget: string | null;
+  editable: { readonly: boolean; hidden: boolean; mode: boolean };
+  connection: string | null;
+  revision: string;
+};
+export type AttributeChanges = {
+  readonly?: boolean;
+  hidden?: boolean;
+  mode?: number;
+  modeSet?: number;
+  modeClear?: number;
+};
+export type SizeSummary = {
+  files: number;
+  folders: number;
+  links: number;
+  bytes: number;
+  errors: string[];
+  errorCount: number;
+  done: boolean;
+  cancelled: boolean;
+};
 export type Tab = {
   id: string;
   location: Location;
@@ -23,7 +58,7 @@ export type Settings = {
   language: Language;
   theme: "dark" | "light" | "system";
   panes: PaneState[];
-  bookmarks: Place[];
+  bookmarks: Bookmark[];
   showHidden: boolean;
   glass: boolean;
   transparency?: number;

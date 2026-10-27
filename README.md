@@ -8,7 +8,7 @@ Browse local drives, UNC paths, ZIP archives and SSH/SFTP servers. Work with fam
 
 The first public release is **[SuperCommander 0.2.0](https://github.com/rihokirss/SuperCommander/releases/tag/v0.2.0)**.
 
-The `main` branch contains ongoing improvements beyond that release, including keyboard-accessible menus, file context actions, wildcard selection and searchable shortcut help. The shortcuts below describe the current source.
+The `main` branch contains ongoing improvements beyond that release, including keyboard-accessible menus, bookmark management, file properties, native file clipboard support and quick editing. The shortcuts below describe the current source.
 
 - [Windows x64 installer](https://github.com/rihokirss/SuperCommander/releases/download/v0.2.0/SuperCommander_0.2.0_x64-setup.exe) — recommended.
 - [Standalone Windows x64 executable](https://github.com/rihokirss/SuperCommander/releases/download/v0.2.0/SuperCommander_0.2.0_x64.exe) — requires WebView2.
@@ -108,7 +108,9 @@ Each pane has independent tabs, history, sorting and filtering. Click its locati
 | Ctrl+Tab / Ctrl+Shift+Tab | Next / previous tab in the active pane |
 | Ctrl+Page Down / Ctrl+Page Up | Next / previous tab |
 | Ctrl+Shift+T | Restore the last closed pane tab |
-| Ctrl+D | Toggle the current local folder's bookmark |
+| Ctrl+D | Toggle the current local, SSH or ZIP folder's bookmark |
+| Ctrl+Shift+D | Manage bookmarks: add, rename, reorder, filter or remove |
+| Alt+Enter | Properties for marked items, the focused item or the current folder |
 | Ctrl+U | Swap panes |
 | Ctrl+H | Toggle hidden files |
 | Ctrl+F | Recursive filename search with size and date filters |
@@ -160,6 +162,16 @@ The editor supports local and SFTP text files up to 4 MiB. It preserves UTF-8/UT
 Closing a modified editor or the application window offers Save, Discard and Cancel. Save completes before closing; a failed save leaves the edits available. Esc in Save As or an overwrite confirmation closes that inner dialog. No file is created for a new buffer until it is saved.
 
 ### Workspace and appearance
+
+Bookmarks can point to local/UNC folders, SSH addresses or folders inside ZIP archives. SSH catalog connections are saved by their Host alias, so later config changes apply to the bookmark too. Use **Ctrl+D** to toggle the current location or **Ctrl+Shift+D** to manage bookmarks. On a sidebar bookmark, **F2** edits it, **Delete** removes the bookmark, and **Ctrl+Enter** opens it in the other pane. Removing a bookmark leaves the files untouched.
+
+![Bookmark management](docs/screenshots/bookmarks.png)
+
+**Alt+Enter** opens file properties, also available from the file context menu. Inspect sizes, timestamps, Windows flags, SSH owner/group IDs and link targets. Read-only and hidden flags are editable where Windows supports them; SSH permissions support octal input and owner/group/other checkboxes. Mixed selections show indeterminate values and preserve permission bits that you do not change. Attribute changes affect the selected items themselves; they do not recurse into folders. A changed file or replacement SSH connection requires refreshing before applying.
+
+Folder sizes are calculated on request, with progress, cancellation and partial-error reporting. These are apparent file sizes, rather than allocated disk space. Overlapping selected roots are deduplicated; symbolic links and Windows junctions are counted without traversing their targets. ZIP properties are read-only.
+
+![File properties and Windows attributes](docs/screenshots/properties.png)
 
 Workspace collapses into an icon rail. Each section can also be collapsed independently; these choices persist. **Network** includes network folders and servers from Explorer Quick Access, mapped drives and saved Windows network shortcuts. Its refresh button reloads them. Use **+** to add a UNC location, rename a listed entry, remove it from SuperCommander or restore a removed Explorer entry. These customizations are saved in SuperCommander and leave Explorer's pins unchanged. Opening a server such as `\\server` lists its shared folders through the Windows shell; the `..` row at a share root returns to the server. UNC paths can also be entered directly; the app does not scan the network for devices.
 
@@ -246,5 +258,9 @@ The workflow also runs native file-clipboard tests in its dedicated Windows desk
 `node scripts/windows-network-smoke.mjs`, run with Windows Node against a test instance using the same debugging port, checks Explorer imports, adding and persisting a custom UNC location, renaming/removing it, the collapsed sidebar tooltip, and browsing a server root through the Windows shell. It uses a temporary WSL folder and restores the original settings.
 
 Source: [rihokirss/SuperCommander](https://github.com/rihokirss/SuperCommander).
+
+`node scripts/windows-properties-smoke.mjs [path-to-supercommander.exe]`, run with Windows Node, checks real Windows read-only/hidden changes, stale metadata protection, mixed selections, folder sizes and junction handling, persistent local/ZIP bookmarks and one collapsed sidebar tooltip. With the SFTP fixture running, it also checks SSH permissions, direct-connection reuse and alias bookmarks after reload. It launches and closes its own test app on port 9224 with temporary settings and a separate WebView profile. The default executable is `target/release/supercommander.exe`; pass the executable path when testing a cross-build. The Windows workflow runs this test after the native clipboard test.
+
+`SUPERCOMMANDER_DATA_DIR` can override the application settings directory with an absolute path. Tests use it to keep their settings and backups separate from your working profile. The default remains the per-user SuperCommander configuration directory. SSH config files and Credential Manager credentials retain their existing locations.
 
 `node scripts/windows-editor-smoke.mjs`, run with Windows Node against the development test instance on port 9223, tests new files, Save As, encoding conversions, overwrite conflicts, and native window close protection. It restores settings and closes that test window after saving its temporary document; restart the development instance afterward.

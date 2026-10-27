@@ -49,6 +49,7 @@ const child = spawn(exe, [], {
   stdio: ["ignore", "pipe", "pipe"],
   env: {
     ...process.env,
+    SUPERCOMMANDER_DATA_DIR: path.join(root, "Settings"),
     WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS:
       "--remote-debugging-port=9224 --remote-debugging-address=127.0.0.1",
     WEBVIEW2_USER_DATA_FOLDER: path.join(root, "WebView"),

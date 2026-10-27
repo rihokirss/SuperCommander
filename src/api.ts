@@ -9,6 +9,8 @@ import type {
   Settings,
   SearchFilter,
   SshCatalog,
+  FileProperties,
+  SizeSummary,
 } from "./types";
 export const desktop = isTauri();
 export async function command<T>(
@@ -25,6 +27,50 @@ export function subscribe<T>(event: string, callback: (data: T) => void) {
 }
 export const onJob = (callback: (job: JobEvent) => void) =>
   subscribe("job-progress", callback);
+
+export async function properties(
+  location: Location,
+  entry?: Entry,
+): Promise<FileProperties> {
+  if (desktop) return command("get_properties", { location });
+  const file = entry || {
+    name: location.path,
+    path: location.path,
+    isDir: true,
+    isSymlink: false,
+    size: 0,
+    modified: 0,
+    hidden: false,
+  };
+  return {
+    file,
+    created: null,
+    accessed: null,
+    readonly: null,
+    hidden: null,
+    system: null,
+    compressed: null,
+    encrypted: null,
+    mode: null,
+    uid: null,
+    gid: null,
+    linkTarget: null,
+    editable: { readonly: false, hidden: false, mode: false },
+    connection: null,
+    revision: "preview",
+  };
+}
+export function calculateSize(
+  source: string,
+  paths: string[],
+  id: string,
+  onUpdate: (value: SizeSummary) => void,
+) {
+  if (!desktop) return command("calculate_size", { source, paths, id });
+  const channel = new Channel<SizeSummary>();
+  channel.onmessage = onUpdate;
+  return command("calculate_size", { source, paths, id, channel });
+}
 
 const home = "C:\\Users\\Alex";
 const demoFolders = [

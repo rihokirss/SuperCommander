@@ -70,6 +70,74 @@ fn start() -> Server {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[ignore = "Requires local OpenSSH server and ssh-keygen"]
+async fn remote_properties_preserve_permissions_and_reject_replaced_connections() {
+    use commander_core::properties::{self, Changes, SizeSummary};
+    use std::{
+        os::unix::fs::{symlink, PermissionsExt},
+        sync::{atomic::AtomicBool, Mutex},
+    };
+    let server = start();
+    let (probe, _) = remote::connect(&server.profile, "", None).await.unwrap();
+    let (_, first) = remote::connect(&server.profile, "", Some(probe.fingerprint.clone()))
+        .await
+        .unwrap();
+    let (_, second) = remote::connect(&server.profile, "", Some(probe.fingerprint))
+        .await
+        .unwrap();
+    let (first, second) = (first.unwrap(), second.unwrap());
+    let directory = server._directory.path().join("attributes");
+    fs::create_dir(&directory).unwrap();
+    let file = directory.join("file.txt");
+    fs::write(&file, "preserved").unwrap();
+    fs::set_permissions(&file, fs::Permissions::from_mode(0o640)).unwrap();
+    symlink(&file, directory.join("link")).unwrap();
+    tokio::task::spawn_blocking(move || {
+        let path = file.to_str().unwrap();
+        let info = properties::get(first.as_ref(), path).unwrap();
+        assert_eq!(info.mode, Some(0o640));
+        assert!(info.uid.is_some() && info.gid.is_some() && info.editable.mode);
+        let changes = Changes {
+            mode_set: 0o004,
+            mode_clear: 0o020,
+            ..Changes::default()
+        };
+        assert!(properties::apply(second.as_ref(), path, &info.revision, &changes).is_err());
+        let changed = properties::apply(first.as_ref(), path, &info.revision, &changes).unwrap();
+        assert_eq!(changed.mode, Some(0o644));
+        assert!(properties::apply(first.as_ref(), path, &info.revision, &changes).is_err());
+        let link = directory.join("link");
+        let link = link.to_str().unwrap();
+        let info = properties::get(first.as_ref(), link).unwrap();
+        assert!(info.file.is_symlink && !info.editable.mode);
+        assert_eq!(info.link_target.as_deref(), Some(path));
+        assert!(properties::apply(first.as_ref(), link, &info.revision, &changes).is_err());
+        assert_eq!(fs::read_to_string(&file).unwrap(), "preserved");
+        let result = Mutex::new(SizeSummary::default());
+        properties::calculate(
+            first.as_ref(),
+            &[directory.to_str().unwrap().into()],
+            &AtomicBool::new(false),
+            &|summary| *result.lock().unwrap() = summary,
+        )
+        .unwrap();
+        let result = result.into_inner().unwrap();
+        assert_eq!(
+            (
+                result.files,
+                result.folders,
+                result.links,
+                result.bytes,
+                result.error_count
+            ),
+            (1, 1, 1, 9, 0)
+        );
+    })
+    .await
+    .unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "Requires local OpenSSH server and ssh-keygen"]
 async fn queued_ssh_jobs_and_clipboards_do_not_rebind_to_replacement_connections() {
     use commander_core::{
         clipboard::Files, engine::Engine, filesystem::Sources, Conflict, JobRequest, Location,

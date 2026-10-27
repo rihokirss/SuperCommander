@@ -75,6 +75,7 @@ type Props = {
   t: Text;
   refresh: number;
   clipboard: FileClipboard | null;
+  bookmarked: boolean;
   onCancelCut: () => void;
   activate: () => void;
   navigate: (location: Location) => void;
@@ -513,9 +514,7 @@ export function FilePane(p: Props) {
       p.history(1);
     }
   }
-  const bookmarked =
-    settings.bookmarks.some((b) => b.path === location.path) &&
-    location.source === "local";
+  const bookmarked = p.bookmarked;
   const sourceLabel = location.source.startsWith("zip:")
     ? t.readOnly
     : location.source.startsWith("sftp:")
@@ -701,9 +700,8 @@ export function FilePane(p: Props) {
           </button>
         )}
         <IconButton
-          title={t.addFavorite}
+          title={bookmarked ? t.removeFavorite : t.addFavorite}
           shortcut="Ctrl+D"
-          disabled={location.source !== "local"}
           className={bookmarked ? "is-bookmarked" : ""}
           onClick={p.onBookmark}
         >

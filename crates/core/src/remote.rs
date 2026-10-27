@@ -414,6 +414,41 @@ impl Write for RemoteFile {
     }
 }
 impl FileSystem for RemoteFs {
+    fn properties(&self, path: &str) -> Result<crate::properties::Properties> {
+        let meta = self.runtime.block_on(self.sftp.symlink_metadata(path))?;
+        let mut info = crate::properties::Properties::basic(
+            self.entry(
+                path.into(),
+                path.trim_end_matches('/')
+                    .rsplit('/')
+                    .next()
+                    .unwrap_or("/")
+                    .into(),
+                meta.clone(),
+            ),
+        );
+        info.accessed = meta.atime.map(u64::from);
+        info.mode = meta.permissions.map(|mode| mode & 0o7777);
+        info.uid = meta.uid;
+        info.gid = meta.gid;
+        if info.file.is_symlink {
+            info.link_target = self.runtime.block_on(self.sftp.read_link(path)).ok();
+        }
+        info.editable.mode = !info.file.is_symlink && info.mode.is_some();
+        Ok(info)
+    }
+    fn apply_properties(&self, path: &str, changes: &crate::properties::Changes) -> Result<()> {
+        if let Some(mode) = changes.mode {
+            let original = self.runtime.block_on(self.sftp.symlink_metadata(path))?;
+            let metadata = russh_sftp::client::fs::Metadata {
+                permissions: Some((original.permissions.unwrap_or(0) & !0o7777) | mode),
+                ..Default::default()
+            };
+            self.runtime
+                .block_on(self.sftp.set_metadata(path, metadata))?;
+        }
+        Ok(())
+    }
     fn connection_id(&self) -> Option<&str> {
         Some(&self.connection_id)
     }

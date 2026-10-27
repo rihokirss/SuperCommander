@@ -14,6 +14,7 @@ import {
   ArrowDownUp,
   Archive,
   BookOpen,
+  Info,
   ChevronDown,
   Cloud,
   Copy,
@@ -79,6 +80,9 @@ import { Tooltips } from "./components/Tooltips";
 import { Menu, type MenuAction } from "./components/Menu";
 import { NetworkDialog } from "./components/NetworkDialog";
 import { networkLocations } from "./network";
+import { BookmarksDialog } from "./components/BookmarksDialog";
+import { bookmarkKey, normalizeBookmarks } from "./bookmarks";
+import { PropertiesDialog } from "./components/PropertiesDialog";
 import type {
   Bootstrap,
   Entry,
@@ -93,6 +97,7 @@ import type {
   SshCatalog,
   CatalogHost,
   Tab,
+  Bookmark,
 } from "./types";
 
 type Dialog =
@@ -107,6 +112,8 @@ type Dialog =
     }
   | { kind: "sshConfig"; add?: boolean }
   | { kind: "forward"; source: string; title: string }
+  | { kind: "bookmarks"; seed?: Bookmark | null }
+  | { kind: "properties"; location: Location; entries: Entry[] }
   | { kind: "settings" | "search" | "palette" | "network" | "shortcuts" };
 const emptySnapshot: PaneSnapshot = { entries: [], selected: [] };
 export function App() {
@@ -116,6 +123,11 @@ export function App() {
   const [active, setActive] = useState(0);
   const [refresh, setRefresh] = useState(0);
   const [dialog, setDialog] = useState<Dialog>();
+  const [bookmarkMenu, setBookmarkMenu] = useState<{
+    bookmark: Bookmark;
+    x: number;
+    y: number;
+  }>();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [queueOpen, setQueueOpen] = useState(false);
   const [fileClipboard, setFileClipboard] = useState<FileClipboard | null>(
@@ -149,6 +161,8 @@ export function App() {
   const remoteHomes = useRef(new Map<string, string>());
   const [catalog, setCatalog] = useState<SshCatalog>();
   const [sessions, setSessions] = useState<SftpProfile[]>([]);
+  const sessionsRef = useRef(sessions);
+  sessionsRef.current = sessions;
   const catalogRef = useRef(catalog);
   catalogRef.current = catalog;
   const stateRef = useRef(settings);
@@ -241,6 +255,7 @@ export function App() {
       const restored = {
         ...defaults,
         ...saved,
+        bookmarks: normalizeBookmarks(saved?.bookmarks),
         language:
           saved?.language === "et"
             ? "et"
@@ -414,7 +429,13 @@ export function App() {
           notify(imported.warnings.join("\n"));
           return;
         }
-        const profiles = (stateRef.current?.profiles || []).filter(
+        const profiles = [
+          ...new Map(
+            [...(stateRef.current?.profiles || []), ...sessionsRef.current].map(
+              (profile) => [profile.id, profile],
+            ),
+          ).values(),
+        ].filter(
           (p) =>
             !p.id.startsWith("config-") &&
             p.host.toLowerCase() === remote.host.toLowerCase() &&
@@ -903,6 +924,14 @@ export function App() {
         run: () => action("trash", index, entries),
       },
       {
+        id: "properties",
+        label: t.properties,
+        icon: <Info size={15} />,
+        key: "Alt+Enter",
+        separator: true,
+        run: () => properties(index, entries),
+      },
+      {
         id: "new-file",
         label: t.newFile,
         icon: <FilePenLine size={15} />,
@@ -1003,6 +1032,27 @@ export function App() {
     }
     setDialog({ kind: "edit", location: folder, newFile: true });
   }
+  function properties(index = active, entries = chosenEntries(index)) {
+    const location = locationAt(index);
+    if (!location) return;
+    setDialog({
+      kind: "properties",
+      location,
+      entries: entries.length
+        ? entries
+        : [
+            {
+              name: basename(location.path),
+              path: location.path,
+              isDir: true,
+              isSymlink: false,
+              size: 0,
+              modified: 0,
+              hidden: false,
+            },
+          ],
+    });
+  }
   function toggleTerminal() {
     const source = ensureTerminal();
     if (!source) return;
@@ -1049,23 +1099,92 @@ export function App() {
     terminalReturnView.current = terminalView;
     setTerminalView("full");
   }
+  function bookmarkFor(index = active): Bookmark | null {
+    const location = locationAt(index);
+    if (!location) return null;
+    if (location.source.startsWith("zip:"))
+      return {
+        name:
+          location.path === "/"
+            ? basename(location.source.slice(4))
+            : basename(location.path),
+        path: location.path,
+        source: location.source,
+        kind: "bookmark",
+      };
+    if (location.source.startsWith("sftp:")) {
+      const host = catalog?.hosts.find(
+        (host) => `sftp:${host.profile.id}` === location.source,
+      );
+      const profile =
+        host?.profile ||
+        sessions.find((profile) => `sftp:${profile.id}` === location.source);
+      if (!profile) return null;
+      const target = host
+        ? { ...profile, host: host.alias, username: "", port: 22 }
+        : profile;
+      return {
+        name:
+          basename(location.path) === "/"
+            ? profile.name
+            : basename(location.path),
+        path: formatRemoteAddress(target, location.path),
+        kind: "bookmark",
+      };
+    }
+    return {
+      name: basename(location.path),
+      path: location.path,
+      kind: "bookmark",
+    };
+  }
   function bookmark(index = active) {
-    if (!settings) return;
-    const p = settings.panes[index];
-    const location = p.tabs.find((t) => t.id === p.activeTab)!.location;
-    if (location.source !== "local") return;
-    update({
-      bookmarks: settings.bookmarks.some((b) => b.path === location.path)
-        ? settings.bookmarks.filter((b) => b.path !== location.path)
-        : [
-            ...settings.bookmarks,
-            {
-              name: basename(location.path),
-              path: location.path,
-              kind: "bookmark",
-            },
-          ],
+    const value = bookmarkFor(index);
+    if (!value) return;
+    setSettings((settings) =>
+      settings
+        ? {
+            ...settings,
+            bookmarks: settings.bookmarks.some(
+              (b) => bookmarkKey(b) === bookmarkKey(value),
+            )
+              ? settings.bookmarks.filter(
+                  (b) => bookmarkKey(b) !== bookmarkKey(value),
+                )
+              : [...settings.bookmarks, value],
+          }
+        : settings,
+    );
+  }
+  function removeBookmark(value: Bookmark) {
+    setSettings((settings) =>
+      settings
+        ? {
+            ...settings,
+            bookmarks: settings.bookmarks.filter(
+              (b) => bookmarkKey(b) !== bookmarkKey(value),
+            ),
+          }
+        : settings,
+    );
+  }
+  function openBookmark(value: Bookmark, index = activeRef.current) {
+    closeDialog();
+    setBookmarkMenu(undefined);
+    setActive(index);
+    navigate({ source: value.source || "local", path: value.path }, index);
+    requestAnimationFrame(() => {
+      if (!document.querySelector('[role="dialog"]'))
+        document
+          .querySelector<HTMLElement>(`[data-pane="${index}"] .file-grid`)
+          ?.focus();
     });
+  }
+  function manageBookmarks(seed?: Bookmark | null) {
+    const existing =
+      seed &&
+      settings?.bookmarks.find((b) => bookmarkKey(b) === bookmarkKey(seed));
+    setDialog({ kind: "bookmarks", seed: existing || seed });
   }
   function disconnect(source: string) {
     api
@@ -1107,6 +1226,20 @@ export function App() {
       .catch((e) => notify(String(e)));
   }
   const actions: PaletteAction[] = [
+    {
+      id: "properties",
+      label: t.properties,
+      icon: <Info size={16} />,
+      key: "Alt+Enter",
+      run: () => properties(),
+    },
+    {
+      id: "bookmarks",
+      label: t.manageBookmarks,
+      icon: <Star size={16} />,
+      key: "Ctrl+Shift+D",
+      run: () => manageBookmarks(),
+    },
     {
       id: "new-file",
       label: t.newFile,
@@ -1418,6 +1551,11 @@ export function App() {
         )
       )
         return;
+      if (e.altKey && !ctrl && !e.shiftKey && e.key === "Enter") {
+        e.preventDefault();
+        properties();
+        return;
+      }
       if (ctrl && !e.altKey && name === "c" && e.shiftKey) {
         e.preventDefault();
         void copyPaths();
@@ -1456,9 +1594,10 @@ export function App() {
       } else if (ctrl && e.key.toLowerCase() === "h" && settings) {
         e.preventDefault();
         update({ showHidden: !settings.showHidden });
-      } else if (ctrl && name === "d") {
+      } else if (ctrl && !e.altKey && name === "d") {
         e.preventDefault();
-        bookmark();
+        if (e.shiftKey) manageBookmarks();
+        else bookmark();
       } else if (e.altKey && e.key === "ArrowLeft") {
         e.preventDefault();
         history(-1, active);
@@ -1740,19 +1879,29 @@ export function App() {
             <WorkspaceGroup
               {...groupProps("favorites", t.favorites)}
               actions={
-                <button
-                  data-tooltip={t.addFavorite}
-                  aria-label={t.addFavorite}
-                  onClick={() => bookmark()}
-                >
-                  <Plus size={13} />
-                </button>
+                <span className="catalog-buttons">
+                  <button
+                    data-tooltip={t.manageBookmarks}
+                    data-shortcut="Ctrl+Shift+D"
+                    aria-label={t.manageBookmarks}
+                    onClick={() => manageBookmarks()}
+                  >
+                    <BookOpen size={13} />
+                  </button>
+                  <button
+                    data-tooltip={t.addFavorite}
+                    aria-label={t.addFavorite}
+                    onClick={() => manageBookmarks(bookmarkFor())}
+                  >
+                    <Plus size={13} />
+                  </button>
+                </span>
               }
             >
               {!settings.bookmarks.length ? (
                 <button
                   className="sidebar-item muted"
-                  onClick={() => bookmark()}
+                  onClick={() => manageBookmarks(bookmarkFor())}
                 >
                   <Star size={15} />
                   <span>{t.addFavorite}</span>
@@ -1760,9 +1909,74 @@ export function App() {
               ) : (
                 settings.bookmarks.map((b) => (
                   <button
-                    className={`sidebar-item ${current.path === b.path ? "active" : ""}`}
-                    key={b.path}
-                    onClick={() => navigate({ source: "local", path: b.path })}
+                    className={`sidebar-item bookmark-item ${bookmarkFor() && bookmarkKey(bookmarkFor()!) === bookmarkKey(b) ? "active" : ""}`}
+                    key={bookmarkKey(b)}
+                    data-tooltip={`${b.name} · ${b.path}`}
+                    onClick={() => openBookmark(b)}
+                    onContextMenu={(event) => {
+                      event.preventDefault();
+                      setContext(undefined);
+                      setBookmarkMenu({
+                        bookmark: b,
+                        x: event.clientX,
+                        y: event.clientY,
+                      });
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "F2") {
+                        event.preventDefault();
+                        manageBookmarks(b);
+                      } else if (event.key === "Delete") {
+                        event.preventDefault();
+                        removeBookmark(b);
+                      } else if (
+                        event.key === "Enter" &&
+                        (event.ctrlKey || event.metaKey)
+                      ) {
+                        event.preventDefault();
+                        openBookmark(b, 1 - active);
+                      } else if (
+                        event.key === "ContextMenu" ||
+                        (event.shiftKey && event.key === "F10")
+                      ) {
+                        event.preventDefault();
+                        const rect =
+                          event.currentTarget.getBoundingClientRect();
+                        setContext(undefined);
+                        setBookmarkMenu({
+                          bookmark: b,
+                          x: rect.right,
+                          y: rect.top,
+                        });
+                      } else if (
+                        ["ArrowUp", "ArrowDown", "Home", "End"].includes(
+                          event.key,
+                        )
+                      ) {
+                        event.preventDefault();
+                        const buttons = Array.from(
+                          event.currentTarget
+                            .closest(".sidebar-group")!
+                            .querySelectorAll<HTMLButtonElement>(
+                              ".bookmark-item",
+                            ),
+                        );
+                        const index = buttons.indexOf(event.currentTarget);
+                        buttons[
+                          event.key === "Home"
+                            ? 0
+                            : event.key === "End"
+                              ? buttons.length - 1
+                              : Math.max(
+                                  0,
+                                  Math.min(
+                                    buttons.length - 1,
+                                    index + (event.key === "ArrowUp" ? -1 : 1),
+                                  ),
+                                )
+                        ]?.focus();
+                      }
+                    }}
                   >
                     <Star size={15} />
                     <span>{b.name}</span>
@@ -1937,6 +2151,13 @@ export function App() {
                   active={active === index}
                   settings={settings}
                   clipboard={fileClipboard}
+                  bookmarked={
+                    !!bookmarkFor(index) &&
+                    settings.bookmarks.some(
+                      (b) =>
+                        bookmarkKey(b) === bookmarkKey(bookmarkFor(index)!),
+                    )
+                  }
                   onCancelCut={() => {
                     void cancelCut();
                   }}
@@ -2214,6 +2435,16 @@ export function App() {
           }}
         />
       )}
+      {dialog?.kind === "bookmarks" && (
+        <BookmarksDialog
+          settings={settings}
+          seed={dialog.seed}
+          t={t}
+          update={update}
+          onClose={closeDialog}
+          onOpen={openBookmark}
+        />
+      )}
       {dialog?.kind === "connect" && (
         <ConnectDialog
           profile={dialog.profile}
@@ -2262,6 +2493,54 @@ export function App() {
         />
       )}
       <Tooltips />
+      {dialog?.kind === "properties" && (
+        <PropertiesDialog
+          location={dialog.location}
+          entries={dialog.entries}
+          t={t}
+          onClose={closeDialog}
+          onChanged={() => setRefresh((v) => v + 1)}
+        />
+      )}
+      {bookmarkMenu && (
+        <Menu
+          label={t.bookmarkActions}
+          anchor={{ x: bookmarkMenu.x, y: bookmarkMenu.y }}
+          theme={resolvedTheme}
+          onClose={() => setBookmarkMenu(undefined)}
+          actions={[
+            {
+              id: "open",
+              label: t.open,
+              key: "Enter",
+              icon: <Star size={15} />,
+              run: () => openBookmark(bookmarkMenu.bookmark),
+            },
+            {
+              id: "other",
+              label: t.openOtherPane,
+              key: "Ctrl+Enter",
+              icon: <ArrowRight size={15} />,
+              run: () => openBookmark(bookmarkMenu.bookmark, 1 - active),
+            },
+            {
+              id: "edit",
+              label: t.edit,
+              key: "F2",
+              icon: <FilePenLine size={15} />,
+              run: () => manageBookmarks(bookmarkMenu.bookmark),
+            },
+            {
+              id: "remove",
+              label: t.removeFavorite,
+              key: "Delete",
+              danger: true,
+              icon: <X size={15} />,
+              run: () => removeBookmark(bookmarkMenu.bookmark),
+            },
+          ]}
+        />
+      )}
       {context && (
         <Menu
           label={t.fileActions}

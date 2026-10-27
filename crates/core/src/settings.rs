@@ -4,6 +4,14 @@ use std::{fs, path::PathBuf};
 static SETTINGS_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 pub fn directory() -> Result<PathBuf> {
+    if let Some(path) = std::env::var_os("SUPERCOMMANDER_DATA_DIR") {
+        let path = PathBuf::from(path);
+        anyhow::ensure!(
+            path.is_absolute(),
+            "SUPERCOMMANDER_DATA_DIR must be an absolute path"
+        );
+        return Ok(path);
+    }
     Ok(dirs::config_dir()
         .context("No application data directory")?
         .join("SuperCommander"))

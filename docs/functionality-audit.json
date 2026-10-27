@@ -3,47 +3,271 @@
   "status": "in_progress",
   "baselineRelease": "v0.2.0",
   "lastVerifiedBatch": {
-    "features": ["Keyboard-accessible command and context menus", "Pane navigation, selection masks and searchable help", "Dialog focus restoration and localized close labels", "Refresh without losing filters or marks"],
-    "checks": { "javascriptUnitTests": "13 passed", "browserTests": "21 passed", "nativeWindows": "scripts/windows-smoke.mjs passed, including real OpenSSH, ConPTY, context actions and refresh state", "windowsBuild": "x64 executable and NSIS installer built successfully" },
-    "visualEvidence": ["artifacts/keyboard-menu-dark.png", "artifacts/keyboard-menu-light.png", "artifacts/shortcuts-dark.png", "artifacts/shortcuts-light.png"]
+    "features": [
+      "Keyboard-accessible command and context menus",
+      "Pane navigation, selection masks and searchable help",
+      "Dialog focus restoration and localized close labels",
+      "Refresh without losing filters or marks"
+    ],
+    "checks": {
+      "javascriptUnitTests": "13 passed",
+      "browserTests": "21 passed",
+      "nativeWindows": "scripts/windows-smoke.mjs passed, including real OpenSSH, ConPTY, context actions and refresh state",
+      "windowsBuild": "x64 executable and NSIS installer built successfully"
+    },
+    "visualEvidence": [
+      "artifacts/keyboard-menu-dark.png",
+      "artifacts/keyboard-menu-light.png",
+      "artifacts/shortcuts-dark.png",
+      "artifacts/shortcuts-light.png"
+    ]
   },
   "currentBatch": {
-    "features": ["Windows file clipboard copy/cut/paste and full paths", "Same-folder file/tree duplication", "File identity checks before moves", "Canonical SFTP destination checks", "SSH clipboard and queue connection binding", "Single tooltip owner including inherited native titles"],
-    "checks": { "javascriptUnitTests": "14 passed", "browserTests": "25 passed", "coreTests": "platform-independent suites passed", "realOpenSshIntegration": "2 passed, including alias safety and queued reconnection isolation", "windowsCompilation": "workspace and all test targets passed", "nativeWindowsClipboard": "Native UI clipboard test passed in CI run 40592029965 against build artifact 40590183790, including independent shell producer/consumer, same-folder trees, cut completion and Unicode; native core tests also passed", "nativeWindows": "Full scripts/windows-smoke.mjs and windows-network-smoke.mjs passed on 783b189 build" },
-    "visualEvidence": ["artifacts/clipboard-menu-dark.png", "artifacts/clipboard-menu-light.png"],
+    "features": [
+      "Windows file clipboard copy/cut/paste and full paths",
+      "Same-folder file/tree duplication",
+      "File identity checks before moves",
+      "Canonical SFTP destination checks",
+      "SSH clipboard and queue connection binding",
+      "Single tooltip owner including inherited native titles"
+    ],
+    "checks": {
+      "javascriptUnitTests": "14 passed",
+      "browserTests": "25 passed",
+      "coreTests": "platform-independent suites passed",
+      "realOpenSshIntegration": "2 passed, including alias safety and queued reconnection isolation",
+      "windowsCompilation": "workspace and all test targets passed",
+      "nativeWindowsClipboard": "Native UI clipboard test passed in CI run 40592029965 against build artifact 40590183790, including independent shell producer/consumer, same-folder trees, cut completion and Unicode; native core tests also passed",
+      "nativeWindows": "Full scripts/windows-smoke.mjs and windows-network-smoke.mjs passed on 783b189 build"
+    },
+    "visualEvidence": [
+      "artifacts/clipboard-menu-dark.png",
+      "artifacts/clipboard-menu-light.png"
+    ],
     "completion": "Implemented batch verified; full clipboard/source lifecycle audit remains in progress"
   },
   "editorBatch": {
-    "features": ["Shift+F4 new unsaved file", "Save As across connected sources", "Explicit overwrite confirmation with revision checks", "UTF-8/UTF-16 and LF/CRLF format controls", "Styled Save/Discard/Cancel on editor and native window close", "Multiline indentation and contextual F1 help"],
-    "checks": { "browserTests": "27 passed on 1698a8f", "javascriptUnitTests": "17 passed", "editorCoreTests": "7 passed, including concurrent publication and backup preservation", "realOpenSshIntegration": "2 passed with new/create/replace editor operations", "nativeWindows": "On 1698a8f: full windows-smoke.mjs passed including stale connection rejection and remote-to-local Save As; windows-editor-smoke.mjs passed including actual Save & Close of the window", "windowsBuild": "x64 executable and NSIS installer built" },
-    "visualEvidence": ["docs/screenshots/editor.png", "artifacts/editor-save-as-light.png", "artifacts/native-editor.png"]
+    "features": [
+      "Shift+F4 new unsaved file",
+      "Save As across connected sources",
+      "Explicit overwrite confirmation with revision checks",
+      "UTF-8/UTF-16 and LF/CRLF format controls",
+      "Styled Save/Discard/Cancel on editor and native window close",
+      "Multiline indentation and contextual F1 help"
+    ],
+    "checks": {
+      "browserTests": "27 passed on 1698a8f",
+      "javascriptUnitTests": "17 passed",
+      "editorCoreTests": "7 passed, including concurrent publication and backup preservation",
+      "realOpenSshIntegration": "2 passed with new/create/replace editor operations",
+      "nativeWindows": "On 1698a8f: full windows-smoke.mjs passed including stale connection rejection and remote-to-local Save As; windows-editor-smoke.mjs passed including actual Save & Close of the window",
+      "windowsBuild": "x64 executable and NSIS installer built"
+    },
+    "visualEvidence": [
+      "docs/screenshots/editor.png",
+      "artifacts/editor-save-as-light.png",
+      "artifacts/native-editor.png"
+    ]
   },
   "followUpFindings": [
     "Transfer safety still needs an audit of physical aliases reached through different protocols (for example UNC and SFTP), cancellation/rollback and metadata preservation.",
     "Editor create/Save As/format conversion and application-close protection are implemented and tested; the overall viewer/editor audit still needs its remaining larger-file and search behavior checks.",
-    "Bookmark management, file properties, content search and directory comparison remain in the full scope below."
+    "Content search, directory comparison and the remaining viewer, navigation and transfer audits are still required. Bookmark management and file properties are now implemented and verified.",
+    "Migrate the older native smoke scripts to the owned-instance harness; the new properties test and CI clipboard test already use isolated settings. An interrupted early properties test lost previous pane locations; owned test bookmarks were removed and affected panes reset to Home/Downloads. No file contents, SSH config or stored credentials were changed by that cleanup."
   ],
   "completionRule": "Implementation plus current functional, keyboard and visual evidence is required; source inspection or an older release alone does not prove completion.",
   "requirements": [
-    { "id": "navigation", "status": "in_progress", "scope": "Independent panes, history, parent entries, roots, path editing, tabs, closed-tab restoration, refresh and keyboard access", "evidence": ["tests/ui/workspace.spec.ts", "tests/ui/keyboard.spec.ts"] },
-    { "id": "selection", "status": "in_progress", "scope": "MC Insert behavior, ranges, all/none/inverse and wildcard masks, preserving marks and excluding the parent entry", "evidence": ["src/selection.test.ts", "tests/ui/keyboard.spec.ts"] },
-    { "id": "context-actions-and-menus", "status": "in_progress", "scope": "Correct pane/selection targets, keyboard-accessible context and command menus, focus restoration, edge positioning and both themes", "evidence": ["tests/ui/keyboard.spec.ts"] },
-    { "id": "file-clipboard", "status": "in_progress", "scope": "Copy, cut and paste across panes and supported sources; local Windows file clipboard interoperability with Explorer; copy paths", "evidence": ["crates/core/tests/clipboard.rs", "tests/ui/clipboard.spec.ts", "scripts/windows-clipboard-smoke.mjs"] },
-    { "id": "transfer-safety", "status": "needs_current_audit", "scope": "Copy/move/delete/rename, conflicts, cancellation, partial failures, metadata handling and source/destination preservation", "evidence": ["crates/core/tests/files.rs", "scripts/windows-smoke.mjs"] },
-    { "id": "bookmarks-and-places", "status": "pending", "scope": "Add, rename, remove and use bookmarks and saved places with keyboard access and persistent configuration" },
-    { "id": "network", "status": "needs_current_audit", "scope": "Explorer network locations, custom UNC entries, mapped drives, server/share navigation and errors", "evidence": ["scripts/windows-network-smoke.mjs", "src/network.test.ts"] },
-    { "id": "ssh", "status": "needs_current_audit", "scope": "SSH config catalog, credentials, key verification, reconnect/disconnect behavior, realistic config directives, independent sessions and transfers", "evidence": ["crates/core/tests/ssh_config.rs", "crates/core/tests/sftp.rs", "scripts/windows-smoke.mjs"] },
-    { "id": "port-forwarding", "status": "needs_current_audit", "scope": "Multiple tunnels, persistence, start/stop/remove, conflicts and connection lifecycle", "evidence": ["crates/core/tests/sftp.rs", "scripts/windows-smoke.mjs"] },
-    { "id": "terminal", "status": "needs_current_audit", "scope": "Local and remote interactive shells, Ctrl+O, docking, independent persistent sessions, resize and lifecycle", "evidence": ["scripts/windows-smoke.mjs", "crates/core/tests/sftp.rs"] },
-    { "id": "viewer", "status": "pending", "scope": "Practical text/image/PDF viewing, search/navigation, copy, zoom, large-file behavior and keyboard controls" },
-    { "id": "editor", "status": "in_progress", "scope": "Create/edit/save/save-as, encoding and line endings, search/replace, undo/redo, selection/indentation and unsaved-change protection including application close", "evidence": ["crates/core/tests/editor.rs", "tests/ui/editor.spec.ts", "scripts/windows-smoke.mjs", "scripts/windows-editor-smoke.mjs"] },
-    { "id": "search", "status": "pending", "scope": "Names and masks, recursive filters, useful content search, results navigation, progress/cancellation and error reporting" },
-    { "id": "archives", "status": "needs_current_audit", "scope": "Practical common archive workflows, safe browsing/creation/extraction, path and symlink protection, and explicit format limitations", "evidence": ["crates/core/tests/files.rs"] },
-    { "id": "properties-and-attributes", "status": "pending", "scope": "Inspect useful file/folder metadata and applicable permissions/attributes without destructive shortcuts" },
-    { "id": "directory-comparison", "status": "pending", "scope": "Preview and act on useful differences between the two panes, with review before synchronization or replacement" },
-    { "id": "ui-consistency", "status": "in_progress", "scope": "Dark/light/system themes, density, translucency, menus, controls, dialogs, tooltips, language completeness, focus visibility and supported window sizes" },
-    { "id": "shortcut-discoverability", "status": "in_progress", "scope": "Practical shortcuts for all implemented actions, searchable F1 help, accurate tooltips, no context collisions or accidental browser reloads", "evidence": ["src/shortcuts.ts", "tests/ui/keyboard.spec.ts"] },
-    { "id": "persistence-and-recovery", "status": "needs_current_audit", "scope": "Settings migration/validation, tabs and remote history, external config changes, interrupted operations and useful recovery errors" },
-    { "id": "distribution", "status": "needs_current_audit", "scope": "Matching Windows builds, current installer and executable, integration checks, English documentation and screenshots, release provenance" }
-  ]
+    {
+      "id": "navigation",
+      "status": "in_progress",
+      "scope": "Independent panes, history, parent entries, roots, path editing, tabs, closed-tab restoration, refresh and keyboard access",
+      "evidence": [
+        "tests/ui/workspace.spec.ts",
+        "tests/ui/keyboard.spec.ts"
+      ]
+    },
+    {
+      "id": "selection",
+      "status": "in_progress",
+      "scope": "MC Insert behavior, ranges, all/none/inverse and wildcard masks, preserving marks and excluding the parent entry",
+      "evidence": [
+        "src/selection.test.ts",
+        "tests/ui/keyboard.spec.ts"
+      ]
+    },
+    {
+      "id": "context-actions-and-menus",
+      "status": "in_progress",
+      "scope": "Correct pane/selection targets, keyboard-accessible context and command menus, focus restoration, edge positioning and both themes",
+      "evidence": [
+        "tests/ui/keyboard.spec.ts"
+      ]
+    },
+    {
+      "id": "file-clipboard",
+      "status": "in_progress",
+      "scope": "Copy, cut and paste across panes and supported sources; local Windows file clipboard interoperability with Explorer; copy paths",
+      "evidence": [
+        "crates/core/tests/clipboard.rs",
+        "tests/ui/clipboard.spec.ts",
+        "scripts/windows-clipboard-smoke.mjs"
+      ]
+    },
+    {
+      "id": "transfer-safety",
+      "status": "needs_current_audit",
+      "scope": "Copy/move/delete/rename, conflicts, cancellation, partial failures, metadata handling and source/destination preservation",
+      "evidence": [
+        "crates/core/tests/files.rs",
+        "scripts/windows-smoke.mjs"
+      ]
+    },
+    {
+      "id": "bookmarks-and-places",
+      "status": "verified",
+      "scope": "Add, rename, remove and use bookmarks and saved places with keyboard access and persistent configuration",
+      "evidence": [
+        "src/bookmarks.test.ts",
+        "tests/ui/bookmarks.spec.ts",
+        "scripts/windows-properties-smoke.mjs",
+        "scripts/windows-network-smoke.mjs"
+      ]
+    },
+    {
+      "id": "network",
+      "status": "needs_current_audit",
+      "scope": "Explorer network locations, custom UNC entries, mapped drives, server/share navigation and errors",
+      "evidence": [
+        "scripts/windows-network-smoke.mjs",
+        "src/network.test.ts"
+      ]
+    },
+    {
+      "id": "ssh",
+      "status": "needs_current_audit",
+      "scope": "SSH config catalog, credentials, key verification, reconnect/disconnect behavior, realistic config directives, independent sessions and transfers",
+      "evidence": [
+        "crates/core/tests/ssh_config.rs",
+        "crates/core/tests/sftp.rs",
+        "scripts/windows-smoke.mjs"
+      ]
+    },
+    {
+      "id": "port-forwarding",
+      "status": "needs_current_audit",
+      "scope": "Multiple tunnels, persistence, start/stop/remove, conflicts and connection lifecycle",
+      "evidence": [
+        "crates/core/tests/sftp.rs",
+        "scripts/windows-smoke.mjs"
+      ]
+    },
+    {
+      "id": "terminal",
+      "status": "needs_current_audit",
+      "scope": "Local and remote interactive shells, Ctrl+O, docking, independent persistent sessions, resize and lifecycle",
+      "evidence": [
+        "scripts/windows-smoke.mjs",
+        "crates/core/tests/sftp.rs"
+      ]
+    },
+    {
+      "id": "viewer",
+      "status": "pending",
+      "scope": "Practical text/image/PDF viewing, search/navigation, copy, zoom, large-file behavior and keyboard controls"
+    },
+    {
+      "id": "editor",
+      "status": "in_progress",
+      "scope": "Create/edit/save/save-as, encoding and line endings, search/replace, undo/redo, selection/indentation and unsaved-change protection including application close",
+      "evidence": [
+        "crates/core/tests/editor.rs",
+        "tests/ui/editor.spec.ts",
+        "scripts/windows-smoke.mjs",
+        "scripts/windows-editor-smoke.mjs"
+      ]
+    },
+    {
+      "id": "search",
+      "status": "pending",
+      "scope": "Names and masks, recursive filters, useful content search, results navigation, progress/cancellation and error reporting"
+    },
+    {
+      "id": "archives",
+      "status": "needs_current_audit",
+      "scope": "Practical common archive workflows, safe browsing/creation/extraction, path and symlink protection, and explicit format limitations",
+      "evidence": [
+        "crates/core/tests/files.rs"
+      ]
+    },
+    {
+      "id": "properties-and-attributes",
+      "status": "verified",
+      "scope": "Inspect useful file/folder metadata and applicable permissions/attributes without destructive shortcuts",
+      "evidence": [
+        "crates/core/tests/properties.rs",
+        "crates/core/tests/sftp.rs",
+        "tests/ui/properties.spec.ts",
+        "scripts/windows-properties-smoke.mjs"
+      ]
+    },
+    {
+      "id": "directory-comparison",
+      "status": "pending",
+      "scope": "Preview and act on useful differences between the two panes, with review before synchronization or replacement"
+    },
+    {
+      "id": "ui-consistency",
+      "status": "in_progress",
+      "scope": "Dark/light/system themes, density, translucency, menus, controls, dialogs, tooltips, language completeness, focus visibility and supported window sizes"
+    },
+    {
+      "id": "shortcut-discoverability",
+      "status": "in_progress",
+      "scope": "Practical shortcuts for all implemented actions, searchable F1 help, accurate tooltips, no context collisions or accidental browser reloads",
+      "evidence": [
+        "src/shortcuts.ts",
+        "tests/ui/keyboard.spec.ts"
+      ]
+    },
+    {
+      "id": "persistence-and-recovery",
+      "status": "needs_current_audit",
+      "scope": "Settings migration/validation, tabs and remote history, external config changes, interrupted operations and useful recovery errors"
+    },
+    {
+      "id": "distribution",
+      "status": "needs_current_audit",
+      "scope": "Matching Windows builds, current installer and executable, integration checks, English documentation and screenshots, release provenance"
+    }
+  ],
+  "bookmarksAndPropertiesBatch": {
+    "features": [
+      "Named, filtered and reordered local/UNC, SSH and ZIP bookmarks",
+      "Ctrl+Shift+D manager, sidebar F2/Delete and Ctrl+Enter",
+      "SSH alias persistence and authenticated direct-session reuse",
+      "Alt+Enter properties for focused files, marked selections and folders",
+      "Windows read-only/hidden flags, SSH octal and checkbox permissions",
+      "Revision and connection checks before attribute updates",
+      "On-demand cancellable folder sizes, partial errors, overlapping roots and link/junction handling",
+      "Fresh metadata on Refresh, mixed attribute states and bounded metadata loading",
+      "Isolated native test processes, WebView profiles and settings directories"
+    ],
+    "checks": {
+      "javascriptUnitTests": "20 passed",
+      "browserTests": "34 passed",
+      "coreTests": "43 passed; includes 5 properties tests and isolated settings/backup test",
+      "realOpenSshIntegration": "3 passed, including mode masks, symlink rejection and connection revision protection",
+      "nativeWindows": "Full windows-smoke.mjs and windows-network-smoke.mjs passed; self-contained windows-properties-smoke.mjs passed including real SSH permissions, direct-session bookmark reuse, alias reauthentication after reload, Windows flags, stale revisions, refreshed size, mixed selections and junctions",
+      "windowsCompilation": "All workspace/test targets passed; x64 executable and NSIS installer built",
+      "profileIsolation": "The user settings checksum remained unchanged throughout subsequent isolated tests"
+    },
+    "visualEvidence": [
+      "docs/screenshots/bookmarks.png",
+      "docs/screenshots/properties.png",
+      "artifacts/properties-dark.png",
+      "artifacts/properties-light.png",
+      "artifacts/native-permissions.png"
+    ],
+    "ci": "Windows workflow now includes the isolated native properties/bookmarks test; verification of the new workflow run is pending the next push."
+  }
 }

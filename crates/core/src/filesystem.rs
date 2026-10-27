@@ -31,6 +31,26 @@ pub trait FileSystem: Send + Sync {
         Ok(())
     }
     fn stat(&self, path: &str) -> Result<Entry>;
+    fn visit_entries(
+        &self,
+        path: &str,
+        cancel: &AtomicBool,
+        send: &mut dyn FnMut(Result<Entry>),
+    ) -> Result<()> {
+        for entry in self.list(path)? {
+            if cancel.load(Ordering::Relaxed) {
+                break;
+            }
+            send(Ok(entry));
+        }
+        Ok(())
+    }
+    fn properties(&self, path: &str) -> Result<crate::properties::Properties> {
+        Ok(crate::properties::Properties::basic(self.stat(path)?))
+    }
+    fn apply_properties(&self, _path: &str, _changes: &crate::properties::Changes) -> Result<()> {
+        bail!("Attributes are not supported for this source")
+    }
     /// Resolve existing paths before comparing transfer locations. Backends with
     /// aliases or symlinks override this with their filesystem's canonical path.
     fn canonical_path(&self, path: &str) -> Result<String> {
@@ -110,6 +130,42 @@ impl LocalFs {
     }
 }
 impl FileSystem for LocalFs {
+    fn visit_entries(
+        &self,
+        path: &str,
+        cancel: &AtomicBool,
+        send: &mut dyn FnMut(Result<Entry>),
+    ) -> Result<()> {
+        if crate::network::is_server(path) {
+            for entry in self.list(path)? {
+                if cancel.load(Ordering::Relaxed) {
+                    break;
+                }
+                send(Ok(entry));
+            }
+            return Ok(());
+        }
+        for entry in fs::read_dir(path)? {
+            if cancel.load(Ordering::Relaxed) {
+                break;
+            }
+            send(
+                entry
+                    .map_err(anyhow::Error::from)
+                    .and_then(|entry| Self::entry(&entry.path())),
+            );
+        }
+        Ok(())
+    }
+    fn properties(&self, path: &str) -> Result<crate::properties::Properties> {
+        if crate::network::is_server(path) {
+            return Ok(crate::properties::Properties::basic(self.stat(path)?));
+        }
+        crate::properties::local(path, self.stat(path)?)
+    }
+    fn apply_properties(&self, path: &str, changes: &crate::properties::Changes) -> Result<()> {
+        crate::properties::apply_local(path, changes)
+    }
     fn canonical_path(&self, path: &str) -> Result<String> {
         Ok(fs::canonicalize(path)?.to_string_lossy().into_owned())
     }

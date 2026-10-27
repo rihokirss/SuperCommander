@@ -273,6 +273,260 @@
   max-height: 320px;
   overflow: auto;
 }
+.bookmark-form {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.bookmark-form .field {
+  margin: 0;
+  min-width: 0;
+}
+.bookmark-form-actions {
+  grid-column: 1/-1;
+  display: flex;
+  gap: 8px;
+}
+.bookmark-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  margin-bottom: 12px;
+}
+.bookmark-filter input {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 9px;
+}
+.bookmark-list {
+  max-height: min(350px, 40vh);
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+}
+.bookmark-list > .helper {
+  padding: 12px;
+}
+.bookmark-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--line);
+  font-size: 11px;
+}
+.bookmark-row:last-child {
+  border-bottom: 0;
+}
+.bookmark-row > svg {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+.bookmark-open {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  display: flex;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 2px;
+  padding: 3px 6px;
+  color: var(--text);
+}
+.bookmark-open strong {
+  font-weight: 500;
+}
+.bookmark-open code {
+  color: var(--muted);
+  font-size: 10px;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.bookmark-row .icon-button {
+  width: 25px;
+  height: 25px;
+  flex-shrink: 0;
+}
+.properties-overview {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 14px;
+}
+.property-kind {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+  color: var(--text);
+}
+.property-kind > svg {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.property-kind strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  word-break: break-word;
+}
+.property-kind small {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+  margin-top: 3px;
+}
+.property-facts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 20px;
+  margin: 0;
+  font-size: 11px;
+}
+.property-facts dt {
+  font-size: 10px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.property-facts dd {
+  margin: 0;
+  word-break: break-word;
+  color: var(--text);
+}
+.property-facts dd small {
+  margin-left: 8px;
+  font-size: 9px;
+  color: var(--muted);
+}
+.property-wide {
+  grid-column: 1/-1;
+}
+.property-scan {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  font-size: 10px;
+}
+.property-scan button {
+  padding: 5px 8px;
+  font-size: 10px;
+}
+.property-selection {
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 12px;
+  max-height: 130px;
+  overflow: auto;
+}
+.property-selection summary {
+  cursor: pointer;
+  padding: 5px 0;
+}
+.property-selection code {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 3px 0;
+}
+.property-load {
+  margin-top: 14px;
+}
+.property-attributes {
+  border: 0;
+  margin: 15px 0 0;
+  padding: 0;
+  min-width: 0;
+}
+.property-attributes legend {
+  font-size: 11px;
+  color: var(--text);
+  font-weight: 500;
+  margin-bottom: 12px;
+}
+.property-flags {
+  display: flex;
+  gap: 24px;
+  align-items: center;
+}
+.property-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text);
+  cursor: pointer;
+}
+.property-mode {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--text);
+  font-size: 11px;
+  margin-bottom: 10px;
+}
+.property-mode input {
+  width: 85px;
+  padding: 5px 8px;
+  font-family: Consolas, monospace;
+}
+.property-mode small {
+  font-size: 9px;
+  color: var(--muted);
+}
+.permissions-table {
+  width: 100%;
+  font-size: 10px;
+  border-collapse: collapse;
+}
+.permissions-table th {
+  color: var(--muted);
+  font-weight: 400;
+  text-align: center;
+}
+.permissions-table th:first-child {
+  text-align: left;
+}
+.permissions-table td {
+  text-align: center;
+  padding: 6px;
+}
+.permissions-table .property-flag > span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.property-errors {
+  font-size: 10px;
+  max-height: 100px;
+  overflow: auto;
+  word-break: break-word;
+}
+.property-errors p {
+  margin: 5px 0;
+}
+.property-actions small {
+  margin-right: auto;
+  color: var(--muted);
+  font-size: 10px;
+}
+input[type="checkbox"]:not([role="switch"]):indeterminate::after {
+  content: "";
+  position: absolute;
+  width: 7px;
+  height: 0;
+  border: 0;
+  border-top: 2px solid currentColor;
+  top: 5px;
+  left: 3px;
+}
 .network-list > .helper {
   padding: 15px;
 }

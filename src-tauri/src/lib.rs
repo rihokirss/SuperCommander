@@ -145,6 +145,50 @@ fn cancel_search(state: State<AppState>, id: String) {
 }
 
 #[tauri::command]
+async fn get_properties(
+    state: State<'_, AppState>,
+    location: Location,
+) -> Reply<core::properties::Properties> {
+    let fs = state.sources.get(&location.source).map_err(error)?;
+    blocking(move || core::properties::get(fs.as_ref(), &location.path)).await
+}
+#[tauri::command]
+async fn apply_properties(
+    state: State<'_, AppState>,
+    location: Location,
+    revision: String,
+    changes: core::properties::Changes,
+) -> Reply<core::properties::Properties> {
+    let fs = state.sources.get(&location.source).map_err(error)?;
+    blocking(move || core::properties::apply(fs.as_ref(), &location.path, &revision, &changes))
+        .await
+}
+#[tauri::command]
+async fn calculate_size(
+    state: State<'_, AppState>,
+    source: String,
+    paths: Vec<String>,
+    id: String,
+    channel: Channel<core::properties::SizeSummary>,
+) -> Reply<()> {
+    let fs = state.sources.get(&source).map_err(error)?;
+    let cancel = Arc::new(AtomicBool::new(false));
+    state
+        .searches
+        .lock()
+        .unwrap()
+        .insert(id.clone(), cancel.clone());
+    let result = blocking(move || {
+        core::properties::calculate(fs.as_ref(), &paths, &cancel, &|value| {
+            let _ = channel.send(value);
+        })
+    })
+    .await;
+    state.searches.lock().unwrap().remove(&id);
+    result
+}
+
+#[tauri::command]
 fn enqueue_job(state: State<AppState>, request: JobRequest) -> Reply<()> {
     state.engine.enqueue(request).map_err(error)
 }
@@ -784,6 +828,9 @@ pub fn run() {
             list_directory,
             search_files,
             cancel_search,
+            get_properties,
+            apply_properties,
+            calculate_size,
             enqueue_job,
             cancel_job,
             resolve_conflict,
