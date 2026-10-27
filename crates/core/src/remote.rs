@@ -412,6 +412,9 @@ impl Write for RemoteFile {
     }
 }
 impl FileSystem for RemoteFs {
+    fn canonical_path(&self, path: &str) -> Result<String> {
+        Ok(self.runtime.block_on(self.sftp.canonicalize(path))?)
+    }
     fn copy_permissions(&self, from: &str, to: &str) -> Result<()> {
         let original = self.runtime.block_on(self.sftp.metadata(from))?;
         let meta = russh_sftp::client::fs::Metadata {

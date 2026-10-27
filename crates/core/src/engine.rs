@@ -209,8 +209,10 @@ fn run(sources: &Sources, req: &JobRequest, ctx: &mut ContextJob) -> Result<()> 
             && req.source == req.destination.source
             && req.source != "local"
         {
-            let root = path.trim_end_matches('/');
-            let target = req.destination.path.trim_end_matches('/');
+            let canonical_source = source.canonical_path(path)?;
+            let canonical_destination = dest.canonical_path(&req.destination.path)?;
+            let root = canonical_source.trim_end_matches('/');
+            let target = canonical_destination.trim_end_matches('/');
             if target == root || target.starts_with(&format!("{root}/")) {
                 bail!("Cannot copy or move a directory into itself");
             }
@@ -234,9 +236,12 @@ fn run(sources: &Sources, req: &JobRequest, ctx: &mut ContextJob) -> Result<()> 
                 let mut target = dest.join(&req.destination.path, &entry.name);
                 let same = req.source == req.destination.source
                     && (path == &target
-                        || req.source == "local"
-                            && dest.exists(&target)?
-                            && same_file::is_same_file(path, &target)?);
+                        || dest.exists(&target)?
+                            && if req.source == "local" {
+                                same_file::is_same_file(path, &target)?
+                            } else {
+                                source.canonical_path(path)? == dest.canonical_path(&target)?
+                            });
                 if same && !(req.operation == Operation::Copy && req.conflict == Conflict::KeepBoth)
                 {
                     bail!("Source and destination are the same");

@@ -31,6 +31,11 @@ pub trait FileSystem: Send + Sync {
         Ok(())
     }
     fn stat(&self, path: &str) -> Result<Entry>;
+    /// Resolve existing paths before comparing transfer locations. Backends with
+    /// aliases or symlinks override this with their filesystem's canonical path.
+    fn canonical_path(&self, path: &str) -> Result<String> {
+        Ok(self.stat(path)?.path)
+    }
     fn reader(&self, path: &str) -> Result<Box<dyn Read + Send>>;
     fn writer(&self, path: &str) -> Result<Box<dyn Write + Send>>;
     fn mkdir(&self, path: &str) -> Result<()>;
@@ -98,6 +103,9 @@ impl LocalFs {
     }
 }
 impl FileSystem for LocalFs {
+    fn canonical_path(&self, path: &str) -> Result<String> {
+        Ok(fs::canonicalize(path)?.to_string_lossy().into_owned())
+    }
     fn copy_permissions(&self, from: &str, to: &str) -> Result<()> {
         let permissions = fs::metadata(from)?.permissions();
         if permissions.readonly() {

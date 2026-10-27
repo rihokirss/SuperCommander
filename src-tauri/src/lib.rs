@@ -277,7 +277,7 @@ async fn plan_file_paste(
                 let same = if value.source == "local" {
                     core::filesystem::same_directory(&parent, &destination.path)?
                 } else {
-                    parent.trim_end_matches('/') == destination.path.trim_end_matches('/')
+                    source.canonical_path(&parent)? == dest.canonical_path(&destination.path)?
                 };
                 same_folder |= same;
             }

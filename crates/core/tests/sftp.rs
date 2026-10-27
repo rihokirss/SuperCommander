@@ -111,6 +111,84 @@ async fn verifies_host_authenticates_and_transfers_over_real_sftp() {
         let renamed = remote.join(&dir, "renamed.txt");
         remote.rename(&file, &renamed).unwrap();
         assert!(!remote.exists(&file).unwrap());
+        // REALPATH must protect transfers even when the destination is reached
+        // through an alias, or contains a parent-directory segment.
+        let root = std::path::Path::new(&dir);
+        let inner = root.join("inner");
+        fs::create_dir(&inner).unwrap();
+        let alias = root.with_file_name("transfer-alias");
+        let descendant_alias = root.with_file_name("descendant-alias");
+        std::os::unix::fs::symlink(root, &alias).unwrap();
+        std::os::unix::fs::symlink(&inner, &descendant_alias).unwrap();
+        let sources = std::sync::Arc::new(commander_core::filesystem::Sources::default());
+        sources.insert("sftp:test".into(), remote.clone());
+        let (tx, rx) = std::sync::mpsc::channel();
+        let engine = commander_core::engine::Engine::new(
+            sources,
+            std::sync::Arc::new(move |event| {
+                let _ = tx.send(event);
+            }),
+        );
+        let run = |operation, source: &str, destination: &str, conflict| {
+            engine
+                .enqueue(commander_core::JobRequest {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    operation,
+                    source: "sftp:test".into(),
+                    paths: vec![source.into()],
+                    destination: commander_core::Location {
+                        source: "sftp:test".into(),
+                        path: destination.into(),
+                    },
+                    conflict,
+                })
+                .unwrap();
+            loop {
+                let event = rx.recv_timeout(Duration::from_secs(15)).unwrap();
+                if ["failed", "completed", "cancelled"].contains(&event.state.as_str()) {
+                    return event;
+                }
+            }
+        };
+        use commander_core::{Conflict, Operation};
+        let descendant = run(
+            Operation::Copy,
+            &dir,
+            &descendant_alias.to_string_lossy(),
+            Conflict::Replace,
+        );
+        assert_eq!(descendant.state, "failed");
+        assert!(descendant.errors.join(" ").contains("into itself"));
+        let parent_segment = run(
+            Operation::Copy,
+            &dir,
+            &format!("{dir}/inner/.."),
+            Conflict::Replace,
+        );
+        assert_eq!(parent_segment.state, "failed");
+        assert!(parent_segment.errors.join(" ").contains("into itself"));
+        let same = run(
+            Operation::Move,
+            &renamed,
+            &alias.to_string_lossy(),
+            Conflict::Replace,
+        );
+        assert_eq!(same.state, "failed");
+        assert_eq!(fs::read_to_string(&renamed).unwrap(), "SFTP round trip");
+        let duplicate = run(
+            Operation::Copy,
+            &renamed,
+            &alias.to_string_lossy(),
+            Conflict::KeepBoth,
+        );
+        assert_eq!(duplicate.state, "completed", "{:?}", duplicate.errors);
+        assert_eq!(
+            fs::read_to_string(root.join("renamed (1).txt")).unwrap(),
+            "SFTP round trip"
+        );
+        assert!(fs::read_dir(&inner).unwrap().next().is_none());
+        fs::remove_file(alias).unwrap();
+        fs::remove_file(descendant_alias).unwrap();
         remote.remove(&dir).unwrap();
     })
     .await

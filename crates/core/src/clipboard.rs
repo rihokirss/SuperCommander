@@ -231,7 +231,7 @@ mod platform {
         value.validate()?;
         Ok(Some(value))
     }
-    fn write_open(value: &Files) -> Result<Files> {
+    fn write_open(value: &Files) -> Result<()> {
         value.validate()?;
         let private = format("SuperCommander.Files.v1")?;
         let effect = format("Preferred DropEffect")?;
@@ -270,9 +270,7 @@ mod platform {
         for (id, data) in formats {
             data.publish(id)?;
         }
-        let mut result = value.clone();
-        result.revision = revision();
-        Ok(result)
+        Ok(())
     }
     pub fn revision() -> u32 {
         unsafe { GetClipboardSequenceNumber() }
@@ -284,8 +282,16 @@ mod platform {
     }
     pub fn write(owner: usize, value: &Files) -> Result<Files> {
         let _lock = ACCESS.lock().unwrap();
+        {
+            let _open = Open::new(owner)?;
+            write_open(value)?;
+        }
+        // Closing a Unicode-text clipboard adds synthesized text formats and
+        // advances its sequence number. Reopen and read the actual clipboard:
+        // sampling the sequence before CloseClipboard produces a stale receipt,
+        // while sampling afterwards alone could claim another application's data.
         let _open = Open::new(owner)?;
-        write_open(value)
+        read_open()?.context("The clipboard changed while copying files")
     }
     pub fn text(owner: usize, value: &str) -> Result<()> {
         if value.contains('\0') {
@@ -310,7 +316,7 @@ mod platform {
         remaining: Vec<String>,
     ) -> Result<Option<Files>> {
         let _lock = ACCESS.lock().unwrap();
-        let _open = Open::new(owner)?;
+        let open = Open::new(owner)?;
         let current = read_open()?;
         if current.as_ref() != Some(expected) || !expected.cut {
             return Ok(current);
@@ -327,8 +333,10 @@ mod platform {
         write_open(&Files {
             paths: remaining,
             ..expected.clone()
-        })
-        .map(Some)
+        })?;
+        drop(open);
+        let _open = Open::new(owner)?;
+        read_open()
     }
 }
 
