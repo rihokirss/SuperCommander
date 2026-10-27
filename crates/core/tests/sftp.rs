@@ -311,6 +311,30 @@ async fn verifies_host_authenticates_and_transfers_over_real_sftp() {
         assert!(fs::read_dir(&inner).unwrap().next().is_none());
         fs::remove_file(alias).unwrap();
         fs::remove_file(descendant_alias).unwrap();
+        let new_file = remote.join(&dir, "new-editor.txt");
+        let blank = commander_core::editor::prepare(remote.as_ref(), &new_file).unwrap();
+        assert!(blank.revision.is_empty());
+        assert_eq!(blank.connection.as_deref(), remote.connection_id());
+        assert!(!remote.exists(&new_file).unwrap());
+        let format = commander_core::editor::Format {
+            encoding: "UTF-8 BOM".into(),
+            line_ending: "CRLF".into(),
+        };
+        let saved =
+            commander_core::editor::write(remote.as_ref(), &new_file, "Õunad\n", None, &format)
+                .unwrap();
+        assert_eq!(saved.text, "Õunad\n");
+        assert!(remote.rename_new(&new_file, &renamed).is_err());
+        let updated = commander_core::editor::write(
+            remote.as_ref(),
+            &new_file,
+            "Changed\n",
+            Some(&saved.revision),
+            &format,
+        )
+        .unwrap();
+        assert_eq!(updated.text, "Changed\n");
+        assert_eq!(fs::read_to_string(&renamed).unwrap(), "SFTP round trip");
         remote.remove(&dir).unwrap();
     })
     .await

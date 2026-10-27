@@ -18,6 +18,8 @@ jobs:
         with:
           components: rustfmt
       - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
       - run: npm ci
       - run: cargo fmt --all -- --check
       - run: cargo test -p commander-core --locked

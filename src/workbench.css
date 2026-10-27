@@ -36,6 +36,42 @@
   padding: 8px 0;
   border-top: 1px solid var(--line);
   font-size: 10px;
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+.editor-format,
+.editor-save-fields {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.editor-format {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.editor-format .select-control {
+  padding: 4px 7px;
+  min-width: 108px;
+  font-size: 10px;
+}
+.editor-format-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.editor-format-fields .select-control {
+  width: 100%;
+}
+.shortcut-grid.editor-shortcuts {
+  grid-template-columns: minmax(0, 1fr);
+}
+.editor-save-fields .field {
+  margin-top: 0;
+}
+.workbench-keys {
+  flex-wrap: wrap;
 }
 .text-toolbar .editor-dirty {
   color: #c0ab80;

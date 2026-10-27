@@ -107,6 +107,10 @@ export function Modal({
       ) || node?.querySelector<HTMLElement>("button")
     )?.focus();
     const key = (e: KeyboardEvent) => {
+      const dialogs = document.querySelectorAll(
+        '[role="dialog"][aria-modal="true"]',
+      );
+      if (dialogs[dialogs.length - 1] !== node) return;
       if (e.key === "Escape") {
         if (document.querySelector('[data-select-open="true"]')) return;
         e.preventDefault();

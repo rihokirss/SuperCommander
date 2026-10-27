@@ -43,6 +43,10 @@ pub trait FileSystem: Send + Sync {
     fn writer(&self, path: &str) -> Result<Box<dyn Write + Send>>;
     fn mkdir(&self, path: &str) -> Result<()>;
     fn rename(&self, from: &str, to: &str) -> Result<()>;
+    /// Move a regular file into a new name without replacing an existing entry.
+    fn rename_new(&self, _from: &str, _to: &str) -> Result<()> {
+        bail!("This filesystem does not support publishing new files safely")
+    }
     fn remove(&self, path: &str) -> Result<()>;
     fn join(&self, parent: &str, name: &str) -> String;
     fn exists(&self, path: &str) -> Result<bool> {
@@ -198,6 +202,26 @@ impl FileSystem for LocalFs {
     }
     fn rename(&self, from: &str, to: &str) -> Result<()> {
         fs::rename(from, to)?;
+        Ok(())
+    }
+    fn rename_new(&self, from: &str, to: &str) -> Result<()> {
+        #[cfg(windows)]
+        {
+            let from: Vec<u16> = from.encode_utf16().chain(Some(0)).collect();
+            let to: Vec<u16> = to.encode_utf16().chain(Some(0)).collect();
+            // No MOVEFILE_REPLACE_EXISTING: this works on NTFS, FAT and network shares.
+            if unsafe {
+                windows_sys::Win32::Storage::FileSystem::MoveFileExW(from.as_ptr(), to.as_ptr(), 0)
+            } == 0
+            {
+                return Err(std::io::Error::last_os_error().into());
+            }
+        }
+        #[cfg(not(windows))]
+        {
+            fs::hard_link(from, to)?;
+            fs::remove_file(from)?;
+        }
         Ok(())
     }
     fn remove(&self, path: &str) -> Result<()> {

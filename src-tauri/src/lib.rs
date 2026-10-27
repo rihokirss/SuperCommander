@@ -364,14 +364,67 @@ async fn read_document(
     let fs = state.sources.get(&location.source).map_err(error)?;
     blocking(move || core::editor::read(fs.as_ref(), &location.path)).await
 }
+fn editor_connection(
+    fs: &dyn filesystem::FileSystem,
+    connection: Option<&str>,
+) -> anyhow::Result<()> {
+    if fs.connection_id().is_some() && connection != fs.connection_id() {
+        anyhow::bail!("The SSH connection changed. Your edits are still here; use Save As to another connected location.");
+    }
+    Ok(())
+}
+#[tauri::command]
+async fn new_document(
+    state: State<'_, AppState>,
+    folder: Location,
+) -> Reply<core::editor::Document> {
+    let fs = state.sources.get(&folder.source).map_err(error)?;
+    blocking(move || core::editor::blank(fs.as_ref(), &folder.path)).await
+}
+#[tauri::command]
+async fn document_target(
+    state: State<'_, AppState>,
+    location: Location,
+    connection: Option<String>,
+) -> Reply<core::editor::Target> {
+    let fs = state.sources.get(&location.source).map_err(error)?;
+    if connection.is_some() {
+        editor_connection(fs.as_ref(), connection.as_deref()).map_err(error)?;
+    }
+    blocking(move || core::editor::target(fs.as_ref(), &location.path)).await
+}
+#[tauri::command]
+async fn write_document(
+    state: State<'_, AppState>,
+    location: Location,
+    text: String,
+    revision: Option<String>,
+    format: core::editor::Format,
+    connection: Option<String>,
+) -> Reply<core::editor::Document> {
+    let fs = state.sources.get(&location.source).map_err(error)?;
+    editor_connection(fs.as_ref(), connection.as_deref()).map_err(error)?;
+    blocking(move || {
+        core::editor::write(
+            fs.as_ref(),
+            &location.path,
+            &text,
+            revision.as_deref(),
+            &format,
+        )
+    })
+    .await
+}
 #[tauri::command]
 async fn save_document(
     state: State<'_, AppState>,
     location: Location,
     text: String,
     revision: String,
+    connection: Option<String>,
 ) -> Reply<core::editor::Document> {
     let fs = state.sources.get(&location.source).map_err(error)?;
+    editor_connection(fs.as_ref(), connection.as_deref()).map_err(error)?;
     blocking(move || core::editor::save(fs.as_ref(), &location.path, &text, &revision)).await
 }
 #[tauri::command]
@@ -746,6 +799,9 @@ pub fn run() {
             finish_file_paste,
             cancel_file_cut,
             read_document,
+            new_document,
+            document_target,
+            write_document,
             save_document,
             save_settings,
             connect_sftp,

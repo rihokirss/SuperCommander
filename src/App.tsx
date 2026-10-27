@@ -99,7 +99,7 @@ type Dialog =
   | { kind: "action"; data: ActionData }
   | { kind: "rename"; entries: Entry[]; source: string }
   | { kind: "preview"; location: Location }
-  | { kind: "edit"; location: Location }
+  | { kind: "edit"; location: Location; newFile?: boolean }
   | {
       kind: "connect";
       profile?: SftpProfile;
@@ -903,6 +903,14 @@ export function App() {
         run: () => action("trash", index, entries),
       },
       {
+        id: "new-file",
+        label: t.newFile,
+        icon: <FilePenLine size={15} />,
+        key: "Shift+F4",
+        disabled: readOnly,
+        run: () => newTextFile(location),
+      },
+      {
         id: "mkdir",
         label: t.mkdir,
         icon: <FolderPlus size={15} />,
@@ -986,6 +994,14 @@ export function App() {
       return;
     }
     setDialog({ kind: "edit", location: { ...current, path: entry.path } });
+  }
+  function newTextFile(folder = locationAt(active)) {
+    if (!folder) return;
+    if (folder.source.startsWith("zip:")) {
+      notify(t.readOnly);
+      return;
+    }
+    setDialog({ kind: "edit", location: folder, newFile: true });
   }
   function toggleTerminal() {
     const source = ensureTerminal();
@@ -1091,6 +1107,13 @@ export function App() {
       .catch((e) => notify(String(e)));
   }
   const actions: PaletteAction[] = [
+    {
+      id: "new-file",
+      label: t.newFile,
+      icon: <FilePenLine size={16} />,
+      key: "Shift+F4",
+      run: () => newTextFile(),
+    },
     {
       id: "clipboard-copy",
       label: t.copyClipboard,
@@ -1452,14 +1475,14 @@ export function App() {
       } else if (
         !ctrl &&
         !e.altKey &&
-        (!e.shiftKey || ["F8", "Delete"].includes(e.key)) &&
+        (!e.shiftKey || ["F4", "F8", "Delete"].includes(e.key)) &&
         ["F2", "F3", "F4", "F5", "F6", "F7", "F8", "Delete"].includes(e.key)
       ) {
         e.preventDefault();
         const shortcuts: Record<string, () => void> = {
           F2: rename,
           F3: preview,
-          F4: edit,
+          F4: () => (e.shiftKey ? newTextFile() : edit()),
           F5: () => action("copy"),
           F6: () => action("move"),
           F7: () => action("mkdir"),
@@ -2139,6 +2162,19 @@ export function App() {
           location={dialog.location}
           t={t}
           editable
+          newFile={dialog.newFile}
+          destinations={[
+            { source: "local", folder: boot.home, label: t.local },
+            ...sessions
+              .filter((profile) =>
+                remoteHomes.current.has(`sftp:${profile.id}`),
+              )
+              .map((profile) => ({
+                source: `sftp:${profile.id}`,
+                folder: remoteHomes.current.get(`sftp:${profile.id}`)!,
+                label: `${profile.name} · ${profile.username}@${profile.host}:${profile.port}`,
+              })),
+          ]}
           onClose={closeDialog}
           onSaved={() => setRefresh((v) => v + 1)}
         />

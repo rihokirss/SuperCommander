@@ -99,6 +99,7 @@ Each pane has independent tabs, history, sorting and filtering. Click its locati
 | F2 | Rename, including bulk rename |
 | F3 | View file |
 | F4 | Quick edit, locally or over SFTP |
+| Shift+F4 | New unsaved text file |
 | F5 / F6 | Copy / move to the other pane |
 | F7 | Create folder |
 | F8 / Delete | Recycle; remote deletion is permanent and requires confirmation |
@@ -134,9 +135,15 @@ SSH selections and queued operations stay bound to the authenticated connection 
 
 Text files open in a spacious viewer with line numbers, search and optional word wrap. Image and PDF previews are also available. F4 opens the built-in editor; ZIP contents remain read-only.
 
+Shift+F4 starts an unsaved new text file in the active pane. Save As supports local folders and connected SSH servers, with UTF-8, UTF-8 BOM, UTF-16 LE/BE and LF/CRLF options. Existing destinations require confirmation; changes made by another application during that confirmation are preserved. An SSH editor can also save a local copy without changing its remote original.
+
+![Quick editor with encoding, line endings and keyboard commands](docs/screenshots/editor.png)
+
 | Shortcut | In the viewer or editor |
 | --- | --- |
 | F2 / Ctrl+S | Save in the editor |
+| Shift+F2 / Ctrl+Shift+S | Save As |
+| F1 | Editor and viewer shortcut reference |
 | F4 | Switch from viewer to editor |
 | F6 | Go to line |
 | F7 / Ctrl+F | Find text |
@@ -145,10 +152,12 @@ Text files open in a spacious viewer with line numbers, search and optional word
 | Ctrl+H | Find and replace in the editor |
 | Ctrl+Z / Ctrl+Y | Undo / redo |
 | Ctrl+C / Ctrl+V | Copy / paste |
-| Tab | Insert a tab in the editor |
-| F10 / Esc | Close; confirm before discarding unsaved edits |
+| Tab / Shift+Tab | Insert a tab, or indent / unindent selected lines |
+| F10 / Esc / Ctrl+W | Close the viewer or editor |
 
 The editor supports local and SFTP text files up to 4 MiB. It preserves UTF-8/UTF-16 encoding, BOM and LF/CRLF line endings, stages replacements in a temporary file, and rejects saves if the original content changed externally. Binary files, unsupported encodings, mixed line endings and symbolic links are not editable. Text previews of larger files are limited to the first 256 KiB.
+
+Closing a modified editor or the application window offers Save, Discard and Cancel. Save completes before closing; a failed save leaves the edits available. Esc in Save As or an overwrite confirmation closes that inner dialog. No file is created for a new buffer until it is saved.
 
 ### Workspace and appearance
 
@@ -237,3 +246,5 @@ The workflow also runs native file-clipboard tests in its dedicated Windows desk
 `node scripts/windows-network-smoke.mjs`, run with Windows Node against a test instance using the same debugging port, checks Explorer imports, adding and persisting a custom UNC location, renaming/removing it, the collapsed sidebar tooltip, and browsing a server root through the Windows shell. It uses a temporary WSL folder and restores the original settings.
 
 Source: [rihokirss/SuperCommander](https://github.com/rihokirss/SuperCommander).
+
+`node scripts/windows-editor-smoke.mjs`, run with Windows Node against the development test instance on port 9223, tests new files, Save As, encoding conversions, overwrite conflicts, and native window close protection. It restores settings and closes that test window after saving its temporary document; restart the development instance afterward.

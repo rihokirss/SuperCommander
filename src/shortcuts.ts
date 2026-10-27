@@ -7,6 +7,7 @@ export function shortcutGroups(t: Text) {
         ["F2", t.rename],
         ["F3", t.preview],
         ["F4", t.edit],
+        ["Shift+F4", t.newFile],
         ["F5", t.copy],
         ["F6", t.move],
         ["F7", t.mkdir],
@@ -68,6 +69,9 @@ export function shortcutGroups(t: Text) {
       title: t.textTools,
       items: [
         ["F2 / Ctrl+S", t.saveChanges],
+        ["Shift+F2 / Ctrl+Shift+S", t.saveAs],
+        ["Tab / Shift+Tab", t.indent],
+        ["F1", t.keyboard],
         ["F4", t.edit],
         ["F6", t.goToLine],
         ["F7 / Ctrl+F", t.findText],
@@ -76,7 +80,7 @@ export function shortcutGroups(t: Text) {
         ["Ctrl+Z / Ctrl+Y", t.undoRedo],
         ["Ctrl+C / Ctrl+V", t.copyPasteText],
         ["F8", t.wordWrap],
-        ["F10 / Esc", t.close],
+        ["F10 / Esc / Ctrl+W", t.close],
       ],
     },
     {

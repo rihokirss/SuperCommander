@@ -477,6 +477,10 @@ impl FileSystem for RemoteFs {
         self.runtime.block_on(self.sftp.rename(from, to))?;
         Ok(())
     }
+    fn rename_new(&self, from: &str, to: &str) -> Result<()> {
+        // SSH_FXP_RENAME v3 fails if newpath exists; do not use posix-rename.
+        self.rename(from, to)
+    }
     fn remove(&self, path: &str) -> Result<()> {
         if path.trim_matches('/').is_empty()
             || !path.starts_with('/')

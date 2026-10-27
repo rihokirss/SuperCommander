@@ -488,11 +488,59 @@ try {
     await expect(
       fileEditor.getByRole("textbox", { name: "File contents", exact: true }),
     ).toHaveValue("A file from the SSH server");
+    const editorSource = `sftp:${savedCatalog.hosts.find((host) => host.alias === "sc-form").profile.id}`;
+    const editorLocation = {
+      source: editorSource,
+      path: `${fixture.path}/remote-only.txt`,
+    };
+    const remoteDocument = await rpc("read_document", {
+      location: editorLocation,
+    });
+    assert.equal(typeof remoteDocument.connection, "string");
+    await assert.rejects(
+      rpc("write_document", {
+        location: editorLocation,
+        text: "must not be saved",
+        revision: remoteDocument.revision,
+        format: {
+          encoding: remoteDocument.encoding,
+          lineEnding: remoteDocument.lineEnding,
+        },
+        connection: "closed-session",
+      }),
+      /SSH connection changed/,
+    );
     await fileEditor
       .getByRole("textbox", { name: "File contents", exact: true })
       .fill("Edited through the existing SSH connection");
     await page.keyboard.press("Control+s");
     await expect(fileEditor).toContainText("Saved");
+    await page.keyboard.press("Control+Shift+s");
+    const remoteSaveAs = page.getByRole("dialog", {
+      name: "Save As",
+      exact: true,
+    });
+    await remoteSaveAs
+      .getByRole("combobox", { name: "Save location", exact: true })
+      .click();
+    await page
+      .getByRole("option", { name: "Local files", exact: true })
+      .click();
+    const savedLocalCopy = path.join(dst, "remote-editor-copy.txt");
+    await remoteSaveAs
+      .getByRole("textbox", { name: "File path", exact: true })
+      .fill(savedLocalCopy);
+    await remoteSaveAs
+      .getByRole("button", { name: "Save changes", exact: true })
+      .click();
+    await expect(remoteSaveAs).toHaveCount(0);
+    assert.equal(
+      await fs.readFile(savedLocalCopy, "utf8"),
+      "Edited through the existing SSH connection",
+    );
+    console.log(
+      "PASS remote editor Save As to a local file preserves the remote original",
+    );
     await page.keyboard.press("F10");
     await right.getByRole("grid").focus();
     await page.keyboard.press("Control+o");

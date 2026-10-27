@@ -1,19 +1,31 @@
 use crate::filesystem::FileSystem;
 use anyhow::{bail, Context, Result};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::io::Read;
 
 const LIMIT: usize = 4 * 1024 * 1024;
 static SAVE: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Document {
     pub text: String,
     pub revision: String,
     pub encoding: String,
     pub line_ending: String,
+    pub connection: Option<String>,
+}
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Format {
+    pub encoding: String,
+    pub line_ending: String,
+}
+#[derive(Serialize)]
+pub struct Target {
+    pub revision: Option<String>,
+    pub connection: Option<String>,
 }
 fn revision(bytes: &[u8]) -> String {
     Sha256::digest(bytes)
@@ -85,26 +97,104 @@ pub fn read(fs: &dyn FileSystem, path: &str) -> Result<Document> {
         revision: revision(&bytes),
         encoding: encoding.into(),
         line_ending: if crlf > 0 { "CRLF" } else { "LF" }.into(),
+        connection: fs.connection_id().map(str::to_owned),
     })
 }
 pub fn save(fs: &dyn FileSystem, path: &str, text: &str, expected: &str) -> Result<Document> {
-    let _guard = SAVE.lock().unwrap();
+    let original = read(fs, path)?;
+    write(
+        fs,
+        path,
+        text,
+        Some(expected),
+        &Format {
+            encoding: original.encoding,
+            line_ending: original.line_ending,
+        },
+    )
+}
+pub fn prepare(fs: &dyn FileSystem, path: &str) -> Result<Document> {
+    if fs.exists(path)? {
+        return read(fs, path);
+    }
+    let path = validate_destination(fs, path)?;
+    blank(fs, &crate::rename::parent(&path))
+}
+pub fn blank(fs: &dyn FileSystem, folder: &str) -> Result<Document> {
+    if !fs.writable() || !fs.stat(&fs.canonical_path(folder)?)?.is_dir {
+        bail!("Choose a writable directory for the new file");
+    }
+    Ok(Document {
+        text: String::new(),
+        revision: String::new(),
+        encoding: "UTF-8".into(),
+        line_ending: if cfg!(windows) && fs.connection_id().is_none() {
+            "CRLF"
+        } else {
+            "LF"
+        }
+        .into(),
+        connection: fs.connection_id().map(str::to_owned),
+    })
+}
+fn validate_destination(fs: &dyn FileSystem, path: &str) -> Result<String> {
     if !fs.writable() {
         bail!("This source is read-only");
     }
-    let original = read(fs, path)?;
-    if original.revision != expected {
-        bail!("The file changed outside the editor. Reopen it before saving; your edits are still here.");
+    if path.contains('\0') {
+        bail!("Invalid file path");
+    }
+    if fs.connection_id().is_some() && !path.starts_with('/')
+        || fs.connection_id().is_none() && !std::path::Path::new(path).is_absolute()
+    {
+        bail!("Choose an absolute file path");
+    }
+    let parent = fs.canonical_path(&crate::rename::parent(path))?;
+    let name = path.rsplit(['/', '\\']).next().unwrap_or("");
+    crate::filesystem::valid_name(name)?;
+    if !fs.stat(&parent)?.is_dir {
+        bail!("Choose an existing destination directory");
+    }
+    Ok(fs.join(&parent, name))
+}
+pub fn target(fs: &dyn FileSystem, path: &str) -> Result<Target> {
+    let path = validate_destination(fs, path)?;
+    Ok(Target {
+        connection: fs.connection_id().map(str::to_owned),
+        revision: if fs.exists(&path)? {
+            Some(revision(&bytes(fs, &path)?))
+        } else {
+            None
+        },
+    })
+}
+pub fn write(
+    fs: &dyn FileSystem,
+    path: &str,
+    text: &str,
+    expected: Option<&str>,
+    format: &Format,
+) -> Result<Document> {
+    let _guard = SAVE.lock().unwrap();
+    let resolved = validate_destination(fs, path)?;
+    let path = resolved.as_str();
+    if target(fs, path)?.revision.as_deref() != expected {
+        bail!("The destination changed outside the editor. Your edits are still here; choose Save As or reopen the file.");
     }
     if text.contains(['\0', '\r']) {
         bail!("Invalid text content");
     }
-    let normalized = if original.line_ending == "CRLF" {
+    if !["LF", "CRLF"].contains(&format.line_ending.as_str())
+        || !["UTF-8", "UTF-8 BOM", "UTF-16 LE", "UTF-16 BE"].contains(&format.encoding.as_str())
+    {
+        bail!("Unsupported text encoding or line endings");
+    }
+    let normalized = if format.line_ending == "CRLF" {
         text.replace('\n', "\r\n")
     } else {
         text.into()
     };
-    let encoded: Vec<u8> = match original.encoding.as_str() {
+    let encoded: Vec<u8> = match format.encoding.as_str() {
         "UTF-16 LE" => [
             vec![0xff, 0xfe],
             normalized
@@ -141,13 +231,24 @@ pub fn save(fs: &dyn FileSystem, path: &str, text: &str, expected: &str) -> Resu
         writer.write_all(&encoded)?;
         writer.flush()?;
         drop(writer);
-        fs.copy_permissions(path, &temp)?;
-        if revision(&bytes(fs, path)?) != expected {
+        if expected.is_some() {
+            fs.copy_permissions(path, &temp)?;
+        }
+        if target(fs, path)?.revision.as_deref() != expected {
             bail!("The file changed while saving. Your edits were not written over it.");
         }
-        fs.rename(path, &backup)?;
-        if let Err(e) = fs.rename(&temp, path) {
-            if let Err(restore) = fs.rename(&backup, path) {
+        if expected.is_none() {
+            return fs.rename_new(&temp, path);
+        }
+        fs.rename_new(path, &backup)?;
+        let committed = (|| -> Result<()> {
+            if revision(&bytes(fs, &backup)?) != expected.unwrap() {
+                bail!("The file changed while saving. Your edits were not written over it.");
+            }
+            fs.rename_new(&temp, path)
+        })();
+        if let Err(e) = committed {
+            if let Err(restore) = fs.rename_new(&backup, path) {
                 bail!("{e}; original preserved at {backup}; restore failed: {restore}");
             }
             return Err(e);
@@ -159,5 +260,7 @@ pub fn save(fs: &dyn FileSystem, path: &str, text: &str, expected: &str) -> Resu
         let _ = fs.remove(&temp);
     }
     result?;
-    read(fs, path)
+    let mut document = read(fs, path)?;
+    document.line_ending.clone_from(&format.line_ending);
+    Ok(document)
 }
