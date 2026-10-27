@@ -245,7 +245,7 @@ The test starts an isolated loopback server with temporary keys and verifies hos
 
 ### Native Windows smoke test
 
-Launch a test instance with the **process-only** environment variable `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9223`, then run `node scripts/windows-smoke.mjs` with **Windows Node**. Do not set the debugging variable system-wide. The script exercises real Rust IPC, file operations, editor saves, previews, the recycle bin and PowerShell/ConPTY in its own temporary directory. It restores the original settings and removes its test files. Use `SC_SCREENSHOT` to choose the final diagnostic screenshot path.
+Run `node scripts/windows-smoke.mjs [path-to-supercommander.exe]` with **Windows Node**. It launches an owned test process on port 9224 with separate settings and WebView data, exercises real Rust IPC, file operations, editor saves, previews, the recycle bin and PowerShell/ConPTY, and removes its own process and temporary files afterward. It refuses to attach to an existing debugging endpoint. The default executable is `target/release/supercommander.exe`. Use `SC_SCREENSHOT` to choose the final diagnostic screenshot path.
 
 To include SSH UI checks, first run `node scripts/sftp-fixture.mjs` in WSL. This creates a temporary loopback SSH server and test keys. The Windows smoke test edits only a temporary SSH config, transfers files both ways, edits a remote file, exercises the server shell, and saves and reopens multiple forwards. It closes its own SSH sessions afterward. Stop the fixture with Ctrl+C to remove its keys and files.
 
@@ -255,7 +255,7 @@ The Windows GitHub Actions workflow runs checks and produces an x64 executable a
 
 The workflow also runs native file-clipboard tests in its dedicated Windows desktop, including shell file-drop formats, an external clipboard producer/consumer, Unicode, copy/cut/paste, duplicate folders and conditional clipboard cleanup. `scripts/windows-clipboard-smoke.mjs` requires `CI=true` and launches its own built executable on debugging port 9224; it owns that test desktop's clipboard and must not run on a user's desktop.
 
-`node scripts/windows-network-smoke.mjs`, run with Windows Node against a test instance using the same debugging port, checks Explorer imports, adding and persisting a custom UNC location, renaming/removing it, the collapsed sidebar tooltip, and browsing a server root through the Windows shell. It uses a temporary WSL folder and restores the original settings.
+`node scripts/windows-network-smoke.mjs [path-to-supercommander.exe]`, run with Windows Node, checks Explorer imports, adding and persisting a custom UNC location, renaming/removing it, the collapsed sidebar tooltip, and browsing a server root through the Windows shell. It launches its own isolated app and uses an owned temporary folder through the WSL Ubuntu share.
 
 Source: [rihokirss/SuperCommander](https://github.com/rihokirss/SuperCommander).
 
@@ -263,4 +263,4 @@ Source: [rihokirss/SuperCommander](https://github.com/rihokirss/SuperCommander).
 
 `SUPERCOMMANDER_DATA_DIR` can override the application settings directory with an absolute path. Tests use it to keep their settings and backups separate from your working profile. The default remains the per-user SuperCommander configuration directory. SSH config files and Credential Manager credentials retain their existing locations.
 
-`node scripts/windows-editor-smoke.mjs`, run with Windows Node against the development test instance on port 9223, tests new files, Save As, encoding conversions, overwrite conflicts, and native window close protection. It restores settings and closes that test window after saving its temporary document; restart the development instance afterward.
+`node scripts/windows-editor-smoke.mjs [path-to-supercommander.exe]`, run with Windows Node, launches its own isolated test app and tests new files, Save As, encoding conversions, overwrite conflicts, and native window close protection. The Save & Close assertion closes only that test window. Run native test scripts sequentially; they reserve port 9224.

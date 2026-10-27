@@ -73,7 +73,7 @@
     "Transfer safety still needs an audit of physical aliases reached through different protocols (for example UNC and SFTP), cancellation/rollback and metadata preservation.",
     "Editor create/Save As/format conversion and application-close protection are implemented and tested; the overall viewer/editor audit still needs its remaining larger-file and search behavior checks.",
     "Content search, directory comparison and the remaining viewer, navigation and transfer audits are still required. Bookmark management and file properties are now implemented and verified.",
-    "Migrate the older native smoke scripts to the owned-instance harness; the new properties test and CI clipboard test already use isolated settings. An interrupted early properties test lost previous pane locations; owned test bookmarks were removed and affected panes reset to Home/Downloads. No file contents, SSH config or stored credentials were changed by that cleanup."
+    "All native smoke scripts now launch owned processes with isolated settings and WebView profiles. Full file/SSH/terminal, network and editor-close tests passed after migration, with the user's settings checksum unchanged. An earlier interrupted properties test lost previous pane locations; owned test bookmarks were removed and affected panes reset to Home/Downloads. No file contents, SSH config or stored credentials were changed by that cleanup."
   ],
   "completionRule": "Implementation plus current functional, keyboard and visual evidence is required; source inspection or an older release alone does not prove completion.",
   "requirements": [
@@ -268,6 +268,6 @@
       "artifacts/properties-light.png",
       "artifacts/native-permissions.png"
     ],
-    "ci": "Windows workflow now includes the isolated native properties/bookmarks test; verification of the new workflow run is pending the next push."
+    "ci": "Full Windows CI run 40599062130 on 1fb5d2a passed, including native Windows core tests, file clipboard tests and the isolated properties/bookmarks UI test."
   }
 }

@@ -1,49 +1,45 @@
-// Own temporary files only. Restores settings, then verifies Save & Close by
-// closing the development test window. Restart that test instance afterwards.
-import { chromium, expect } from "@playwright/test";
+// Owns an isolated app and verifies native Save & Close on that test window.
+import { expect } from "@playwright/test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
-assert.equal(process.platform, "win32");
-const browser = await chromium.connectOverCDP("http://127.0.0.1:9223");
-const page = browser
-  .contexts()[0]
-  .pages()
-  .find((p) => p.url().includes("tauri.localhost"));
-const rpc = (command, args = {}) =>
-  page.evaluate(
-    ({ command, args }) => window.__TAURI_INTERNALS__.invoke(command, args),
-    { command, args },
-  );
-const original = (await rpc("bootstrap")).settings;
-const root = await fs.mkdtemp(path.join(os.tmpdir(), "SuperCommander-editor-"));
-const originalFile = path.join(root, "original.txt");
-await fs.writeFile(originalFile, "\ufeffOriginal\r\n");
-const existing = path.join(root, "existing.txt");
-await fs.writeFile(existing, "old destination");
-const panes = original.panes.map((p) => ({
-  ...p,
-  activeTab: p.tabs[0].id,
-  tabs: p.tabs.map((tab, i) => {
-    const location = { source: "local", path: root };
-    return i === 0
-      ? { ...tab, location, history: [location], historyIndex: 0 }
-      : tab;
-  }),
-}));
-const text = page.getByRole("textbox", { name: "File contents", exact: true });
-const saveAs = page.getByRole("dialog", { name: "Save As", exact: true });
-const prompt = page.getByRole("dialog", {
-  name: "Save changes before closing?",
-  exact: true,
-});
-async function choose(scope, label, value) {
-  await scope.getByRole("combobox", { name: label, exact: true }).click();
-  await page.getByRole("option", { name: value, exact: true }).click();
-}
-let restored = false;
+import { startNativeTest } from "./native-test-instance.mjs";
+const instance = await startNativeTest("editor", process.argv[2]);
+const { page, root } = instance;
 try {
+  const rpc = (command, args = {}) =>
+    page.evaluate(
+      ({ command, args }) => window.__TAURI_INTERNALS__.invoke(command, args),
+      { command, args },
+    );
+  const original = (await rpc("bootstrap")).settings;
+  const originalFile = path.join(root, "original.txt");
+  await fs.writeFile(originalFile, "\ufeffOriginal\r\n");
+  const existing = path.join(root, "existing.txt");
+  await fs.writeFile(existing, "old destination");
+  const panes = original.panes.map((p) => ({
+    ...p,
+    activeTab: p.tabs[0].id,
+    tabs: p.tabs.map((tab, i) => {
+      const location = { source: "local", path: root };
+      return i === 0
+        ? { ...tab, location, history: [location], historyIndex: 0 }
+        : tab;
+    }),
+  }));
+  const text = page.getByRole("textbox", {
+    name: "File contents",
+    exact: true,
+  });
+  const saveAs = page.getByRole("dialog", { name: "Save As", exact: true });
+  const prompt = page.getByRole("dialog", {
+    name: "Save changes before closing?",
+    exact: true,
+  });
+  async function choose(scope, label, value) {
+    await scope.getByRole("combobox", { name: label, exact: true }).click();
+    await page.getByRole("option", { name: value, exact: true }).click();
+  }
   await rpc("save_settings", {
     value: { ...original, language: "en", theme: "dark", panes },
   });
@@ -157,9 +153,6 @@ try {
   );
   await fs.mkdir("artifacts", { recursive: true });
   await page.screenshot({ path: "artifacts/native-editor.png" });
-  // No settings mutation follows: only saving this test document and closing.
-  await rpc("save_settings", { value: original });
-  restored = true;
   await rpc("plugin:window|close", { label: "main" });
   await expect(prompt).toBeVisible();
   const closed = page.waitForEvent("close", { timeout: 15000 });
@@ -178,31 +171,5 @@ try {
     "PASS native Save & Close persists edits before destroying the test window",
   );
 } finally {
-  if (!page.isClosed()) {
-    // Discard only this script's own temporary buffer so restoration cannot get
-    // stuck behind beforeunload or an inner Save As dialog.
-    for (
-      let attempt = 0;
-      attempt < 5 && (await page.getByRole("dialog").count());
-      attempt++
-    ) {
-      const discard = page.getByRole("button", {
-        name: "Discard changes",
-        exact: true,
-      });
-      if (await discard.isVisible()) await discard.click();
-      else await page.keyboard.press("Escape");
-    }
-    await rpc("save_settings", { value: original });
-    await page.reload();
-    restored = true;
-  }
-  assert.ok(restored, "Original settings must be restored");
-  await browser.close().catch(() => {});
-  await fs.rm(root, {
-    recursive: true,
-    force: true,
-    maxRetries: 10,
-    retryDelay: 200,
-  });
+  await instance.close();
 }

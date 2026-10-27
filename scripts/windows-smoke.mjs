@@ -1,108 +1,94 @@
-// Run with Windows Node against a SuperCommander WebView2 test instance.
-// Set WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9223
-// on that process only. Every file operation below targets a new temporary folder.
-import { chromium, expect } from "@playwright/test";
+// Run with Windows Node; launches its own app, profile and temporary files.
+import { expect } from "@playwright/test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { startNativeTest } from "./native-test-instance.mjs";
 
-assert.equal(
-  process.platform,
-  "win32",
-  "Run this smoke test with Windows Node.",
-);
-const temp = await fs.mkdtemp(path.join(os.tmpdir(), "SuperCommander-smoke-"));
-const src = path.join(temp, "Source"),
-  dst = path.join(temp, "Destination");
-await fs.mkdir(src);
-await fs.mkdir(dst);
-await fs.writeFile(path.join(src, "Õunad.txt"), "Tere, maailm!");
-await fs.writeFile(path.join(src, "move-me.txt"), "move payload");
-await fs.writeFile(
-  path.join(src, "quick-edit.txt"),
-  Buffer.from("\ufeffFirst line\r\nSecond line\r\n"),
-);
-await fs.writeFile(
-  path.join(src, "preview.html"),
-  "<script>window.SC_UNSAFE=true</script>",
-);
-await fs.writeFile(
-  path.join(src, "pixel.png"),
-  Buffer.from(
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jNAAAAABJRU5ErkJggg==",
-    "base64",
-  ),
-);
-function pdf() {
-  const text = "BT /F1 18 Tf 50 700 Td (SuperCommander PDF preview) Tj ET";
-  const objects = [
-    "<< /Type /Catalog /Pages 2 0 R >>",
-    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
-    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
-    `<< /Length ${text.length} >>\nstream\n${text}\nendstream`,
-  ];
-  let out = "%PDF-1.4\n";
-  const offsets = [0];
-  for (let i = 0; i < objects.length; i++) {
-    offsets.push(Buffer.byteLength(out));
-    out += `${i + 1} 0 obj\n${objects[i]}\nendobj\n`;
-  }
-  const start = Buffer.byteLength(out);
-  out += `xref\n0 6\n0000000000 65535 f \n${offsets
-    .slice(1)
-    .map((n) => String(n).padStart(10, "0") + " 00000 n \n")
-    .join("")}trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${start}\n%%EOF`;
-  return out;
-}
-await fs.writeFile(path.join(src, "test.pdf"), pdf());
-const browser = await chromium.connectOverCDP(
-  process.env.SC_CDP_URL || "http://127.0.0.1:9223",
-);
-const context = browser.contexts()[0];
-const page =
-  context.pages().find((p) => p.url().includes("tauri.localhost")) ||
-  context.pages()[0];
-const pageErrors = [];
-page.on("pageerror", (e) => pageErrors.push(e.message));
+const instance = await startNativeTest("smoke", process.argv[2]);
+const { page, root: temp } = instance;
+const ownedSources = new Set();
 const rpc = (command, args = {}) =>
   page.evaluate(
     ({ command, args }) => window.__TAURI_INTERNALS__.invoke(command, args),
     { command, args },
   );
-const originalSettings = (await rpc("bootstrap")).settings;
-assert.equal(
-  (await rpc("bootstrap")).networkError,
-  null,
-  "Windows saved network locations should load without an error",
-);
-async function choose(label, option) {
-  await page.getByRole("combobox", { name: label, exact: true }).click();
-  await page.getByRole("option", { name: option, exact: true }).click();
-}
-async function navigate(index, value) {
-  const pane = page.locator(`[data-pane="${index}"]`);
-  await pane.locator(".breadcrumbs").click();
-  await pane.locator(".path-form input").fill(value);
-  await pane.locator(".path-form input").press("Enter");
-  await expect(pane.locator(".breadcrumbs")).toHaveAttribute("title", value);
-  return pane;
-}
-async function finished(count) {
-  await expect(page.locator(".job-row.completed")).toHaveCount(count, {
-    timeout: 20000,
-  });
-  assert.equal(
-    await page.locator(".job-row.failed").count(),
-    0,
-    await page.locator(".queue-scroll").innerText(),
-  );
-}
-let completed = 0;
-const ownedSources = new Set();
 try {
+  const src = path.join(temp, "Source"),
+    dst = path.join(temp, "Destination");
+  await fs.mkdir(src);
+  await fs.mkdir(dst);
+  await fs.writeFile(path.join(src, "Õunad.txt"), "Tere, maailm!");
+  await fs.writeFile(path.join(src, "move-me.txt"), "move payload");
+  await fs.writeFile(
+    path.join(src, "quick-edit.txt"),
+    Buffer.from("\ufeffFirst line\r\nSecond line\r\n"),
+  );
+  await fs.writeFile(
+    path.join(src, "preview.html"),
+    "<script>window.SC_UNSAFE=true</script>",
+  );
+  await fs.writeFile(
+    path.join(src, "pixel.png"),
+    Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jNAAAAABJRU5ErkJggg==",
+      "base64",
+    ),
+  );
+  function pdf() {
+    const text = "BT /F1 18 Tf 50 700 Td (SuperCommander PDF preview) Tj ET";
+    const objects = [
+      "<< /Type /Catalog /Pages 2 0 R >>",
+      "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+      "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+      "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+      `<< /Length ${text.length} >>\nstream\n${text}\nendstream`,
+    ];
+    let out = "%PDF-1.4\n";
+    const offsets = [0];
+    for (let i = 0; i < objects.length; i++) {
+      offsets.push(Buffer.byteLength(out));
+      out += `${i + 1} 0 obj\n${objects[i]}\nendobj\n`;
+    }
+    const start = Buffer.byteLength(out);
+    out += `xref\n0 6\n0000000000 65535 f \n${offsets
+      .slice(1)
+      .map((n) => String(n).padStart(10, "0") + " 00000 n \n")
+      .join("")}trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${start}\n%%EOF`;
+    return out;
+  }
+  await fs.writeFile(path.join(src, "test.pdf"), pdf());
+  const pageErrors = [];
+  page.on("pageerror", (e) => pageErrors.push(e.message));
+  assert.equal(
+    (await rpc("bootstrap")).networkError,
+    null,
+    "Windows saved network locations should load without an error",
+  );
+  async function choose(label, option) {
+    await page.getByRole("combobox", { name: label, exact: true }).click();
+    await page.getByRole("option", { name: option, exact: true }).click();
+  }
+  async function navigate(index, value) {
+    const pane = page.locator(`[data-pane="${index}"]`);
+    await pane.locator(".breadcrumbs").click();
+    await pane.locator(".path-form input").fill(value);
+    await pane.locator(".path-form input").press("Enter");
+    await expect(pane.locator(".breadcrumbs")).toHaveAttribute("title", value);
+    return pane;
+  }
+  async function finished(count) {
+    await expect(page.locator(".job-row.completed")).toHaveCount(count, {
+      timeout: 20000,
+    });
+    assert.equal(
+      await page.locator(".job-row.failed").count(),
+      0,
+      await page.locator(".queue-scroll").innerText(),
+    );
+  }
+  let completed = 0;
   await page.reload();
   await expect(page.locator(".app-shell")).toBeVisible({ timeout: 20000 });
   // Keep the interaction assertions independent of the user's Windows language.
@@ -826,37 +812,24 @@ try {
   console.log("PASS no WebView JavaScript errors");
   console.log("WINDOWS SMOKE PASSED");
 } finally {
-  await page.keyboard.press("Escape").catch(() => {});
-  for (const source of ownedSources)
-    await rpc("disconnect_sftp", { source }).catch(() => {});
-  if (await page.locator(".terminal-panel").count()) {
-    if (!(await page.locator(".terminal-panel").isVisible()))
-      await page
-        .locator(".titlebar-tools")
-        .getByRole("button", { name: "Terminal", exact: true })
-        .click();
-    await page
-      .locator(".terminal-panel>header")
-      .getByRole("button", { name: "Close", exact: true })
-      .click()
-      .catch(() => {});
+  try {
+    await page.keyboard.press("Escape").catch(() => {});
+    for (const source of ownedSources)
+      await rpc("disconnect_sftp", { source }).catch(() => {});
+    const terminal = page.locator(".terminal-panel");
+    if (await terminal.count()) {
+      if (!(await terminal.isVisible()))
+        await page
+          .locator(".titlebar-tools")
+          .getByRole("button", { name: "Terminal", exact: true })
+          .click();
+      await terminal
+        .locator("header")
+        .getByRole("button", { name: "Close", exact: true })
+        .click()
+        .catch(() => {});
+    }
+  } finally {
+    await instance.close();
   }
-  // Navigate away before removing this test's exact temporary directory.
-  const bootstrap = await rpc("bootstrap").catch(() => null);
-  if (bootstrap) {
-    await navigate(0, bootstrap.home).catch(() => {});
-    await navigate(1, bootstrap.home).catch(() => {});
-  }
-  if (originalSettings) {
-    await rpc("save_settings", { value: originalSettings });
-    await page.reload();
-    await expect(page.locator(".app-shell")).toBeVisible();
-  }
-  await browser.close();
-  await fs.rm(temp, {
-    recursive: true,
-    force: true,
-    maxRetries: 10,
-    retryDelay: 200,
-  });
 }

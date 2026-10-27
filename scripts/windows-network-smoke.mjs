@@ -1,24 +1,22 @@
-import { chromium, expect } from "@playwright/test";
+import { expect } from "@playwright/test";
 import assert from "node:assert/strict";
+import { startNativeTest } from "./native-test-instance.mjs";
 import fs from "node:fs/promises";
 import path from "node:path";
-assert.equal(process.platform, "win32");
-const browser = await chromium.connectOverCDP("http://127.0.0.1:9223");
-const page = browser
-  .contexts()[0]
-  .pages()
-  .find((p) => p.url().includes("tauri.localhost"));
-const rpc = (command, args = {}) =>
-  page.evaluate(
-    ({ command, args }) => window.__TAURI_INTERNALS__.invoke(command, args),
-    { command, args },
-  );
-const boot = await rpc("bootstrap");
-const original = boot.settings;
-const directory = await fs.mkdtemp(
-  "\\\\wsl.localhost\\Ubuntu\\tmp\\supercommander-network-",
-);
+const instance = await startNativeTest("network", process.argv[2]);
+const { page } = instance;
+let directory;
 try {
+  const rpc = (command, args = {}) =>
+    page.evaluate(
+      ({ command, args }) => window.__TAURI_INTERNALS__.invoke(command, args),
+      { command, args },
+    );
+  const boot = await rpc("bootstrap");
+  const original = boot.settings;
+  directory = await fs.mkdtemp(
+    "\\\\wsl.localhost\\Ubuntu\\tmp\\supercommander-network-",
+  );
   assert.equal(boot.networkError, null);
   console.log(`PASS Explorer locations loaded: ${boot.network.length}`);
   await fs.mkdir(path.join(directory, "Network test folder"));
@@ -124,10 +122,15 @@ try {
     "PASS Windows shell server-root enumeration, opening a share and returning to the server",
   );
 } finally {
-  await page.keyboard.press("Escape").catch(() => {});
-  await rpc("save_settings", { value: original });
-  await page.reload();
-  await expect(page.locator(".app-shell")).toBeVisible();
-  await browser.close();
-  await fs.rm(directory, { recursive: true, force: true });
+  try {
+    await instance.close();
+  } finally {
+    if (directory)
+      await fs.rm(directory, {
+        recursive: true,
+        force: true,
+        maxRetries: 10,
+        retryDelay: 200,
+      });
+  }
 }
