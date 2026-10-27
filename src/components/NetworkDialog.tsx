@@ -56,6 +56,7 @@ export function NetworkDialog({
   }
   return (
     <Modal
+      closeLabel={t.close}
       title={t.networkLocations}
       subtitle={t.networkHint}
       onClose={onClose}

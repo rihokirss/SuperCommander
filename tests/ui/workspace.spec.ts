@@ -151,6 +151,12 @@ test("language, glass setting and command palette", async ({ page }) => {
   const dialog = page.getByRole("dialog");
   await choose(page, "Language", "Eesti");
   await expect(
+    dialog
+      .locator(".modal-heading")
+      .getByRole("button", { name: "Sulge", exact: true }),
+  ).toBeVisible();
+  await expect(page.locator("html")).toHaveAttribute("lang", "et");
+  await expect(
     dialog.getByRole("heading", { name: "Seaded", exact: true }),
   ).toBeVisible();
   await dialog.getByRole("switch").uncheck();

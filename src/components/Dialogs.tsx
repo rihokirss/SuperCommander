@@ -12,6 +12,7 @@ import {
   Keyboard,
   ExternalLink,
 } from "lucide-react";
+import { shortcutGroups } from "../shortcuts";
 import * as api from "../api";
 import { basename, join, size, uid } from "../utils";
 import { FileIcon, Modal } from "./Primitives";
@@ -63,7 +64,7 @@ export function ActionDialog({
         ? t.confirmTrash
         : t[data.operation];
   return (
-    <Modal title={title} onClose={onClose}>
+    <Modal closeLabel={t.close} title={title} onClose={onClose}>
       <form
         onSubmit={async (e) => {
           e.preventDefault();
@@ -261,6 +262,7 @@ export function RenameDialog({
     setRules((r) => ({ ...r, ...patch }));
   return (
     <Modal
+      closeLabel={t.close}
       title={t.rename}
       subtitle={t.renameHint}
       onClose={onClose}
@@ -455,6 +457,7 @@ export function SearchDialog({
   }, []);
   return (
     <Modal
+      closeLabel={t.close}
       title={t.search}
       subtitle={`${t.searchIn} · ${location.path}`}
       onClose={onClose}
@@ -630,14 +633,16 @@ export function SettingsDialog({
   t,
   update,
   onClose,
+  onShortcuts,
 }: {
   settings: Settings;
   t: Text;
   update: (patch: Partial<Settings>) => void;
   onClose: () => void;
+  onShortcuts: () => void;
 }) {
   return (
-    <Modal title={t.settings} onClose={onClose}>
+    <Modal closeLabel={t.close} title={t.settings} onClose={onClose}>
       <div className="settings-section">
         <h3>
           <SlidersHorizontal size={15} />
@@ -732,32 +737,66 @@ export function SettingsDialog({
           {t.keyboard}
         </h3>
         <div className="shortcut-grid">
-          {[
-            ["F2", t.rename],
-            ["F3", t.preview],
-            ["F4", t.edit],
-            ["F5", t.copy],
-            ["F6", t.move],
-            ["F7", t.mkdir],
-            ["F8 / Delete", t.trash],
-            ["Shift+F8", t.delete],
-            ["Shift+Delete", t.delete],
-            ["Ctrl+P", t.commandPalette],
-            ["Ctrl+F", t.search],
-            ["Ctrl+T", t.newTab],
-            ["Ctrl+`", t.terminal],
-            ["Ctrl+O", t.fullTerminal],
-            ["Ctrl+U", t.swap],
-            ["Ctrl+H", t.hidden],
-            ["Ctrl+,", t.settings],
-            ["F9", t.actions],
-          ].map(([key, label]) => (
-            <div key={key}>
-              <span>{label}</span>
-              <kbd>{key}</kbd>
-            </div>
-          ))}
+          {shortcutGroups(t)[0]
+            .items.slice(0, 7)
+            .map(([key, label]) => (
+              <div key={key}>
+                <span>{label}</span>
+                <kbd>{key}</kbd>
+              </div>
+            ))}
         </div>
+        <button className="shortcut-help" onClick={onShortcuts}>
+          <Keyboard size={14} />
+          {t.keyboard}
+          <kbd>F1</kbd>
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+export function ShortcutsDialog({
+  t,
+  onClose,
+}: {
+  t: Text;
+  onClose: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  return (
+    <Modal closeLabel={t.close} title={t.keyboard} onClose={onClose} wide>
+      <label className="field">
+        <input
+          autoFocus
+          aria-label={t.searchShortcuts}
+          placeholder={t.searchShortcuts}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+      </label>
+      <div className="shortcut-reference">
+        {shortcutGroups(t).map((group) => {
+          const items = group.items.filter((entry) =>
+            entry
+              .join(" ")
+              .toLocaleLowerCase()
+              .includes(query.toLocaleLowerCase()),
+          );
+          return items.length ? (
+            <section className="settings-section" key={group.title}>
+              <h3>{group.title}</h3>
+              <div className="shortcut-grid">
+                {items.map(([key, label]) => (
+                  <div key={key}>
+                    <span>{label}</span>
+                    <kbd>{key}</kbd>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null;
+        })}
       </div>
     </Modal>
   );
@@ -862,6 +901,7 @@ export function ConnectDialog({
   }
   return (
     <Modal
+      closeLabel={t.close}
       title={t.connect}
       subtitle="SFTP · SSH File Transfer Protocol"
       onClose={onClose}
@@ -1046,7 +1086,7 @@ export function Palette({
     a.label.toLocaleLowerCase().includes(query.toLocaleLowerCase()),
   );
   return (
-    <Modal title={t.commandPalette} onClose={onClose}>
+    <Modal closeLabel={t.close} title={t.commandPalette} onClose={onClose}>
       <div className="palette-search">
         <Search size={18} />
         <input

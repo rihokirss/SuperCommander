@@ -49,7 +49,11 @@ import {
 import * as api from "./api";
 import { dictionary } from "./i18n";
 import { basename, parent, pane, tab, uid } from "./utils";
-import { FilePane, type PaneSnapshot } from "./components/FilePane";
+import {
+  FilePane,
+  type PaneHandle,
+  type PaneSnapshot,
+} from "./components/FilePane";
 import { IconButton } from "./components/Primitives";
 import {
   ActionDialog,
@@ -58,6 +62,7 @@ import {
   RenameDialog,
   SearchDialog,
   SettingsDialog,
+  ShortcutsDialog,
   type ActionData,
   type PaletteAction,
 } from "./components/Dialogs";
@@ -69,6 +74,7 @@ import { WorkspaceTools } from "./components/WorkspaceTools";
 import { parseRemoteAddress } from "./address";
 import { ForwardDialog, SshCatalogDialog } from "./components/SshTools";
 import { Tooltips } from "./components/Tooltips";
+import { Menu, type MenuAction } from "./components/Menu";
 import { NetworkDialog } from "./components/NetworkDialog";
 import { networkLocations } from "./network";
 import type {
@@ -82,6 +88,7 @@ import type {
   SftpProfile,
   SshCatalog,
   CatalogHost,
+  Tab,
 } from "./types";
 
 type Dialog =
@@ -96,7 +103,7 @@ type Dialog =
     }
   | { kind: "sshConfig"; add?: boolean }
   | { kind: "forward"; source: string; title: string }
-  | { kind: "settings" | "search" | "palette" | "network" };
+  | { kind: "settings" | "search" | "palette" | "network" | "shortcuts" };
 const emptySnapshot: PaneSnapshot = { entries: [], selected: [] };
 export function App() {
   const [boot, setBoot] = useState<Bootstrap>();
@@ -121,6 +128,14 @@ export function App() {
   const [toast, setToast] = useState("");
   const [split, setSplit] = useState(50);
   const snapshots = useRef<PaneSnapshot[]>([emptySnapshot, emptySnapshot]);
+  const paneControls = useRef<(PaneHandle | null)[]>([null, null]);
+  const closedTabs = useRef<Tab[][]>([[], []]);
+  const [context, setContext] = useState<{
+    index: number;
+    entries: Entry[];
+    location: Location;
+    position: { x: number; y: number };
+  }>();
   const remoteHomes = useRef(new Map<string, string>());
   const [catalog, setCatalog] = useState<SshCatalog>();
   const [sessions, setSessions] = useState<SftpProfile[]>([]);
@@ -138,6 +153,9 @@ export function App() {
         ? "dark"
         : "light"
       : settings?.theme || "dark";
+  useEffect(() => {
+    if (settings?.language) document.documentElement.lang = settings.language;
+  }, [settings?.language]);
   useEffect(() => {
     if (!api.desktop || !settings) return;
     const timer = setTimeout(() => {
@@ -166,9 +184,6 @@ export function App() {
   );
   const current = settings?.panes[active].tabs.find(
     (x) => x.id === settings.panes[active].activeTab,
-  )?.location;
-  const other = settings?.panes[1 - active].tabs.find(
-    (x) => x.id === settings.panes[1 - active].activeTab,
   )?.location;
   async function initialize() {
     setBootError("");
@@ -451,6 +466,13 @@ export function App() {
     });
   }
   function closeTab(id: string, index: number) {
+    const state = stateRef.current?.panes[index];
+    const closing = state?.tabs.find((t) => t.id === id);
+    if (!closing || state!.tabs.length <= 1) return;
+    closedTabs.current[index] = [
+      ...closedTabs.current[index].filter((t) => t.id !== id),
+      closing,
+    ].slice(-10);
     setSettings((s) =>
       s
         ? {
@@ -467,6 +489,31 @@ export function App() {
           }
         : s,
     );
+  }
+  function cycleTab(delta: number) {
+    if (!settings) return;
+    const pane = settings.panes[active];
+    const index = pane.tabs.findIndex((t) => t.id === pane.activeTab);
+    const next =
+      pane.tabs[(index + delta + pane.tabs.length) % pane.tabs.length];
+    update({
+      panes: settings.panes.map((p, i) =>
+        i === active ? { ...p, activeTab: next.id } : p,
+      ),
+    });
+  }
+  function reopenTab() {
+    const closed = closedTabs.current[active].pop();
+    if (!closed || !settings) return;
+    update({
+      panes: settings.panes.map((p, i) =>
+        i === active ? { tabs: [...p.tabs, closed], activeTab: closed.id } : p,
+      ),
+    });
+  }
+  function locationAt(index: number) {
+    const pane = settings?.panes[index];
+    return pane?.tabs.find((t) => t.id === pane.activeTab)?.location;
   }
   async function enqueue(request: JobRequest) {
     const job: Job = {
@@ -495,14 +542,26 @@ export function App() {
       throw e;
     }
   }
-  function action(operation: Operation | "mkdir") {
+  function action(
+    operation: Operation | "mkdir",
+    index = active,
+    chosen?: Entry[],
+  ) {
+    const current = locationAt(index),
+      other = locationAt(1 - index);
     if (!current || !other) return;
-    const snapshot = snapshots.current[active];
-    const entries = snapshot.selected.length
-      ? snapshot.selected
-      : snapshot.focused
-        ? [snapshot.focused]
-        : [];
+    const snapshot = snapshots.current[index];
+    const entries =
+      chosen ??
+      (snapshot.selected.length
+        ? snapshot.selected
+        : snapshot.focused
+          ? [snapshot.focused]
+          : []);
+    if (current.source.startsWith("zip:") && operation !== "copy") {
+      notify(t.readOnly);
+      return;
+    }
     if (operation !== "mkdir" && !entries.length) {
       notify(t.selectFiles);
       return;
@@ -524,8 +583,117 @@ export function App() {
       data: { operation: resolved, source: current, entries, destination },
     });
   }
+  function contextActions(spec: NonNullable<typeof context>): MenuAction[] {
+    const { entries, location, index } = spec;
+    const one = entries.length === 1 ? entries[0] : undefined;
+    const text = !!one && !one.isDir;
+    const readOnly = location.source.startsWith("zip:");
+    const menu: MenuAction[] = [
+      {
+        id: "open",
+        label: t.open,
+        icon: <Folder size={15} />,
+        key: "Enter",
+        disabled: !one,
+        run: () => {
+          if (one) open(one, index);
+        },
+      },
+      {
+        id: "view",
+        label: t.preview,
+        icon: <Eye size={15} />,
+        key: "F3",
+        disabled: !text,
+        run: () => {
+          if (one)
+            setDialog({
+              kind: "preview",
+              location: { ...location, path: one.path },
+            });
+        },
+      },
+      {
+        id: "edit",
+        label: t.edit,
+        icon: <FilePenLine size={15} />,
+        key: "F4",
+        disabled: !text || readOnly,
+        run: () => {
+          if (one)
+            setDialog({
+              kind: "edit",
+              location: { ...location, path: one.path },
+            });
+        },
+      },
+      {
+        id: "copy",
+        label: t.copy,
+        icon: <Copy size={15} />,
+        key: "F5",
+        separator: true,
+        disabled: !entries.length,
+        run: () => action("copy", index, entries),
+      },
+      {
+        id: "move",
+        label: t.move,
+        icon: <ArrowRight size={15} />,
+        key: "F6",
+        disabled: !entries.length || readOnly,
+        run: () => action("move", index, entries),
+      },
+      {
+        id: "rename",
+        label: t.rename,
+        icon: <FilePenLine size={15} />,
+        key: "F2",
+        disabled: !entries.length || readOnly,
+        run: () =>
+          setDialog({ kind: "rename", entries, source: location.source }),
+      },
+      {
+        id: "trash",
+        label: location.source === "local" ? t.trash : t.delete,
+        icon: <X size={15} />,
+        key: "F8",
+        danger: true,
+        disabled: !entries.length || readOnly,
+        run: () => action("trash", index, entries),
+      },
+      {
+        id: "mkdir",
+        label: t.mkdir,
+        icon: <FolderPlus size={15} />,
+        key: "F7",
+        separator: true,
+        disabled: readOnly,
+        run: () => action("mkdir", index, []),
+      },
+      {
+        id: "refresh",
+        label: t.refresh,
+        icon: <RefreshCw size={15} />,
+        key: "Ctrl+R",
+        run: () => paneControls.current[index]?.refresh(),
+      },
+      {
+        id: "terminal",
+        label: t.terminal,
+        icon: <TerminalSquare size={15} />,
+        key: "Ctrl+`",
+        run: toggleTerminal,
+      },
+    ];
+    return entries.length ? menu : menu.filter((a) => !a.disabled);
+  }
   function rename() {
     if (!current) return;
+    if (current.source.startsWith("zip:")) {
+      notify(t.readOnly);
+      return;
+    }
     const s = snapshots.current[active];
     const entries = s.selected.length
       ? s.selected
@@ -648,6 +816,9 @@ export function App() {
       .command("disconnect_sftp", { source })
       .then(() => {
         remoteHomes.current.delete(source);
+        closedTabs.current = closedTabs.current.map((tabs) =>
+          tabs.filter((tab) => tab.location.source !== source),
+        );
         setTerminals((old) => {
           const next = { ...old };
           delete next[source];
@@ -727,6 +898,62 @@ export function App() {
       run: preview,
     },
     {
+      id: "edit",
+      label: t.edit,
+      icon: <FilePenLine size={16} />,
+      key: "F4",
+      run: edit,
+    },
+    {
+      id: "trash",
+      label: t.trash,
+      icon: <X size={16} />,
+      key: "F8",
+      run: () => action("trash"),
+    },
+    {
+      id: "refresh",
+      label: t.refresh,
+      icon: <RefreshCw size={16} />,
+      key: "Ctrl+R",
+      run: () => paneControls.current[active]?.refresh(),
+    },
+    {
+      id: "location",
+      label: t.goToPath,
+      icon: <Folder size={16} />,
+      key: "Ctrl+L",
+      run: () => paneControls.current[active]?.path(),
+    },
+    {
+      id: "selectAll",
+      label: t.selectAll,
+      icon: <Square size={16} />,
+      key: "Ctrl+A",
+      run: () => paneControls.current[active]?.all(),
+    },
+    {
+      id: "invert",
+      label: t.invertSelection,
+      icon: <Square size={16} />,
+      key: "Ctrl+I",
+      run: () => paneControls.current[active]?.invert(),
+    },
+    {
+      id: "selectPattern",
+      label: t.selectPattern,
+      icon: <Square size={16} />,
+      key: "+",
+      run: () => paneControls.current[active]?.pattern(),
+    },
+    {
+      id: "deselectPattern",
+      label: t.deselectPattern,
+      icon: <Square size={16} />,
+      key: "−",
+      run: () => paneControls.current[active]?.pattern(true),
+    },
+    {
       id: "zip",
       label: t.zip,
       icon: <Archive size={16} />,
@@ -785,29 +1012,112 @@ export function App() {
     );
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
+      if (
+        e.defaultPrevented ||
+        (e.target as HTMLElement).closest('[role="menu"]')
+      )
+        return;
       const ctrl = e.ctrlKey || e.metaKey;
+      const modal = !!dialog || !!document.querySelector('[role="dialog"]');
+      if (modal) {
+        if (e.key === "F5" || (ctrl && e.key.toLowerCase() === "r"))
+          e.preventDefault();
+        return;
+      }
       if (!dialog && ctrl && e.key.toLowerCase() === "o") {
         e.preventDefault();
         e.stopPropagation();
         toggleFullTerminal();
         return;
       }
-      if (!dialog && ctrl && e.key === "`") {
+      if (!dialog && ctrl && (e.key === "`" || e.code === "Backquote")) {
         e.preventDefault();
         toggleTerminal();
         return;
       }
+      if ((e.target as HTMLElement).closest(".terminal-panel")) return;
+      const name = e.key.toLowerCase();
+      if ((ctrl && name === "l") || (e.altKey && !ctrl && name === "d")) {
+        e.preventDefault();
+        paneControls.current[active]?.path();
+        return;
+      }
+      if (ctrl && name === "r") {
+        e.preventDefault();
+        paneControls.current[active]?.refresh();
+        return;
+      }
+      if (ctrl && name === "f" && e.shiftKey) {
+        e.preventDefault();
+        paneControls.current[active]?.filter();
+        return;
+      }
       if (
-        dialog ||
+        (ctrl && e.key === "Tab") ||
+        (ctrl && ["PageUp", "PageDown"].includes(e.key))
+      ) {
+        e.preventDefault();
+        cycleTab(e.shiftKey || e.key === "PageUp" ? -1 : 1);
+        return;
+      }
+      if (ctrl && name === "t" && e.shiftKey) {
+        e.preventDefault();
+        reopenTab();
+        return;
+      }
+      if (ctrl && name === "t") {
+        e.preventDefault();
+        newTab();
+        return;
+      }
+      if (ctrl && name === "w" && settings) {
+        e.preventDefault();
+        closeTab(settings.panes[active].activeTab, active);
+        return;
+      }
+      if (ctrl && ["p", "k"].includes(name)) {
+        e.preventDefault();
+        setDialog({ kind: "palette" });
+        return;
+      }
+      if (ctrl && name === "f") {
+        e.preventDefault();
+        setDialog({ kind: "search" });
+        return;
+      }
+      if (ctrl && e.key === ",") {
+        e.preventDefault();
+        setDialog({ kind: "settings" });
+        return;
+      }
+      if (e.key === "F1" && !ctrl && !e.altKey) {
+        e.preventDefault();
+        setDialog({ kind: "shortcuts" });
+        return;
+      }
+      if (e.altKey && e.key === "ArrowUp") {
+        e.preventDefault();
+        paneControls.current[active]?.up();
+        return;
+      }
+      if (e.altKey && e.key === "Home" && current && boot) {
+        e.preventDefault();
+        navigate({
+          source: current.source,
+          path:
+            current.source === "local"
+              ? boot.home
+              : remoteHomes.current.get(current.source) || "/",
+        });
+        return;
+      }
+      if (
         (e.target as HTMLElement).closest(
-          "input,textarea,select,.terminal-panel",
+          "input,textarea,select,[contenteditable=true]",
         )
       )
         return;
-      if (ctrl && ["p", "k"].includes(e.key.toLowerCase())) {
-        e.preventDefault();
-        setDialog({ kind: "palette" });
-      } else if (ctrl && e.key.toLowerCase() === "u" && settings) {
+      if (ctrl && e.key.toLowerCase() === "u" && settings) {
         e.preventDefault();
         update({ panes: [settings.panes[1], settings.panes[0]] });
       } else if (ctrl && e.key.toLowerCase() === "b" && settings) {
@@ -816,21 +1126,15 @@ export function App() {
       } else if (ctrl && e.key.toLowerCase() === "h" && settings) {
         e.preventDefault();
         update({ showHidden: !settings.showHidden });
-      } else if ((ctrl && e.key === ",") || e.key === "F1") {
+      } else if (ctrl && name === "d") {
         e.preventDefault();
-        setDialog({ kind: "settings" });
-      } else if (ctrl && e.key.toLowerCase() === "f") {
+        bookmark();
+      } else if (e.altKey && e.key === "ArrowLeft") {
         e.preventDefault();
-        setDialog({ kind: "search" });
-      } else if (ctrl && e.key.toLowerCase() === "t") {
+        history(-1, active);
+      } else if (e.altKey && e.key === "ArrowRight") {
         e.preventDefault();
-        newTab();
-      } else if (ctrl && e.key.toLowerCase() === "w" && settings) {
-        e.preventDefault();
-        closeTab(settings.panes[active].activeTab, active);
-      } else if (ctrl && e.key === "`") {
-        e.preventDefault();
-        toggleTerminal();
+        history(1, active);
       } else if (e.key === "Tab") {
         e.preventDefault();
         const index = 1 - active;
@@ -839,6 +1143,9 @@ export function App() {
           .querySelector<HTMLElement>(`[data-pane="${index}"] .file-grid`)
           ?.focus();
       } else if (
+        !ctrl &&
+        !e.altKey &&
+        (!e.shiftKey || ["F8", "Delete"].includes(e.key)) &&
         ["F2", "F3", "F4", "F5", "F6", "F7", "F8", "Delete"].includes(e.key)
       ) {
         e.preventDefault();
@@ -1287,6 +1594,9 @@ export function App() {
             {settings.panes
               .map((state, index) => (
                 <FilePane
+                  controls={(handle) => {
+                    paneControls.current[index] = handle;
+                  }}
                   key={index}
                   index={index}
                   state={state}
@@ -1316,6 +1626,10 @@ export function App() {
                   }}
                   onOpen={(e) => open(e, index)}
                   onBookmark={() => bookmark(index)}
+                  onContext={(entries, location, position) => {
+                    setActive(index);
+                    setContext({ index, entries, location, position });
+                  }}
                   onError={notify}
                   onDrop={(destination, paths, source, move) => {
                     void enqueue({
@@ -1436,7 +1750,8 @@ export function App() {
             ))}
             <IconButton
               title={t.keyboard}
-              onClick={() => setDialog({ kind: "settings" })}
+              shortcut="F1"
+              onClick={() => setDialog({ kind: "shortcuts" })}
             >
               <Keyboard size={16} />
             </IconButton>
@@ -1528,7 +1843,11 @@ export function App() {
           t={t}
           update={update}
           onClose={closeDialog}
+          onShortcuts={() => setDialog({ kind: "shortcuts" })}
         />
+      )}
+      {dialog?.kind === "shortcuts" && (
+        <ShortcutsDialog t={t} onClose={closeDialog} />
       )}
       {dialog?.kind === "network" && (
         <NetworkDialog
@@ -1592,6 +1911,15 @@ export function App() {
         />
       )}
       <Tooltips />
+      {context && (
+        <Menu
+          label={t.fileActions}
+          anchor={context.position}
+          theme={resolvedTheme}
+          onClose={() => setContext(undefined)}
+          actions={contextActions(context)}
+        />
+      )}
     </div>
   );
 }

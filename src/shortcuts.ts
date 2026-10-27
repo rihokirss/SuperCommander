@@ -1,0 +1,83 @@
+import type { Text } from "./i18n";
+export function shortcutGroups(t: Text) {
+  return [
+    {
+      title: t.fileActions,
+      items: [
+        ["F2", t.rename],
+        ["F3", t.preview],
+        ["F4", t.edit],
+        ["F5", t.copy],
+        ["F6", t.move],
+        ["F7", t.mkdir],
+        ["F8 / Delete", t.trash],
+        ["Shift+F8 / Shift+Delete", t.delete],
+        ["Shift+F10 / Menu", t.fileActions],
+      ],
+    },
+    {
+      title: t.navigation,
+      items: [
+        ["Tab", t.swap],
+        ["Home / End / PgUp / PgDn", t.rowNavigation],
+        ["Alt+Left / Alt+Right", `${t.back} / ${t.forward}`],
+        ["Backspace / Alt+Up", t.up],
+        ["Alt+Home", t.home],
+        ["Ctrl+L / Alt+D", t.goToPath],
+        ["Ctrl+R", t.refresh],
+        ["Ctrl+Shift+F", t.filter],
+      ],
+    },
+    {
+      title: t.selection,
+      items: [
+        ["Insert / Space", t.toggleMark],
+        ["Ctrl+A", t.selectAll],
+        ["Ctrl+Shift+A / Esc", t.clearSelection],
+        ["Ctrl+I / *", t.invertSelection],
+        ["+", t.selectPattern],
+        ["−", t.deselectPattern],
+      ],
+    },
+    {
+      title: t.workspace,
+      items: [
+        ["Ctrl+T", t.newTab],
+        ["Ctrl+W", t.closeTab],
+        ["Ctrl+Shift+T", t.reopenTab],
+        ["Ctrl+Tab / Ctrl+PgDn", t.nextTab],
+        ["Ctrl+Shift+Tab / Ctrl+PgUp", t.previousTab],
+        ["Ctrl+D", t.addFavorite],
+        ["Ctrl+B", t.collapseWorkspace],
+        ["Ctrl+U", t.swap],
+        ["Ctrl+H", t.hidden],
+        ["Ctrl+F", t.search],
+        ["Ctrl+P / Ctrl+K", t.commandPalette],
+        ["Ctrl+,", t.settings],
+        ["F1", t.keyboard],
+        ["F9", t.actions],
+        ["Ctrl+`", t.terminal],
+        ["Ctrl+O", t.fullTerminal],
+      ],
+    },
+    {
+      title: t.textTools,
+      items: [
+        ["F2 / Ctrl+S", t.saveChanges],
+        ["F4", t.edit],
+        ["F6", t.goToLine],
+        ["F7 / Ctrl+F", t.findText],
+        ["Ctrl+G / Shift+F7", `${t.nextMatch} / ${t.previousMatch}`],
+        ["Ctrl+H", t.replace],
+        ["Ctrl+Z / Ctrl+Y", t.undoRedo],
+        ["Ctrl+C / Ctrl+V", t.copyPasteText],
+        ["F8", t.wordWrap],
+        ["F10 / Esc", t.close],
+      ],
+    },
+    {
+      title: t.actions,
+      items: [["↑ / ↓ / Home / End / Enter / Esc", t.menuNavigation]],
+    },
+  ];
+}

@@ -2,6 +2,7 @@
 @import url("./light.css");
 @import url("./controls.css");
 @import url("./workbench.css");
+@import url("./menu.css");
 * {
   box-sizing: border-box;
 }

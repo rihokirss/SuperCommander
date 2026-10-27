@@ -31,6 +31,11 @@ export function Tooltips() {
       target = node;
       // A native title already supplies a tooltip. Do not stack a second one over it.
       if (node.hasAttribute("title")) return;
+      if (
+        node.matches('[role="menuitem"],[role="option"]') &&
+        !node.dataset.tooltip
+      )
+        return;
       const text =
         node.dataset.tooltip ||
         node.getAttribute("title") ||

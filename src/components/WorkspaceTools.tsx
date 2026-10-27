@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowLeftRight,
   ListFilter,
@@ -9,6 +9,7 @@ import {
 import { IconButton } from "./Primitives";
 import type { PaletteAction } from "./Dialogs";
 import type { Text } from "../i18n";
+import { Menu } from "./Menu";
 
 export function WorkspaceTools({
   t,
@@ -30,6 +31,7 @@ export function WorkspaceTools({
   actions: PaletteAction[];
 }) {
   const [menu, setMenu] = useState(false);
+  const trigger = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     const close = (event: KeyboardEvent) => {
       if (event.key === "Escape") setMenu(false);
@@ -71,9 +73,10 @@ export function WorkspaceTools({
       </IconButton>
       <div className="menu-anchor">
         <button
+          ref={trigger}
           className={`icon-button ${menu ? "pressed" : ""}`}
           aria-label={t.actions}
-          title={t.actions}
+          data-tooltip={t.actions}
           data-shortcut="F9"
           aria-haspopup="menu"
           aria-expanded={menu}
@@ -81,42 +84,26 @@ export function WorkspaceTools({
         >
           <MoreHorizontal size={18} />
         </button>
-        {menu && (
-          <>
-            <div className="menu-dismiss" onClick={() => setMenu(false)} />
-            <div
-              className="dropdown-menu glass"
-              role="menu"
-              aria-label={t.actions}
-            >
-              {actions
-                .filter((a) =>
-                  [
-                    "search",
-                    "zip",
-                    "extract",
-                    "connect",
-                    "disconnect",
-                    "sshConfig",
-                    "forward",
-                  ].includes(a.id),
-                )
-                .map((a) => (
-                  <button
-                    key={a.id}
-                    role="menuitem"
-                    onClick={() => {
-                      setMenu(false);
-                      a.run();
-                    }}
-                  >
-                    {a.icon}
-                    <span>{a.label}</span>
-                    {a.key && <kbd>{a.key}</kbd>}
-                  </button>
-                ))}
-            </div>
-          </>
+        {menu && trigger.current && (
+          <Menu
+            label={t.actions}
+            anchor={trigger.current}
+            onClose={() => setMenu(false)}
+            actions={actions.filter((a) =>
+              [
+                "search",
+                "zip",
+                "extract",
+                "connect",
+                "disconnect",
+                "sshConfig",
+                "forward",
+                "selectPattern",
+                "deselectPattern",
+                "invert",
+              ].includes(a.id),
+            )}
+          />
         )}
       </div>
       <IconButton title={t.settings} shortcut="Ctrl+," onClick={onSettings}>

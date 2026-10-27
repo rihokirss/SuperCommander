@@ -65,6 +65,7 @@ export function PreviewDialog({
     );
   return (
     <Modal
+      closeLabel={t.close}
       title={basename(location.path)}
       subtitle={data ? `${size(data.size)} · ${data.mime}` : location.path}
       onClose={onClose}

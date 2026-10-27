@@ -1,10 +1,12 @@
 import {
   useEffect,
   useMemo,
+  useImperativeHandle,
   useRef,
   useState,
   type KeyboardEvent,
   type MouseEvent,
+  type Ref,
 } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
@@ -42,13 +44,26 @@ import type {
 } from "../types";
 import type { Text } from "../i18n";
 import { formatRemoteAddress } from "../address";
+import { matchesMask } from "../selection";
+import { Modal } from "./Primitives";
 
 export type PaneSnapshot = {
   entries: Entry[];
   selected: Entry[];
   focused?: Entry;
 };
+export type PaneHandle = {
+  path: () => void;
+  filter: () => void;
+  refresh: () => void;
+  up: () => void;
+  all: () => void;
+  clear: () => void;
+  invert: () => void;
+  pattern: (remove?: boolean) => void;
+};
 type Props = {
+  controls: Ref<PaneHandle>;
   index: number;
   state: PaneState;
   active: boolean;
@@ -65,6 +80,11 @@ type Props = {
   onSelection: (snapshot: PaneSnapshot) => void;
   onOpen: (entry: Entry) => void;
   onBookmark: () => void;
+  onContext: (
+    entries: Entry[],
+    location: Location,
+    position: { x: number; y: number },
+  ) => void;
   onError: (error: string) => void;
   onDrop: (
     location: Location,
@@ -97,6 +117,13 @@ export function FilePane(p: Props) {
   const [pathValue, setPathValue] = useState(location.path);
   const [localRefresh, setLocalRefresh] = useState(0);
   const [dropOver, setDropOver] = useState(false);
+  const [pattern, setPattern] = useState<{
+    remove: boolean;
+    mask: string;
+    folders: boolean;
+  }>();
+  const pathInput = useRef<HTMLInputElement>(null);
+  const filterInput = useRef<HTMLInputElement>(null);
   const anchor = useRef(0);
   const drag = useRef<{
     x: number;
@@ -108,6 +135,12 @@ export function FilePane(p: Props) {
   const root = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const generation = useRef(0);
+  const loadedLocation = useRef("");
+  useEffect(() => {
+    // Tab changes return navigation to the list; merely clicking another pane's input must keep that input focused.
+    if (p.active && !document.querySelector('[role="dialog"]'))
+      root.current?.querySelector<HTMLElement>(".file-grid")?.focus();
+  }, [state.activeTab]);
   const dataEntries = useMemo(
     () =>
       sortEntries(
@@ -141,6 +174,34 @@ export function FilePane(p: Props) {
     () => visible.filter((e) => !e.isParent && selected.has(e.path)),
     [visible, selected],
   );
+  function editPath() {
+    setPathValue(displayPath);
+    setEditingPath(true);
+    requestAnimationFrame(() => {
+      pathInput.current?.focus();
+      pathInput.current?.select();
+    });
+  }
+  function invertSelection() {
+    setSelected(
+      (old) =>
+        new Set(dataEntries.filter((e) => !old.has(e.path)).map((e) => e.path)),
+    );
+  }
+  useImperativeHandle(p.controls, () => ({
+    path: editPath,
+    filter: () => {
+      filterInput.current?.focus();
+      filterInput.current?.select();
+    },
+    refresh: () => setLocalRefresh((n) => n + 1),
+    up: goUp,
+    all: () => setSelected(new Set(dataEntries.map((e) => e.path))),
+    clear: () => setSelected(new Set()),
+    invert: invertSelection,
+    pattern: (remove = false) =>
+      setPattern({ remove, mask: "*", folders: true }),
+  }));
   const rowHeight = settings.density === "compact" ? 32 : 40;
   const virtual = useVirtualizer({
     count: visible.length,
@@ -154,14 +215,19 @@ export function FilePane(p: Props) {
   }, [rowHeight]);
   useEffect(() => {
     const id = ++generation.current;
-    setEntries([]);
-    setSelected(new Set());
-    setFocused(undefined);
+    const key = `${state.activeTab}\0${location.source}\0${location.path}`;
+    const changed = loadedLocation.current !== key;
+    loadedLocation.current = key;
+    if (changed) {
+      setEntries([]);
+      setSelected(new Set());
+      setFocused(undefined);
+      setFilter("");
+      setPathValue(location.path);
+      setEditingPath(false);
+    }
     setLoading(true);
     setError("");
-    setFilter("");
-    setPathValue(location.path);
-    setEditingPath(false);
     const pending: Entry[] = [];
     let flush: ReturnType<typeof setTimeout> | undefined;
     api
@@ -171,7 +237,18 @@ export function FilePane(p: Props) {
         if (batch.done) {
           clearTimeout(flush);
           setEntries([...pending]);
-        } else if (!flush)
+          if (!changed) {
+            const paths = new Set(pending.map((e) => e.path));
+            setSelected(
+              (old) => new Set([...old].filter((path) => paths.has(path))),
+            );
+            setFocused((old) =>
+              old && (paths.has(old) || old.startsWith("__parent__:"))
+                ? old
+                : undefined,
+            );
+          }
+        } else if (changed && !flush)
           flush = setTimeout(() => {
             flush = undefined;
             if (id === generation.current) setEntries([...pending]);
@@ -278,11 +355,51 @@ export function FilePane(p: Props) {
     let index = visible.findIndex((x) => x.path === focused);
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") {
       e.preventDefault();
-      setSelected(new Set(dataEntries.map((e) => e.path)));
+      setSelected(
+        e.shiftKey ? new Set() : new Set(dataEntries.map((e) => e.path)),
+      );
+      return;
+    }
+    if (
+      ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "i") ||
+      (!e.ctrlKey &&
+        !e.metaKey &&
+        !e.altKey &&
+        (e.key === "*" || e.code === "NumpadMultiply"))
+    ) {
+      e.preventDefault();
+      invertSelection();
+      return;
+    }
+    if (!e.ctrlKey && !e.metaKey && !e.altKey && ["+", "-"].includes(e.key)) {
+      e.preventDefault();
+      setPattern({ remove: e.key === "-", mask: "*", folders: true });
+      return;
+    }
+    if (e.key === "Escape") {
+      e.preventDefault();
+      if (filter) setFilter("");
+      else setSelected(new Set());
+      return;
+    }
+    if (e.key === "ContextMenu" || (e.shiftKey && e.key === "F10")) {
+      e.preventDefault();
+      const entry = visible.find(
+        (item) => item.path === focused && !item.isParent,
+      );
+      const bounds = root.current!.getBoundingClientRect();
+      if (entry && !selected.has(entry.path))
+        setSelected(new Set([entry.path]));
+      p.onContext(
+        entry ? (selected.has(entry.path) ? selectedEntries : [entry]) : [],
+        location,
+        { x: bounds.left + 70, y: bounds.top + 150 },
+      );
       return;
     }
     if (
       !e.altKey &&
+      (!(e.ctrlKey || e.metaKey) || !["PageUp", "PageDown"].includes(e.key)) &&
       ["ArrowDown", "ArrowUp", "Home", "End", "PageUp", "PageDown"].includes(
         e.key,
       )
@@ -356,7 +473,7 @@ export function FilePane(p: Props) {
       }
       return;
     }
-    if (e.key === "Enter" && focused) {
+    if (e.key === "Enter" && focused && !e.ctrlKey && !e.metaKey && !e.altKey) {
       const entry = visible.find((x) => x.path === focused);
       if (entry?.isParent) goUp();
       else if (entry) p.onOpen(entry);
@@ -485,7 +602,7 @@ export function FilePane(p: Props) {
             </div>
           ))}
         </div>
-        <IconButton title={t.newTab} onClick={p.newTab}>
+        <IconButton title={t.newTab} shortcut="Ctrl+T" onClick={p.newTab}>
           <Plus size={15} />
         </IconButton>
         <span className="pane-indicator">{p.index === 0 ? "01" : "02"}</span>
@@ -494,6 +611,7 @@ export function FilePane(p: Props) {
         <div className="navigation-buttons">
           <IconButton
             title={t.back}
+            shortcut="Alt+Left"
             disabled={tab.historyIndex <= 0}
             onClick={() => p.history(-1)}
           >
@@ -501,12 +619,13 @@ export function FilePane(p: Props) {
           </IconButton>
           <IconButton
             title={t.forward}
+            shortcut="Alt+Right"
             disabled={tab.historyIndex >= tab.history.length - 1}
             onClick={() => p.history(1)}
           >
             <ArrowRight size={15} />
           </IconButton>
-          <IconButton title={t.up} shortcut="Backspace" onClick={goUp}>
+          <IconButton title={t.up} shortcut="Alt+Up / Backspace" onClick={goUp}>
             <ArrowUp size={15} />
           </IconButton>
         </div>
@@ -519,6 +638,7 @@ export function FilePane(p: Props) {
             }}
           >
             <input
+              ref={pathInput}
               autoFocus
               aria-label={t.destination}
               placeholder={t.remoteAddressHint}
@@ -526,7 +646,14 @@ export function FilePane(p: Props) {
               onChange={(e) => setPathValue(e.target.value)}
               onBlur={() => setEditingPath(false)}
               onKeyDown={(e) => {
-                if (e.key === "Escape") setEditingPath(false);
+                if (e.key === "Escape") {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setEditingPath(false);
+                  root.current
+                    ?.querySelector<HTMLElement>(".file-grid")
+                    ?.focus();
+                }
               }}
             />
           </form>
@@ -534,10 +661,8 @@ export function FilePane(p: Props) {
           <button
             className="breadcrumbs"
             title={displayPath}
-            onClick={() => {
-              setPathValue(displayPath);
-              setEditingPath(true);
-            }}
+            data-shortcut="Ctrl+L / Alt+D"
+            onClick={editPath}
           >
             <span>
               {location.path
@@ -555,6 +680,7 @@ export function FilePane(p: Props) {
         )}
         <IconButton
           title={t.addFavorite}
+          shortcut="Ctrl+D"
           disabled={location.source !== "local"}
           className={bookmarked ? "is-bookmarked" : ""}
           onClick={p.onBookmark}
@@ -563,6 +689,7 @@ export function FilePane(p: Props) {
         </IconButton>
         <IconButton
           title={t.refresh}
+          shortcut="Ctrl+R"
           onClick={() => setLocalRefresh((n) => n + 1)}
         >
           <RefreshCw size={14} className={loading ? "spin" : ""} />
@@ -582,10 +709,30 @@ export function FilePane(p: Props) {
         <label className="folder-filter">
           <Search size={12} />
           <input
+            ref={filterInput}
+            data-shortcut="Ctrl+Shift+F"
             aria-label={t.filter}
             placeholder={t.filter}
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                e.preventDefault();
+                e.stopPropagation();
+                setFilter("");
+                root.current?.querySelector<HTMLElement>(".file-grid")?.focus();
+              } else if (e.key === "Enter" || e.key === "ArrowDown") {
+                e.preventDefault();
+                e.stopPropagation();
+                const first = visible.findIndex((entry) => !entry.isParent);
+                if (first >= 0) {
+                  setFocused(visible[first].path);
+                  anchor.current = first;
+                  virtual.scrollToIndex(first);
+                }
+                root.current?.querySelector<HTMLElement>(".file-grid")?.focus();
+              }
+            }}
           />
           {filter && (
             <button aria-label={t.close} onClick={() => setFilter("")}>
@@ -606,6 +753,13 @@ export function FilePane(p: Props) {
         }
         tabIndex={0}
         onKeyDown={keyDown}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          p.activate();
+          e.currentTarget.focus();
+          p.onContext([], location, { x: e.clientX, y: e.clientY });
+        }}
       >
         <div className="list-columns" role="row">
           <span />
@@ -666,6 +820,26 @@ export function FilePane(p: Props) {
                   }}
                   onClick={(e) => {
                     if (!dragged.current) choose(entry, row.index, e);
+                  }}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    p.activate();
+                    root.current
+                      ?.querySelector<HTMLElement>(".file-grid")
+                      ?.focus();
+                    setFocused(entry.path);
+                    const chosen = entry.isParent
+                      ? []
+                      : selected.has(entry.path)
+                        ? selectedEntries
+                        : [entry];
+                    if (!entry.isParent && !selected.has(entry.path))
+                      setSelected(new Set([entry.path]));
+                    p.onContext(chosen, location, {
+                      x: e.clientX,
+                      y: e.clientY,
+                    });
                   }}
                   onDoubleClick={() =>
                     entry.isParent ? goUp() : p.onOpen(entry)
@@ -753,6 +927,65 @@ export function FilePane(p: Props) {
           )}
         </span>
       </footer>
+      {pattern && (
+        <Modal
+          closeLabel={t.close}
+          title={pattern.remove ? t.deselectPattern : t.selectPattern}
+          subtitle={t.patternHint}
+          onClose={() => setPattern(undefined)}
+        >
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const matched = dataEntries.filter(
+                (entry) =>
+                  (pattern.folders || !entry.isDir) &&
+                  matchesMask(entry.name, pattern.mask),
+              );
+              setSelected((old) => {
+                const next = new Set(old);
+                for (const entry of matched) {
+                  if (pattern.remove) next.delete(entry.path);
+                  else next.add(entry.path);
+                }
+                return next;
+              });
+              setPattern(undefined);
+            }}
+          >
+            <label className="field">
+              {t.filePattern}
+              <input
+                aria-label={t.filePattern}
+                autoFocus
+                value={pattern.mask}
+                required
+                onChange={(e) =>
+                  setPattern({ ...pattern, mask: e.target.value })
+                }
+              />
+            </label>
+            <label className="checkbox-row">
+              <input
+                type="checkbox"
+                checked={pattern.folders}
+                onChange={(e) =>
+                  setPattern({ ...pattern, folders: e.target.checked })
+                }
+              />
+              {t.includeFolders}
+            </label>
+            <footer className="modal-actions">
+              <button type="button" onClick={() => setPattern(undefined)}>
+                {t.cancel}
+              </button>
+              <button type="submit" className="primary">
+                {t.apply}
+              </button>
+            </footer>
+          </form>
+        </Modal>
+      )}
     </section>
   );
 }

@@ -175,6 +175,7 @@ export function TextWorkbench({
   }
   return (
     <Modal
+      closeLabel={t.close}
       title={`${basename(location.path)}${dirty ? " •" : ""}`}
       subtitle={`${editable ? t.edit : t.view} · ${location.path}`}
       full

@@ -60,7 +60,9 @@ export function TerminalPanel({
       (event) =>
         !(
           event.ctrlKey &&
-          (event.key.toLowerCase() === "o" || event.key === "`")
+          (event.key.toLowerCase() === "o" ||
+            event.key === "`" ||
+            event.code === "Backquote")
         ),
     );
     term.loadAddon(fit);

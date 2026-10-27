@@ -8,6 +8,8 @@ Browse local drives, UNC paths, ZIP archives and SSH/SFTP servers. Work with fam
 
 The first public release is **[SuperCommander 0.2.0](https://github.com/rihokirss/SuperCommander/releases/tag/v0.2.0)**.
 
+The `main` branch contains ongoing improvements beyond that release, including keyboard-accessible menus, file context actions, wildcard selection and searchable shortcut help. The shortcuts below describe the current source.
+
 - [Windows x64 installer](https://github.com/rihokirss/SuperCommander/releases/download/v0.2.0/SuperCommander_0.2.0_x64-setup.exe) — recommended.
 - [Standalone Windows x64 executable](https://github.com/rihokirss/SuperCommander/releases/download/v0.2.0/SuperCommander_0.2.0_x64.exe) — requires WebView2.
 - [SHA-256 checksums](https://github.com/rihokirss/SuperCommander/releases/download/v0.2.0/SHA256SUMS.txt).
@@ -78,9 +80,18 @@ Each pane has independent tabs, history, sorting and filtering. Click its locati
 | Tab | Switch panes; dialogs keep normal field navigation |
 | Arrows | Move the cursor without clearing marks |
 | Insert | Toggle the current mark and advance to the next row |
+| Space | Toggle the current mark without advancing |
+| Ctrl+A / Ctrl+Shift+A | Select all / clear visible marks |
+| Ctrl+I / * | Invert the visible selection |
+| + / - | Select / deselect by filename pattern |
 | Home / End | First / last row |
 | Page Up / Page Down | Move by one visible page |
 | Enter | Open the current file or folder |
+| Ctrl+L / Alt+D | Edit the active pane's location |
+| Ctrl+R | Refresh the active pane |
+| Ctrl+Shift+F | Focus the pane's filename filter |
+| Alt+Up / Backspace | Parent folder |
+| Alt+Home | Home directory of the current source |
 | F2 | Rename, including bulk rename |
 | F3 | View file |
 | F4 | Quick edit, locally or over SFTP |
@@ -89,6 +100,10 @@ Each pane has independent tabs, history, sorting and filtering. Click its locati
 | F8 / Delete | Recycle; remote deletion is permanent and requires confirmation |
 | Shift+F8 / Shift+Delete | Confirm permanent deletion |
 | Ctrl+T / Ctrl+W | Open / close a pane tab |
+| Ctrl+Tab / Ctrl+Shift+Tab | Next / previous tab in the active pane |
+| Ctrl+Page Down / Ctrl+Page Up | Next / previous tab |
+| Ctrl+Shift+T | Restore the last closed pane tab |
+| Ctrl+D | Toggle the current local folder's bookmark |
 | Ctrl+U | Swap panes |
 | Ctrl+H | Toggle hidden files |
 | Ctrl+F | Recursive filename search with size and date filters |
@@ -96,9 +111,16 @@ Each pane has independent tabs, history, sorting and filtering. Click its locati
 | Ctrl+B | Collapse / expand Workspace |
 | Ctrl+O | Full terminal / file panes, preserving the shell session |
 | Ctrl+backtick | Show / hide the docked terminal |
-| Ctrl+, / F1 | Settings and shortcut reference |
+| Ctrl+, | Settings |
+| F1 | Searchable shortcut reference |
+| F9 | Actions menu |
+| Shift+F10 / Menu key | File context menu |
 
 The `..` row opens the parent folder; at a ZIP root it returns to the archive's local parent. ZIP creation and extraction are available in the Actions menu. Double-click a ZIP to browse its read-only contents. Buttons expose tooltips with their shortcuts.
+
+Right-click a file to act on that file or its existing multi-selection. Context menus use the clicked pane as their source. Menus support arrows, Home/End, type-ahead, Enter and Esc, and return focus to the originating control. Selection masks support `*` and `?`, work on the visible file list, and can include or exclude folders.
+
+Refreshing the same directory preserves the filter, marked files and cursor when those files still exist. In the filter field, Enter or Arrow Down returns to the matching file list; Esc clears the filter and returns focus to the list.
 
 ### Viewer and quick editor
 

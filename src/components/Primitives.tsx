@@ -79,6 +79,7 @@ export function FileIcon({ entry }: { entry: Entry }) {
 export function Modal({
   title,
   subtitle,
+  closeLabel,
   children,
   onClose,
   wide = false,
@@ -86,16 +87,19 @@ export function Modal({
 }: {
   title: string;
   subtitle?: string;
+  closeLabel: string;
   children: ReactNode;
   onClose: () => void;
   wide?: boolean;
   full?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  // Capture before autoFocus inputs mount; afterwards activeElement may already be inside this dialog.
+  const previousFocus = useRef(document.activeElement as HTMLElement | null);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
   useLayoutEffect(() => {
-    const previous = document.activeElement as HTMLElement | null;
+    const previous = previousFocus.current;
     const node = ref.current;
     (
       node?.querySelector<HTMLElement>(
@@ -128,7 +132,11 @@ export function Modal({
     document.addEventListener("keydown", key, true);
     return () => {
       document.removeEventListener("keydown", key, true);
-      previous?.focus();
+      if (previous?.isConnected) previous.focus();
+      else
+        document
+          .querySelector<HTMLElement>(".file-pane.active .file-grid")
+          ?.focus();
     };
   }, []);
   return (
@@ -150,7 +158,7 @@ export function Modal({
             <h2>{title}</h2>
             {subtitle && <p>{subtitle}</p>}
           </div>
-          <IconButton title="Close / Sulge" onClick={onClose}>
+          <IconButton title={closeLabel} shortcut="Esc" onClick={onClose}>
             <X size={18} />
           </IconButton>
         </header>

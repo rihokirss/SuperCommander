@@ -1,0 +1,33 @@
+{
+  "objectiveOriginal": "jätka niikaua kuni kõik mõistlik funktsionaalsus olemas, UI ühetaolisus ja sobivus kontrollitud, kõik mõistlikud shortcut keyd olemas",
+  "status": "in_progress",
+  "baselineRelease": "v0.2.0",
+  "lastVerifiedBatch": {
+    "features": ["Keyboard-accessible command and context menus", "Pane navigation, selection masks and searchable help", "Dialog focus restoration and localized close labels", "Refresh without losing filters or marks"],
+    "checks": { "javascriptUnitTests": "13 passed", "browserTests": "21 passed", "nativeWindows": "scripts/windows-smoke.mjs passed, including real OpenSSH, ConPTY, context actions and refresh state", "windowsBuild": "x64 executable and NSIS installer built successfully" },
+    "visualEvidence": ["artifacts/keyboard-menu-dark.png", "artifacts/keyboard-menu-light.png", "artifacts/shortcuts-dark.png", "artifacts/shortcuts-light.png"]
+  },
+  "completionRule": "Implementation plus current functional, keyboard and visual evidence is required; source inspection or an older release alone does not prove completion.",
+  "requirements": [
+    { "id": "navigation", "status": "in_progress", "scope": "Independent panes, history, parent entries, roots, path editing, tabs, closed-tab restoration, refresh and keyboard access", "evidence": ["tests/ui/workspace.spec.ts", "tests/ui/keyboard.spec.ts"] },
+    { "id": "selection", "status": "in_progress", "scope": "MC Insert behavior, ranges, all/none/inverse and wildcard masks, preserving marks and excluding the parent entry", "evidence": ["src/selection.test.ts", "tests/ui/keyboard.spec.ts"] },
+    { "id": "context-actions-and-menus", "status": "in_progress", "scope": "Correct pane/selection targets, keyboard-accessible context and command menus, focus restoration, edge positioning and both themes", "evidence": ["tests/ui/keyboard.spec.ts"] },
+    { "id": "file-clipboard", "status": "pending", "scope": "Copy, cut and paste across panes and supported sources; local Windows file clipboard interoperability with Explorer; copy paths" },
+    { "id": "transfer-safety", "status": "needs_current_audit", "scope": "Copy/move/delete/rename, conflicts, cancellation, partial failures, metadata handling and source/destination preservation", "evidence": ["crates/core/tests/files.rs", "scripts/windows-smoke.mjs"] },
+    { "id": "bookmarks-and-places", "status": "pending", "scope": "Add, rename, remove and use bookmarks and saved places with keyboard access and persistent configuration" },
+    { "id": "network", "status": "needs_current_audit", "scope": "Explorer network locations, custom UNC entries, mapped drives, server/share navigation and errors", "evidence": ["scripts/windows-network-smoke.mjs", "src/network.test.ts"] },
+    { "id": "ssh", "status": "needs_current_audit", "scope": "SSH config catalog, credentials, key verification, reconnect/disconnect behavior, realistic config directives, independent sessions and transfers", "evidence": ["crates/core/tests/ssh_config.rs", "crates/core/tests/sftp.rs", "scripts/windows-smoke.mjs"] },
+    { "id": "port-forwarding", "status": "needs_current_audit", "scope": "Multiple tunnels, persistence, start/stop/remove, conflicts and connection lifecycle", "evidence": ["crates/core/tests/sftp.rs", "scripts/windows-smoke.mjs"] },
+    { "id": "terminal", "status": "needs_current_audit", "scope": "Local and remote interactive shells, Ctrl+O, docking, independent persistent sessions, resize and lifecycle", "evidence": ["scripts/windows-smoke.mjs", "crates/core/tests/sftp.rs"] },
+    { "id": "viewer", "status": "pending", "scope": "Practical text/image/PDF viewing, search/navigation, copy, zoom, large-file behavior and keyboard controls" },
+    { "id": "editor", "status": "pending", "scope": "Create/edit/save/save-as, encoding and line endings, search/replace, undo/redo, selection/indentation and unsaved-change protection including application close", "evidence": ["crates/core/tests/editor.rs", "scripts/windows-smoke.mjs"] },
+    { "id": "search", "status": "pending", "scope": "Names and masks, recursive filters, useful content search, results navigation, progress/cancellation and error reporting" },
+    { "id": "archives", "status": "needs_current_audit", "scope": "Practical common archive workflows, safe browsing/creation/extraction, path and symlink protection, and explicit format limitations", "evidence": ["crates/core/tests/files.rs"] },
+    { "id": "properties-and-attributes", "status": "pending", "scope": "Inspect useful file/folder metadata and applicable permissions/attributes without destructive shortcuts" },
+    { "id": "directory-comparison", "status": "pending", "scope": "Preview and act on useful differences between the two panes, with review before synchronization or replacement" },
+    { "id": "ui-consistency", "status": "in_progress", "scope": "Dark/light/system themes, density, translucency, menus, controls, dialogs, tooltips, language completeness, focus visibility and supported window sizes" },
+    { "id": "shortcut-discoverability", "status": "in_progress", "scope": "Practical shortcuts for all implemented actions, searchable F1 help, accurate tooltips, no context collisions or accidental browser reloads", "evidence": ["src/shortcuts.ts", "tests/ui/keyboard.spec.ts"] },
+    { "id": "persistence-and-recovery", "status": "needs_current_audit", "scope": "Settings migration/validation, tabs and remote history, external config changes, interrupted operations and useful recovery errors" },
+    { "id": "distribution", "status": "needs_current_audit", "scope": "Matching Windows builds, current installer and executable, integration checks, English documentation and screenshots, release provenance" }
+  ]
+}

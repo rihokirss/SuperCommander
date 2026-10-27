@@ -117,6 +117,30 @@ try {
   await expect(left.getByText("Õunad.txt", { exact: true })).toBeVisible();
   assert.equal(await left.locator(".pane-error").count(), 0);
   console.log("PASS native bootstrap, streamed listing, Unicode paths");
+  await left.getByRole("grid").focus();
+  await page.keyboard.press("F9");
+  const actionsMenu = page.getByRole("menu", { name: "Actions", exact: true });
+  await expect(actionsMenu.getByRole("menuitem").first()).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(actionsMenu.getByRole("menuitem").nth(1)).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(left.getByRole("grid")).toBeFocused();
+  await page.keyboard.press("F1");
+  const help = page.getByRole("dialog", {
+    name: "Keyboard shortcuts",
+    exact: true,
+  });
+  await help
+    .getByRole("textbox", { name: "Search shortcuts", exact: true })
+    .fill("Ctrl+L");
+  await expect(help).toContainText("Go to path");
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Control+l");
+  await expect(left.locator(".path-form input")).toBeFocused();
+  await page.keyboard.press("Escape");
+  console.log(
+    "PASS native F9 keyboard menu, searchable F1 reference, Ctrl+L and focus restoration",
+  );
   const paging = path.join(src, "Paging");
   await fs.mkdir(paging);
   await Promise.all(
@@ -169,6 +193,10 @@ try {
   );
 
   await left.getByText("Õunad.txt", { exact: true }).click();
+  await left.getByText("Õunad.txt", { exact: true }).click({ button: "right" });
+  await expect(
+    page.getByRole("menu", { name: "File actions", exact: true }),
+  ).toBeVisible();
   await page.keyboard.press("F5");
   await page
     .getByRole("dialog")
@@ -180,6 +208,24 @@ try {
     "Tere, maailm!",
   );
   console.log("PASS copy through UI and real Rust IPC");
+  await left.getByRole("grid").focus();
+  await page.keyboard.press("Control+Shift+f");
+  const folderFilter = left.getByRole("textbox", {
+    name: "Filter this folder…",
+    exact: true,
+  });
+  await folderFilter.fill("Õunad");
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Control+r");
+  await expect(left.locator(".path-toolbar svg.spin")).toHaveCount(0);
+  await expect(folderFilter).toHaveValue("Õunad");
+  await expect(left.locator(".file-row.selected")).toContainText("Õunad.txt");
+  await expect(left.locator(".file-row.focused")).toContainText("Õunad.txt");
+  await page.keyboard.press("Control+Shift+f");
+  await page.keyboard.press("Escape");
+  console.log(
+    "PASS refresh preserves the filename filter, marks and keyboard cursor",
+  );
   await fs.writeFile(path.join(src, "drag-me.txt"), "drag payload");
   const dragRow = left.getByText("drag-me.txt", { exact: true });
   await expect(dragRow).toBeVisible();
@@ -236,6 +282,11 @@ try {
   await fileEditor
     .getByRole("textbox", { name: "File contents", exact: true })
     .fill("Õunad\nSecond line\nEdited in SuperCommander\n");
+  await page.keyboard.press("F5");
+  await page.keyboard.press("Control+r");
+  await expect(
+    fileEditor.getByRole("textbox", { name: "File contents", exact: true }),
+  ).toHaveValue("Õunad\nSecond line\nEdited in SuperCommander\n");
   await page.keyboard.press("F2");
   await expect(fileEditor).toContainText("Saved");
   assert.equal(

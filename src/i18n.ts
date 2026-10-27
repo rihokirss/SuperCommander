@@ -236,6 +236,28 @@ const en = {
   networkInvalid:
     "Enter a UNC path such as \\\\server or \\\\server\\share, or an absolute mapped drive path.",
   networkDuplicate: "This network location is already in the list.",
+  fileActions: "File actions",
+  goToPath: "Go to path",
+  selectPattern: "Select by pattern",
+  deselectPattern: "Deselect by pattern",
+  invertSelection: "Invert selection",
+  clearSelection: "Clear selection",
+  filePattern: "Filename pattern",
+  patternHint:
+    "Use * for any characters and ? for one character. Applies to the visible file list.",
+  includeFolders: "Include folders",
+  nextTab: "Next tab",
+  previousTab: "Previous tab",
+  reopenTab: "Reopen closed tab",
+  navigation: "Navigation",
+  selection: "Selection",
+  textTools: "Viewer and editor",
+  searchShortcuts: "Search shortcuts",
+  menuNavigation: "Navigate menu / activate / close",
+  toggleMark: "Mark / unmark file",
+  rowNavigation: "First/last row and page navigation",
+  undoRedo: "Undo / redo",
+  copyPasteText: "Copy / paste text",
 };
 type Dictionary = { [K in keyof typeof en]: string };
 const et: Dictionary = {
@@ -476,6 +498,28 @@ const et: Dictionary = {
   networkInvalid:
     "Sisesta UNC-tee, näiteks \\\\server või \\\\server\\share, või võrguketta absoluutne tee.",
   networkDuplicate: "See võrguasukoht on juba loendis.",
+  fileActions: "Failitoimingud",
+  goToPath: "Mine asukohale",
+  selectPattern: "Vali mustri järgi",
+  deselectPattern: "Eemalda valik mustri järgi",
+  invertSelection: "Pööra valik ümber",
+  clearSelection: "Tühjenda valik",
+  filePattern: "Failinime muster",
+  patternHint:
+    "* tähistab suvalisi märke ja ? ühte märki. Rakendub nähtavale faililoendile.",
+  includeFolders: "Kaasa kaustad",
+  nextTab: "Järgmine vaheleht",
+  previousTab: "Eelmine vaheleht",
+  reopenTab: "Taasta suletud vaheleht",
+  navigation: "Navigeerimine",
+  selection: "Valik",
+  textTools: "Vaatur ja redaktor",
+  searchShortcuts: "Otsi kiirklahvi",
+  menuNavigation: "Liigu menüüs / käivita / sulge",
+  toggleMark: "Märgi fail / eemalda märge",
+  rowNavigation: "Esimene/viimane rida ja lehekülje kaupa liikumine",
+  undoRedo: "Võta tagasi / korda",
+  copyPasteText: "Kopeeri / kleebi tekst",
 };
 export type Text = Dictionary;
 export const dictionary = (language: Language): Text =>

@@ -64,7 +64,13 @@ export function SshCatalogDialog({
     onClose();
   }
   return (
-    <Modal title={t.sshCatalog} subtitle={t.configHint} onClose={close} wide>
+    <Modal
+      closeLabel={t.close}
+      title={t.sshCatalog}
+      subtitle={t.configHint}
+      onClose={close}
+      wide
+    >
       <form
         className="ssh-config-path"
         onSubmit={(e) => {
@@ -302,6 +308,7 @@ export function ForwardDialog({
   }, [source]);
   return (
     <Modal
+      closeLabel={t.close}
       title={t.forwarding}
       subtitle={`${title} · ${t.forwardHint}`}
       onClose={onClose}
