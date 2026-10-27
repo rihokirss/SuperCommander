@@ -114,7 +114,7 @@ The editor supports local and SFTP text files up to 4 MiB. It preserves UTF-8/UT
 
 ### Workspace and appearance
 
-Workspace collapses into an icon rail. Each section can also be collapsed independently; these choices persist. **Network** lists Windows mapped network drives and saved File Explorer network locations. Its refresh button reloads them. UNC paths can also be entered directly; the app does not scan the network for devices.
+Workspace collapses into an icon rail. Each section can also be collapsed independently; these choices persist. **Network** includes network folders and servers from Explorer Quick Access, mapped drives and saved Windows network shortcuts. Its refresh button reloads them. Use **+** to add a UNC location, rename a listed entry, remove it from SuperCommander or restore a removed Explorer entry. These customizations are saved in SuperCommander and leave Explorer's pins unchanged. Opening a server such as `\\\\server` lists its shared folders through the Windows shell; the `..` row at a share root returns to the server. UNC paths can also be entered directly; the app does not scan the network for devices.
 
 Settings offer dark, light or Windows-following themes, a glass toggle and a transparency slider. Compact mode uses 32 px rows for both files and Workspace; Comfortable uses 40 px. Transfers use dense rows, expanding details only when needed. Select menus, checkboxes and switches follow the app's theme.
 
@@ -193,5 +193,7 @@ To include SSH UI checks, first run `node scripts/sftp-fixture.mjs` in WSL. This
 Generate public design screenshots from the running Vite preview with `node scripts/screenshots.mjs`. Only fictional sample data is used. The native Windows smoke test captures the forwarding dialog against its local test server.
 
 The Windows GitHub Actions workflow runs checks and produces an x64 executable and NSIS installer as build artifacts. Publishing releases and signing builds are not automatic.
+
+`node scripts/windows-network-smoke.mjs`, run with Windows Node against a test instance using the same debugging port, checks Explorer imports, adding and persisting a custom UNC location, renaming/removing it, the collapsed sidebar tooltip, and browsing a server root through the Windows shell. It uses a temporary WSL folder and restores the original settings.
 
 Source: [rihokirss/SuperCommander](https://github.com/rihokirss/SuperCommander).

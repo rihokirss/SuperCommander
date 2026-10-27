@@ -7,6 +7,8 @@ describe("Windows and remote navigation", () => {
     expect(parent("C:\\Users")).toBe("C:\\");
     expect(parent("C:\\")).toBe("C:\\");
     expect(parent("\\\\server\\share\\folder")).toBe("\\\\server\\share");
+    expect(parent("\\\\server\\share")).toBe("\\\\server");
+    expect(parent("\\\\server")).toBe("\\\\server");
     expect(parent("/home/user")).toBe("/home");
     expect(parent("/")).toBe("/");
   });

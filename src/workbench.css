@@ -209,6 +209,96 @@
 .sidebar-group > div[hidden] {
   display: none;
 }
+.network-form {
+  display: flex;
+  gap: 10px;
+  align-items: end;
+  margin-bottom: 12px;
+}
+.network-form .field {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+}
+.network-form .field:nth-child(2) {
+  flex: 2;
+}
+.network-form input {
+  font-size: 11px;
+}
+.network-form > button {
+  height: 33px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.network-list {
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  max-height: 320px;
+  overflow: auto;
+}
+.network-list > .helper {
+  padding: 15px;
+}
+.network-location {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 38px;
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--line);
+  font-size: 11px;
+}
+.network-location:last-child {
+  border-bottom: 0;
+}
+.network-location > svg {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+.network-location .network-open {
+  padding: 0;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  gap: 12px;
+  justify-content: flex-start;
+  color: var(--text);
+}
+.network-open strong {
+  font-weight: 450;
+  min-width: 90px;
+  text-align: left;
+}
+.network-location code {
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+}
+.network-location small {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 9px;
+  white-space: nowrap;
+}
+.network-location .icon-button {
+  width: 24px;
+  height: 25px;
+}
+.network-available {
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.network-available summary {
+  cursor: pointer;
+  padding: 6px 0;
+}
+.network-available .icon-button {
+  margin-left: auto;
+}
 .sidebar-empty {
   color: var(--muted);
   font-size: 10px;

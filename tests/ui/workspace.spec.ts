@@ -215,11 +215,9 @@ test("tooltips expose shortcuts and themed choices support the keyboard", async 
 test("workspace groups, rail, density and transparency persist", async ({
   page,
 }) => {
-  const group = page
-    .locator(".sidebar-group")
-    .filter({
-      has: page.getByRole("button", { name: "Workspace", exact: true }),
-    });
+  const group = page.locator(".sidebar-group").filter({
+    has: page.getByRole("button", { name: "Workspace", exact: true }),
+  });
   await group.getByRole("button", { name: "Workspace", exact: true }).click();
   await expect(group.locator(":scope>div")).toBeHidden();
   await page
@@ -297,6 +295,68 @@ test("layout stays within the window at supported sizes", async ({ page }) => {
     expect(search!.x + search!.width).toBeLessThanOrEqual(tools!.x);
     await expect(page.locator(".shortcut-bar")).toBeVisible();
   }
+});
+test("network locations can be added, renamed and removed, with a single rail tooltip", async ({
+  page,
+}) => {
+  await page
+    .getByRole("button", { name: "Network locations", exact: true })
+    .click();
+  let dialog = page.getByRole("dialog");
+  await dialog
+    .getByRole("textbox", { name: "Location name", exact: true })
+    .fill("Test server");
+  await dialog
+    .getByRole("textbox", { name: "Network path", exact: true })
+    .fill("\\\\example-server");
+  await dialog
+    .getByRole("button", { name: "Add location", exact: true })
+    .click();
+  await expect(dialog.locator(".network-location")).toContainText(
+    "Test server",
+  );
+  await dialog
+    .getByRole("button", { name: "Edit Test server", exact: true })
+    .click();
+  await dialog
+    .getByRole("textbox", { name: "Location name", exact: true })
+    .fill("Files server");
+  await dialog
+    .getByRole("button", { name: "Save changes", exact: true })
+    .click();
+  await page.keyboard.press("Escape");
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          JSON.parse(localStorage.getItem("supercommander-preview") || "{}")
+            .networkLocations?.[0]?.name,
+      ),
+    )
+    .toBe("Files server");
+  await page.reload();
+  const location = page
+    .locator(".sidebar-item")
+    .filter({ hasText: "Files server" });
+  await expect(location).toBeVisible();
+  await page
+    .getByRole("button", { name: "Collapse workspace", exact: true })
+    .click();
+  await location.hover();
+  await expect(page.getByRole("tooltip")).toHaveCount(1);
+  await expect(page.getByRole("tooltip")).toContainText("example-server");
+  await expect(location).not.toHaveAttribute("title");
+  await page
+    .getByRole("button", { name: "Expand workspace", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Network locations", exact: true })
+    .click();
+  dialog = page.getByRole("dialog");
+  await dialog
+    .getByRole("button", { name: "Remove location Files server", exact: true })
+    .click();
+  await expect(dialog.locator(".network-location")).toHaveCount(0);
 });
 test("Insert toggles a mark and advances the cursor like Midnight Commander", async ({
   page,

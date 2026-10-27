@@ -104,11 +104,29 @@ impl FileSystem for LocalFs {
         Ok(())
     }
     fn list(&self, path: &str) -> Result<Vec<Entry>> {
+        if crate::network::is_server(path) {
+            return crate::network::shares(path);
+        }
         fs::read_dir(path)?
             .map(|e| Self::entry(&e?.path()))
             .collect()
     }
     fn stream(&self, path: &str, send: &dyn Fn(Listing)) -> Result<()> {
+        if crate::network::is_server(path) {
+            for chunk in crate::network::shares(path)?.chunks(256) {
+                send(Listing {
+                    entries: chunk.to_vec(),
+                    done: false,
+                    error: None,
+                });
+            }
+            send(Listing {
+                entries: vec![],
+                done: true,
+                error: None,
+            });
+            return Ok(());
+        }
         let mut batch = Vec::new();
         let mut errors = Vec::new();
         for result in fs::read_dir(path)? {
@@ -136,6 +154,17 @@ impl FileSystem for LocalFs {
         Ok(())
     }
     fn stat(&self, path: &str) -> Result<Entry> {
+        if crate::network::is_server(path) {
+            return Ok(Entry {
+                name: path.trim_matches('\\').into(),
+                path: path.into(),
+                is_dir: true,
+                is_symlink: false,
+                size: 0,
+                modified: 0,
+                hidden: false,
+            });
+        }
         Self::entry(Path::new(path))
     }
     fn reader(&self, path: &str) -> Result<Box<dyn Read + Send>> {
@@ -454,6 +483,9 @@ foreach($item in Get-ChildItem -LiteralPath $folder -Force){
 $links=if($item.PSIsContainer){@(Get-ChildItem -LiteralPath $item.FullName -Filter '*.lnk' -Force)}elseif($item.Extension -eq '.lnk'){@($item)}else{@()}
 foreach($link in $links){$target=$shell.CreateShortcut($link.FullName).TargetPath;if($target.StartsWith('\\')){$items.Add(@{name=$item.BaseName;path=$target;kind='network'})}}
 }}
+$explorer=New-Object -ComObject Shell.Application
+$quick=$explorer.Namespace('shell:::{679f85cb-0220-4080-b29b-5540cc05aab6}')
+if($null -ne $quick){foreach($item in $quick.Items()){$target=[string]$item.Path;if($item.IsFolder -and $target.StartsWith('\\')){$items.Add(@{name=[string]$item.Name;path=$target;kind='network'})}}}
 ConvertTo-Json -InputObject @($items.ToArray()) -Compress
 "#;
         let output = std::process::Command::new("powershell.exe")

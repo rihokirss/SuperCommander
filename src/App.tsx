@@ -69,6 +69,8 @@ import { WorkspaceTools } from "./components/WorkspaceTools";
 import { parseRemoteAddress } from "./address";
 import { ForwardDialog, SshCatalogDialog } from "./components/SshTools";
 import { Tooltips } from "./components/Tooltips";
+import { NetworkDialog } from "./components/NetworkDialog";
+import { networkLocations } from "./network";
 import type {
   Bootstrap,
   Entry,
@@ -94,7 +96,7 @@ type Dialog =
     }
   | { kind: "sshConfig"; add?: boolean }
   | { kind: "forward"; source: string; title: string }
-  | { kind: "settings" | "search" | "palette" };
+  | { kind: "settings" | "search" | "palette" | "network" };
 const emptySnapshot: PaneSnapshot = { entries: [], selected: [] };
 export function App() {
   const [boot, setBoot] = useState<Bootstrap>();
@@ -964,6 +966,21 @@ export function App() {
         }),
     };
   }
+  async function refreshNetwork() {
+    const data = await api.bootstrap();
+    setBoot((old) =>
+      old
+        ? {
+            ...old,
+            drives: data.drives,
+            network: data.network,
+            networkError: data.networkError,
+          }
+        : data,
+    );
+    if (data.networkError) throw new Error(data.networkError);
+  }
+  const locations = networkLocations(settings, boot.network || []);
   return (
     <div
       className={`app-shell ${settings.glass ? "frosted" : "opaque"}`}
@@ -1083,7 +1100,7 @@ export function App() {
               {...groupProps("favorites", t.favorites)}
               actions={
                 <button
-                  title={t.addFavorite}
+                  data-tooltip={t.addFavorite}
                   aria-label={t.addFavorite}
                   onClick={() => bookmark()}
                 >
@@ -1134,36 +1151,31 @@ export function App() {
             <WorkspaceGroup
               {...groupProps("network", t.network)}
               actions={
-                <button
-                  title={t.refresh}
-                  aria-label={t.refresh}
-                  onClick={() => {
-                    void api
-                      .bootstrap()
-                      .then((data) =>
-                        setBoot((old) =>
-                          old
-                            ? {
-                                ...old,
-                                drives: data.drives,
-                                network: data.network,
-                                networkError: data.networkError,
-                              }
-                            : data,
-                        ),
-                      )
-                      .catch((e) => notify(String(e)));
-                  }}
-                >
-                  <RefreshCw size={12} />
-                </button>
+                <span className="catalog-buttons">
+                  <button
+                    data-tooltip={t.refreshExplorer}
+                    aria-label={t.refresh}
+                    onClick={() => {
+                      void refreshNetwork().catch((e) => notify(String(e)));
+                    }}
+                  >
+                    <RefreshCw size={12} />
+                  </button>
+                  <button
+                    data-tooltip={t.networkLocations}
+                    aria-label={t.networkLocations}
+                    onClick={() => setDialog({ kind: "network" })}
+                  >
+                    <Plus size={13} />
+                  </button>
+                </span>
               }
             >
-              {boot.network?.map((place) => (
+              {locations.map((place) => (
                 <button
                   className={`sidebar-item ${current.source === "local" && current.path === place.path ? "active" : ""}`}
                   key={place.path}
-                  title={place.path}
+                  data-tooltip={`${place.name} · ${place.path}`}
                   onClick={() =>
                     navigate({ source: "local", path: place.path })
                   }
@@ -1172,7 +1184,7 @@ export function App() {
                   <span>{place.name}</span>
                 </button>
               ))}
-              {!boot.network?.length && (
+              {!locations.length && (
                 <p className="sidebar-empty">
                   {boot.networkError || t.networkEmpty}
                 </p>
@@ -1183,14 +1195,14 @@ export function App() {
               actions={
                 <span className="catalog-buttons">
                   <button
-                    title={t.sshCatalog}
+                    data-tooltip={t.sshCatalog}
                     aria-label={t.sshCatalog}
                     onClick={() => setDialog({ kind: "sshConfig" })}
                   >
                     <FileCode2 size={13} />
                   </button>
                   <button
-                    title={t.connect}
+                    data-tooltip={t.connect}
                     aria-label={t.connect}
                     onClick={() => setDialog({ kind: "sshConfig", add: true })}
                   >
@@ -1203,7 +1215,7 @@ export function App() {
                 <button
                   className={`sidebar-item ${current.source === `sftp:${host.profile.id}` ? "active" : ""}`}
                   disabled={host.disabled}
-                  title={[
+                  data-tooltip={[
                     `${host.profile.username}@${host.profile.host}:${host.profile.port}`,
                     ...host.warnings,
                   ].join("\n")}
@@ -1516,6 +1528,20 @@ export function App() {
           t={t}
           update={update}
           onClose={closeDialog}
+        />
+      )}
+      {dialog?.kind === "network" && (
+        <NetworkDialog
+          settings={settings}
+          detected={boot.network || []}
+          t={t}
+          update={update}
+          onClose={closeDialog}
+          onRefresh={refreshNetwork}
+          onOpen={(path) => {
+            navigate({ source: "local", path });
+            closeDialog();
+          }}
         />
       )}
       {dialog?.kind === "connect" && (

@@ -29,6 +29,8 @@ export type Settings = {
   transparency?: number;
   workspaceCollapsed?: boolean;
   collapsedGroups?: string[];
+  networkLocations?: Place[];
+  hiddenNetworkPaths?: string[];
   density: "comfortable" | "compact";
   profiles: SftpProfile[];
   trustedHosts: Record<string, string>;

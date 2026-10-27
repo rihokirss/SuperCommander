@@ -230,7 +230,10 @@ export function FilePane(p: Props) {
     api
       .command("watch_directory", {
         id,
-        path: location.source === "local" ? location.path : null,
+        path:
+          location.source === "local" && !/^\\\\[^\\]+\\?$/.test(location.path)
+            ? location.path
+            : null,
       })
       .catch((e) => p.onError(String(e)));
     return () => {

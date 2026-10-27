@@ -9,7 +9,9 @@ export function basename(path: string) {
   );
 }
 export function parent(path: string) {
-  if (/^\\\\[^\\]+\\[^\\]+\\?$/.test(path)) return path;
+  if (/^\\\\[^\\]+\\?$/.test(path)) return path;
+  const share = /^\\\\([^\\]+)\\[^\\]+\\?$/.exec(path);
+  if (share) return `\\\\${share[1]}`;
   const sep = path.includes("\\") ? "\\" : "/";
   const stripped = path.replace(/[\\/]+$/, "");
   const index = stripped.lastIndexOf(sep);

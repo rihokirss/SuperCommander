@@ -222,6 +222,20 @@ const en = {
   expandWorkspace: "Expand workspace",
   network: "Network",
   networkEmpty: "No mapped drives or saved network locations",
+  networkLocations: "Network locations",
+  networkHint:
+    "Includes network folders pinned in Explorer Quick Access, mapped drives and saved network shortcuts. Your additions and names are saved in SuperCommander.",
+  networkName: "Location name",
+  networkPath: "Network path",
+  addLocation: "Add location",
+  removeLocation: "Remove location",
+  restoreLocation: "Restore location",
+  refreshExplorer: "Refresh from Explorer",
+  fromExplorer: "From Explorer",
+  savedLocation: "Saved",
+  networkInvalid:
+    "Enter a UNC path such as \\\\server or \\\\server\\share, or an absolute mapped drive path.",
+  networkDuplicate: "This network location is already in the list.",
 };
 type Dictionary = { [K in keyof typeof en]: string };
 const et: Dictionary = {
@@ -448,6 +462,20 @@ const et: Dictionary = {
   expandWorkspace: "Laienda Workspace",
   network: "Võrk",
   networkEmpty: "Ühendatud võrgukettaid ega salvestatud võrguasukohti pole",
+  networkLocations: "Võrguasukohad",
+  networkHint:
+    "Loeb Exploreri Quick Accessisse kinnitatud võrgukaustad, võrgukettad ja salvestatud võrguotseteed. Sinu lisatud asukohad ja nimed salvestatakse SuperCommanderisse.",
+  networkName: "Asukoha nimi",
+  networkPath: "Võrgutee",
+  addLocation: "Lisa asukoht",
+  removeLocation: "Eemalda asukoht",
+  restoreLocation: "Taasta asukoht",
+  refreshExplorer: "Värskenda Explorerist",
+  fromExplorer: "Explorerist",
+  savedLocation: "Salvestatud",
+  networkInvalid:
+    "Sisesta UNC-tee, näiteks \\\\server või \\\\server\\share, või võrguketta absoluutne tee.",
+  networkDuplicate: "See võrguasukoht on juba loendis.",
 };
 export type Text = Dictionary;
 export const dictionary = (language: Language): Text =>

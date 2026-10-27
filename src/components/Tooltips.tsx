@@ -29,6 +29,8 @@ export function Tooltips() {
       if (node === target) return;
       hide();
       target = node;
+      // A native title already supplies a tooltip. Do not stack a second one over it.
+      if (node.hasAttribute("title")) return;
       const text =
         node.dataset.tooltip ||
         node.getAttribute("title") ||
