@@ -63,6 +63,9 @@ pub trait FileSystem: Send + Sync {
 }
 
 pub struct LocalFs;
+pub fn same_directory(left: &str, right: &str) -> Result<bool> {
+    Ok(same_file::is_same_file(left, right)?)
+}
 impl LocalFs {
     fn entry(path: &Path) -> Result<Entry> {
         let meta = fs::symlink_metadata(path).with_context(|| path.display().to_string())?;

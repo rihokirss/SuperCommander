@@ -1178,6 +1178,13 @@ p {
 .file-row:hover {
   background: #9eaee908;
 }
+.file-row.cut-entry .file-name > span {
+  opacity: 0.62;
+}
+.file-row .cut-indicator {
+  color: var(--accent);
+  flex-shrink: 0;
+}
 .file-row.selected {
   background: #7a98e315;
 }

@@ -25,6 +25,7 @@ import {
   Cloud,
   Check,
   LoaderCircle,
+  Scissors,
 } from "lucide-react";
 import * as api from "../api";
 import {
@@ -41,11 +42,13 @@ import type {
   PaneState,
   Settings,
   SftpProfile,
+  FileClipboard,
 } from "../types";
 import type { Text } from "../i18n";
 import { formatRemoteAddress } from "../address";
 import { matchesMask } from "../selection";
 import { Modal } from "./Primitives";
+import { clipboardPathKey } from "../clipboard";
 
 export type PaneSnapshot = {
   entries: Entry[];
@@ -71,6 +74,8 @@ type Props = {
   profiles: SftpProfile[];
   t: Text;
   refresh: number;
+  clipboard: FileClipboard | null;
+  onCancelCut: () => void;
   activate: () => void;
   navigate: (location: Location) => void;
   history: (delta: number) => void;
@@ -173,6 +178,15 @@ export function FilePane(p: Props) {
   const selectedEntries = useMemo(
     () => visible.filter((e) => !e.isParent && selected.has(e.path)),
     [visible, selected],
+  );
+  const cutPaths = useMemo(
+    () =>
+      new Set(
+        p.clipboard?.cut && p.clipboard.source === location.source
+          ? p.clipboard.paths.map(clipboardPathKey)
+          : [],
+      ),
+    [p.clipboard, location.source],
   );
   function editPath() {
     setPathValue(displayPath);
@@ -379,7 +393,10 @@ export function FilePane(p: Props) {
     if (e.key === "Escape") {
       e.preventDefault();
       if (filter) setFilter("");
-      else setSelected(new Set());
+      else {
+        setSelected(new Set());
+        p.onCancelCut();
+      }
       return;
     }
     if (e.key === "ContextMenu" || (e.shiftKey && e.key === "F10")) {
@@ -452,7 +469,12 @@ export function FilePane(p: Props) {
       }
       return;
     }
-    if (e.key === "Insert" || e.key === " ") {
+    if (
+      ((e.key === "Insert" && !e.shiftKey) || e.key === " ") &&
+      !e.ctrlKey &&
+      !e.metaKey &&
+      !e.altKey
+    ) {
       e.preventDefault();
       if (index < 0) index = 0;
       if (visible[index]) {
@@ -806,10 +828,11 @@ export function FilePane(p: Props) {
             {virtual.getVirtualItems().map((row) => {
               const entry = visible[row.index];
               const isSelected = selected.has(entry.path);
+              const isCut = cutPaths.has(clipboardPathKey(entry.path));
               return (
                 <div
                   key={entry.path}
-                  className={`file-row ${entry.isParent ? "parent-entry" : ""} ${isSelected ? "selected" : ""} ${entry.hidden ? "hidden-entry" : ""} ${focused === entry.path ? "focused" : ""}`}
+                  className={`file-row ${entry.isParent ? "parent-entry" : ""} ${isCut ? "cut-entry" : ""} ${isSelected ? "selected" : ""} ${entry.hidden ? "hidden-entry" : ""} ${focused === entry.path ? "focused" : ""}`}
                   role="row"
                   id={`pane-${p.index}-row-${row.index}`}
                   aria-rowindex={row.index + 2}
@@ -871,6 +894,13 @@ export function FilePane(p: Props) {
                   </span>
                   <span className="file-name" role="gridcell">
                     <FileIcon entry={entry} />
+                    {isCut && (
+                      <Scissors
+                        size={11}
+                        className="cut-indicator"
+                        aria-label={t.cutPending}
+                      />
+                    )}
                     <span>{entry.name}</span>
                   </span>
                   <span className="file-size" role="gridcell">

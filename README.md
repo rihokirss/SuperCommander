@@ -81,6 +81,10 @@ Each pane has independent tabs, history, sorting and filtering. Click its locati
 | Arrows | Move the cursor without clearing marks |
 | Insert | Toggle the current mark and advance to the next row |
 | Space | Toggle the current mark without advancing |
+| Ctrl+C / Ctrl+Insert | Copy selected files to the clipboard |
+| Ctrl+X | Cut selected files to the clipboard |
+| Ctrl+V / Shift+Insert | Paste files into the active pane |
+| Ctrl+Shift+C | Copy full file paths (SSH URLs for remote files) |
 | Ctrl+A / Ctrl+Shift+A | Select all / clear visible marks |
 | Ctrl+I / * | Invert the visible selection |
 | + / - | Select / deselect by filename pattern |
@@ -121,6 +125,8 @@ The `..` row opens the parent folder; at a ZIP root it returns to the archive's 
 Right-click a file to act on that file or its existing multi-selection. Context menus use the clicked pane as their source. Menus support arrows, Home/End, type-ahead, Enter and Esc, and return focus to the originating control. Selection masks support `*` and `?`, work on the visible file list, and can include or exclude folders.
 
 Refreshing the same directory preserves the filter, marked files and cursor when those files still exist. In the filter field, Enter or Arrow Down returns to the matching file list; Esc clears the filter and returns focus to the list.
+
+File clipboard shortcuts work across local, SFTP and read-only ZIP sources, with writable destinations. Local files use the Windows shell file-drop format for interoperability with Explorer; remote and archive selections can be pasted within SuperCommander. Pasting a copy into its original folder creates a numbered duplicate. A cut is consumed after a successful queued move; failed or skipped sources remain available. Esc cancels a pending cut without changing files. Text inputs and the terminal keep their own clipboard shortcuts.
 
 ### Viewer and quick editor
 
@@ -223,6 +229,8 @@ To include SSH UI checks, first run `node scripts/sftp-fixture.mjs` in WSL. This
 Generate public design screenshots from the running Vite preview with `node scripts/screenshots.mjs`. Only fictional sample data is used. The native Windows smoke test captures the forwarding dialog against its local test server.
 
 The Windows GitHub Actions workflow runs checks and produces an x64 executable and NSIS installer as build artifacts. Publishing releases and signing builds are not automatic.
+
+The workflow also runs native file-clipboard tests in its dedicated Windows desktop, including shell file-drop formats, an external clipboard producer/consumer, Unicode, copy/cut/paste, duplicate folders and conditional clipboard cleanup. `scripts/windows-clipboard-smoke.mjs` requires `CI=true` and launches its own built executable on debugging port 9224; it owns that test desktop's clipboard and must not run on a user's desktop.
 
 `node scripts/windows-network-smoke.mjs`, run with Windows Node against a test instance using the same debugging port, checks Explorer imports, adding and persisting a custom UNC location, renaming/removing it, the collapsed sidebar tooltip, and browsing a server root through the Windows shell. It uses a temporary WSL folder and restores the original settings.
 

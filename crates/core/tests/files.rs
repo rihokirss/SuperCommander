@@ -80,6 +80,55 @@ fn move_removes_source_after_completed_transfer() {
     );
 }
 #[test]
+fn copying_into_the_same_folder_with_keep_both_duplicates_files_and_trees() {
+    let tmp = TempDir::new().unwrap();
+    let file = tmp.path().join("Õun.txt");
+    fs::write(&file, "original").unwrap();
+    let mut req = request(Operation::Copy, &file, tmp.path());
+    req.conflict = Conflict::KeepBoth;
+    assert_eq!(run(req).state, "completed");
+    assert_eq!(
+        fs::read_to_string(tmp.path().join("Õun (1).txt")).unwrap(),
+        "original"
+    );
+    assert_eq!(fs::read_to_string(&file).unwrap(), "original");
+    let folder = tmp.path().join("folder");
+    fs::create_dir(&folder).unwrap();
+    fs::write(folder.join("nested.txt"), "tree").unwrap();
+    let mut req = request(Operation::Copy, &folder, tmp.path());
+    req.conflict = Conflict::KeepBoth;
+    assert_eq!(run(req).state, "completed");
+    assert_eq!(
+        fs::read_to_string(tmp.path().join("folder (1)/nested.txt")).unwrap(),
+        "tree"
+    );
+    assert!(folder.join("nested.txt").exists());
+}
+#[test]
+fn moving_onto_an_alias_of_the_same_file_preserves_both_names_and_content() {
+    let tmp = TempDir::new().unwrap();
+    let file = tmp.path().join("payload.txt");
+    let dest = tmp.path().join("dest");
+    fs::create_dir(&dest).unwrap();
+    fs::write(&file, "must survive").unwrap();
+    fs::hard_link(&file, dest.join("payload.txt")).unwrap();
+    assert_eq!(run(request(Operation::Move, &file, &dest)).state, "failed");
+    assert_eq!(fs::read_to_string(&file).unwrap(), "must survive");
+    assert_eq!(
+        fs::read_to_string(dest.join("payload.txt")).unwrap(),
+        "must survive"
+    );
+    #[cfg(windows)]
+    {
+        let parent = std::path::PathBuf::from(tmp.path().to_string_lossy().to_uppercase());
+        assert_eq!(
+            run(request(Operation::Move, &file, &parent)).state,
+            "failed"
+        );
+        assert_eq!(fs::read_to_string(&file).unwrap(), "must survive");
+    }
+}
+#[test]
 fn skipped_move_preserves_source_and_existing_target() {
     let tmp = TempDir::new().unwrap();
     let source = tmp.path().join("file.txt");

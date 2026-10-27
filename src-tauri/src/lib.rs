@@ -200,6 +200,144 @@ async fn get_preview(state: State<'_, AppState>, location: Location) -> Reply<Pr
     let fs = state.sources.get(&location.source).map_err(error)?;
     blocking(move || filesystem::preview(fs.as_ref(), &location.path)).await
 }
+fn clipboard_owner(window: &tauri::Window) -> Reply<usize> {
+    #[cfg(windows)]
+    {
+        window.hwnd().map(|h| h.0 as usize).map_err(error)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = window;
+        Ok(0)
+    }
+}
+#[tauri::command]
+fn clipboard_revision() -> u32 {
+    core::clipboard::revision()
+}
+#[tauri::command]
+async fn read_file_clipboard(window: tauri::Window) -> Reply<Option<core::clipboard::Files>> {
+    let owner = clipboard_owner(&window)?;
+    blocking(move || core::clipboard::read(owner)).await
+}
+#[tauri::command]
+async fn write_file_clipboard(
+    state: State<'_, AppState>,
+    window: tauri::Window,
+    value: core::clipboard::Files,
+) -> Reply<core::clipboard::Files> {
+    value.validate().map_err(error)?;
+    let fs = state.sources.get(&value.source).map_err(error)?;
+    if value.cut && !fs.writable() {
+        return Err("Source is read-only".into());
+    }
+    let owner = clipboard_owner(&window)?;
+    blocking(move || core::clipboard::write(owner, &value)).await
+}
+#[tauri::command]
+async fn write_clipboard_text(window: tauri::Window, text: String) -> Reply<()> {
+    let owner = clipboard_owner(&window)?;
+    blocking(move || core::clipboard::text(owner, &text)).await
+}
+#[derive(Serialize)]
+struct ClipboardPaste {
+    clipboard: core::clipboard::Files,
+    request: JobRequest,
+}
+#[tauri::command]
+async fn plan_file_paste(
+    state: State<'_, AppState>,
+    window: tauri::Window,
+    destination: Location,
+    id: String,
+) -> Reply<ClipboardPaste> {
+    let owner = clipboard_owner(&window)?;
+    let value = blocking(move || {
+        core::clipboard::read(owner)?
+            .ok_or_else(|| anyhow::anyhow!("The clipboard does not contain files"))
+    })
+    .await?;
+    let source = state.sources.get(&value.source).map_err(error)?;
+    let dest = state.sources.get(&destination.source).map_err(error)?;
+    blocking(move || {
+        if !dest.writable() || value.cut && !source.writable() {
+            anyhow::bail!("This location is read-only");
+        }
+        if !dest.stat(&destination.path)?.is_dir {
+            anyhow::bail!("Paste into a directory");
+        }
+        let mut same_folder = false;
+        if value.source == destination.source {
+            let parents: std::collections::HashSet<_> = value
+                .paths
+                .iter()
+                .map(|p| core::rename::parent(p))
+                .collect();
+            for parent in parents {
+                let same = if value.source == "local" {
+                    core::filesystem::same_directory(&parent, &destination.path)?
+                } else {
+                    parent.trim_end_matches('/') == destination.path.trim_end_matches('/')
+                };
+                same_folder |= same;
+            }
+        }
+        if same_folder && value.cut {
+            anyhow::bail!("The files are already in this directory");
+        }
+        Ok(ClipboardPaste {
+            request: JobRequest {
+                id,
+                operation: if value.cut {
+                    Operation::Move
+                } else {
+                    Operation::Copy
+                },
+                source: value.source.clone(),
+                paths: value.paths.clone(),
+                destination,
+                conflict: if same_folder {
+                    Conflict::KeepBoth
+                } else {
+                    Conflict::Ask
+                },
+            },
+            clipboard: value,
+        })
+    })
+    .await
+}
+#[tauri::command]
+async fn finish_file_paste(
+    state: State<'_, AppState>,
+    window: tauri::Window,
+    clipboard: core::clipboard::Files,
+) -> Reply<Option<core::clipboard::Files>> {
+    clipboard.validate().map_err(error)?;
+    let owner = clipboard_owner(&window)?;
+    let fs = state.sources.get(&clipboard.source).map_err(error)?;
+    blocking(move || {
+        let mut remaining = Vec::new();
+        for path in &clipboard.paths {
+            // Retain inaccessible sources as well as skipped/failed files, while
+            // removing paths already moved by a partially successful operation.
+            if fs.exists(path).unwrap_or(true) {
+                remaining.push(path.clone());
+            }
+        }
+        core::clipboard::replace_if_unchanged(owner, &clipboard, remaining)
+    })
+    .await
+}
+#[tauri::command]
+async fn cancel_file_cut(
+    window: tauri::Window,
+    clipboard: core::clipboard::Files,
+) -> Reply<Option<core::clipboard::Files>> {
+    clipboard.validate().map_err(error)?;
+    let owner = clipboard_owner(&window)?;
+    blocking(move || core::clipboard::replace_if_unchanged(owner, &clipboard, vec![])).await
+}
 #[tauri::command]
 async fn read_document(
     state: State<'_, AppState>,
@@ -582,6 +720,13 @@ pub fn run() {
             rename_preview,
             rename_apply,
             get_preview,
+            clipboard_revision,
+            read_file_clipboard,
+            write_file_clipboard,
+            write_clipboard_text,
+            plan_file_paste,
+            finish_file_paste,
+            cancel_file_cut,
             read_document,
             save_document,
             save_settings,

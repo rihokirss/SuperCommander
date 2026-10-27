@@ -13,6 +13,10 @@ export function shortcutGroups(t: Text) {
         ["F8 / Delete", t.trash],
         ["Shift+F8 / Shift+Delete", t.delete],
         ["Shift+F10 / Menu", t.fileActions],
+        ["Ctrl+C / Ctrl+Insert", t.copyClipboard],
+        ["Ctrl+X", t.cutClipboard],
+        ["Ctrl+V / Shift+Insert", t.paste],
+        ["Ctrl+Shift+C", t.copyPath],
       ],
     },
     {

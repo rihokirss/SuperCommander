@@ -525,6 +525,7 @@ dependencies = [
  "regex",
  "russh",
  "russh-sftp",
+ "same-file",
  "serde",
  "serde_json",
  "sha2 0.11.1",
@@ -533,6 +534,7 @@ dependencies = [
  "trash",
  "uuid",
  "walkdir",
+ "windows-sys 0.61.2",
  "zip",
 ]
 

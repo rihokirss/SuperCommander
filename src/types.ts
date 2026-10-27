@@ -87,6 +87,13 @@ export type JobRequest = {
   destination: Location;
   conflict: Conflict;
 };
+export type FileClipboard = {
+  source: string;
+  paths: string[];
+  cut: boolean;
+  revision: number;
+};
+export type ClipboardPaste = { clipboard: FileClipboard; request: JobRequest };
 export type JobEvent = {
   id: string;
   state:

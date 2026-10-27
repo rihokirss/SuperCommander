@@ -258,6 +258,16 @@ const en = {
   rowNavigation: "First/last row and page navigation",
   undoRedo: "Undo / redo",
   copyPasteText: "Copy / paste text",
+  copyClipboard: "Copy to clipboard",
+  cutClipboard: "Cut to clipboard",
+  paste: "Paste files",
+  copyPath: "Copy full path",
+  filesCopied: "Files copied to clipboard",
+  filesCut: "Files cut; paste to move",
+  pathsCopied: "Paths copied",
+  clipboardEmpty: "The clipboard does not contain files",
+  cutPending: "Cut; paste to move",
+  cutInProgress: "These cut files are already being moved",
 };
 type Dictionary = { [K in keyof typeof en]: string };
 const et: Dictionary = {
@@ -520,6 +530,16 @@ const et: Dictionary = {
   rowNavigation: "Esimene/viimane rida ja lehekülje kaupa liikumine",
   undoRedo: "Võta tagasi / korda",
   copyPasteText: "Kopeeri / kleebi tekst",
+  copyClipboard: "Kopeeri lõikelauale",
+  cutClipboard: "Lõika lõikelauale",
+  paste: "Kleebi failid",
+  copyPath: "Kopeeri täielik tee",
+  filesCopied: "Failid kopeeritud lõikelauale",
+  filesCut: "Failid lõigatud; teisaldamiseks kleebi",
+  pathsCopied: "Teed kopeeritud",
+  clipboardEmpty: "Lõikelaual pole faile",
+  cutPending: "Lõigatud; teisaldamiseks kleebi",
+  cutInProgress: "Nende lõigatud failide teisaldamine juba käib",
 };
 export type Text = Dictionary;
 export const dictionary = (language: Language): Text =>

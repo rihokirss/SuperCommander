@@ -1,4 +1,5 @@
 pub mod archive;
+pub mod clipboard;
 pub mod editor;
 pub mod engine;
 pub mod filesystem;

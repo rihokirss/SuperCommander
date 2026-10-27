@@ -7,12 +7,17 @@
     "checks": { "javascriptUnitTests": "13 passed", "browserTests": "21 passed", "nativeWindows": "scripts/windows-smoke.mjs passed, including real OpenSSH, ConPTY, context actions and refresh state", "windowsBuild": "x64 executable and NSIS installer built successfully" },
     "visualEvidence": ["artifacts/keyboard-menu-dark.png", "artifacts/keyboard-menu-light.png", "artifacts/shortcuts-dark.png", "artifacts/shortcuts-light.png"]
   },
+  "currentBatch": {
+    "features": ["Windows file clipboard copy/cut/paste and full paths", "Same-folder file/tree duplication", "File identity checks before moves", "Single tooltip owner including inherited native titles"],
+    "checks": { "javascriptUnitTests": "14 passed", "browserTests": "25 passed", "coreTests": "platform-independent suites passed", "windowsCompilation": "workspace and all test targets passed", "nativeWindowsClipboard": "pending dedicated Windows CI test" },
+    "completion": "in_progress; native clipboard integration evidence is still required"
+  },
   "completionRule": "Implementation plus current functional, keyboard and visual evidence is required; source inspection or an older release alone does not prove completion.",
   "requirements": [
     { "id": "navigation", "status": "in_progress", "scope": "Independent panes, history, parent entries, roots, path editing, tabs, closed-tab restoration, refresh and keyboard access", "evidence": ["tests/ui/workspace.spec.ts", "tests/ui/keyboard.spec.ts"] },
     { "id": "selection", "status": "in_progress", "scope": "MC Insert behavior, ranges, all/none/inverse and wildcard masks, preserving marks and excluding the parent entry", "evidence": ["src/selection.test.ts", "tests/ui/keyboard.spec.ts"] },
     { "id": "context-actions-and-menus", "status": "in_progress", "scope": "Correct pane/selection targets, keyboard-accessible context and command menus, focus restoration, edge positioning and both themes", "evidence": ["tests/ui/keyboard.spec.ts"] },
-    { "id": "file-clipboard", "status": "pending", "scope": "Copy, cut and paste across panes and supported sources; local Windows file clipboard interoperability with Explorer; copy paths" },
+    { "id": "file-clipboard", "status": "in_progress", "scope": "Copy, cut and paste across panes and supported sources; local Windows file clipboard interoperability with Explorer; copy paths", "evidence": ["crates/core/tests/clipboard.rs", "tests/ui/clipboard.spec.ts", "scripts/windows-clipboard-smoke.mjs"] },
     { "id": "transfer-safety", "status": "needs_current_audit", "scope": "Copy/move/delete/rename, conflicts, cancellation, partial failures, metadata handling and source/destination preservation", "evidence": ["crates/core/tests/files.rs", "scripts/windows-smoke.mjs"] },
     { "id": "bookmarks-and-places", "status": "pending", "scope": "Add, rename, remove and use bookmarks and saved places with keyboard access and persistent configuration" },
     { "id": "network", "status": "needs_current_audit", "scope": "Explorer network locations, custom UNC entries, mapped drives, server/share navigation and errors", "evidence": ["scripts/windows-network-smoke.mjs", "src/network.test.ts"] },

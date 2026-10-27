@@ -231,9 +231,21 @@ fn run(sources: &Sources, req: &JobRequest, ctx: &mut ContextJob) -> Result<()> 
             Operation::Copy | Operation::Move => {
                 let entry = source.stat(path)?;
                 crate::filesystem::valid_name(&entry.name)?;
-                let target = dest.join(&req.destination.path, &entry.name);
-                if req.source == req.destination.source && path == &target {
+                let mut target = dest.join(&req.destination.path, &entry.name);
+                let same = req.source == req.destination.source
+                    && (path == &target
+                        || req.source == "local"
+                            && dest.exists(&target)?
+                            && same_file::is_same_file(path, &target)?);
+                if same && !(req.operation == Operation::Copy && req.conflict == Conflict::KeepBoth)
+                {
                     bail!("Source and destination are the same");
+                }
+                if same
+                    || entry.is_dir && req.conflict == Conflict::KeepBoth && dest.exists(&target)?
+                {
+                    target = choose_target(dest.as_ref(), &target, ctx)?
+                        .context("No available copy destination")?;
                 }
                 match copy_tree(source.as_ref(), dest.as_ref(), path, &target, ctx) {
                     Ok(true) if req.operation == Operation::Move => {

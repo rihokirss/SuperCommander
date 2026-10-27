@@ -17,6 +17,8 @@ import {
   ChevronDown,
   Cloud,
   Copy,
+  Scissors,
+  ClipboardPaste as PasteIcon,
   Download,
   Eye,
   FilePenLine,
@@ -71,7 +73,7 @@ import { TextWorkbench } from "./components/TextWorkbench";
 import { QueuePanel } from "./components/QueuePanel";
 import { TerminalPanel } from "./components/TerminalPanel";
 import { WorkspaceTools } from "./components/WorkspaceTools";
-import { parseRemoteAddress } from "./address";
+import { formatRemoteAddress, parseRemoteAddress } from "./address";
 import { ForwardDialog, SshCatalogDialog } from "./components/SshTools";
 import { Tooltips } from "./components/Tooltips";
 import { Menu, type MenuAction } from "./components/Menu";
@@ -82,6 +84,8 @@ import type {
   Entry,
   Job,
   JobRequest,
+  FileClipboard,
+  ClipboardPaste,
   Location,
   Operation,
   Settings,
@@ -114,6 +118,12 @@ export function App() {
   const [dialog, setDialog] = useState<Dialog>();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [queueOpen, setQueueOpen] = useState(false);
+  const [fileClipboard, setFileClipboard] = useState<FileClipboard | null>(
+    null,
+  );
+  const clipboardRevision = useRef(-1);
+  const clipboardBusy = useRef(false);
+  const clipboardMoves = useRef(new Map<string, FileClipboard>());
   const [terminals, setTerminals] = useState<
     Record<string, Location & { label: string }>
   >({});
@@ -303,11 +313,58 @@ export function App() {
         old.map((j) => (j.id === event.id ? { ...j, ...event } : j)),
       );
       if (event.state === "conflict") setQueueOpen(true);
-      if (["completed", "failed", "cancelled"].includes(event.state))
+      if (["completed", "failed", "cancelled"].includes(event.state)) {
         setRefresh((n) => n + 1);
+        const pending = clipboardMoves.current.get(event.id);
+        if (pending) {
+          clipboardMoves.current.delete(event.id);
+          void api
+            .command<FileClipboard | null>("finish_file_paste", {
+              clipboard: pending,
+            })
+            .then((value) => {
+              setFileClipboard(value);
+              clipboardRevision.current = value?.revision ?? -1;
+            })
+            .catch((e) => notify(String(e)));
+        }
+      }
     });
     return () => {
       subscription.then((fn) => fn());
+    };
+  }, []);
+  useEffect(() => {
+    if (!api.desktop) return;
+    let active = true,
+      reading = false;
+    const sync = async () => {
+      if (!active || reading || !document.hasFocus()) return;
+      reading = true;
+      try {
+        const revision = await api.command<number>("clipboard_revision");
+        if (revision !== clipboardRevision.current) {
+          const value = await api.command<FileClipboard | null>(
+            "read_file_clipboard",
+          );
+          if (active) {
+            setFileClipboard(value);
+            clipboardRevision.current = value?.revision ?? revision;
+          }
+        }
+      } catch {
+        /* Another application may briefly own the clipboard. Retry without interrupting the user. */
+      } finally {
+        reading = false;
+      }
+    };
+    void sync();
+    const timer = setInterval(sync, 1000);
+    window.addEventListener("focus", sync);
+    return () => {
+      active = false;
+      clearInterval(timer);
+      window.removeEventListener("focus", sync);
     };
   }, []);
   useEffect(() => {
@@ -542,6 +599,150 @@ export function App() {
       throw e;
     }
   }
+  function chosenEntries(index: number) {
+    const snapshot = snapshots.current[index];
+    return snapshot.selected.length
+      ? snapshot.selected
+      : snapshot.focused
+        ? [snapshot.focused]
+        : [];
+  }
+  async function copyFiles(
+    cut: boolean,
+    index = active,
+    entries = chosenEntries(index),
+  ) {
+    const source = locationAt(index);
+    if (!source || !entries.length) {
+      notify(t.selectFiles);
+      return;
+    }
+    if (cut && source.source.startsWith("zip:")) {
+      notify(t.readOnly);
+      return;
+    }
+    if (clipboardBusy.current) return;
+    clipboardBusy.current = true;
+    try {
+      const value: FileClipboard = {
+        source: source.source,
+        paths: entries.map((e) => e.path),
+        cut,
+        revision: 0,
+      };
+      const saved = api.desktop
+        ? await api.command<FileClipboard>("write_file_clipboard", { value })
+        : { ...value, revision: Math.max(0, clipboardRevision.current + 1) };
+      setFileClipboard(saved);
+      clipboardRevision.current = saved.revision;
+      notify(`${cut ? t.filesCut : t.filesCopied}: ${entries.length}`);
+    } catch (e) {
+      notify(String(e));
+    } finally {
+      clipboardBusy.current = false;
+    }
+  }
+  async function pasteFiles(index = active, destination = locationAt(index)) {
+    if (!destination || clipboardBusy.current) return;
+    if (destination.source.startsWith("zip:")) {
+      notify(t.readOnly);
+      return;
+    }
+    clipboardBusy.current = true;
+    try {
+      const plan = api.desktop
+        ? await api.command<ClipboardPaste>("plan_file_paste", {
+            destination,
+            id: uid(),
+          })
+        : fileClipboard
+          ? {
+              clipboard: fileClipboard,
+              request: {
+                id: uid(),
+                operation: fileClipboard.cut
+                  ? ("move" as const)
+                  : ("copy" as const),
+                source: fileClipboard.source,
+                paths: fileClipboard.paths,
+                destination,
+                conflict: "ask" as const,
+              },
+            }
+          : undefined;
+      if (!plan) {
+        notify(t.clipboardEmpty);
+        return;
+      }
+      if (
+        plan.clipboard.cut &&
+        [...clipboardMoves.current.values()].some(
+          (p) => p.revision === plan.clipboard.revision,
+        )
+      ) {
+        notify(t.cutInProgress);
+        return;
+      }
+      setFileClipboard(plan.clipboard);
+      if (plan.clipboard.cut)
+        clipboardMoves.current.set(plan.request.id, plan.clipboard);
+      try {
+        await enqueue(plan.request);
+      } catch (e) {
+        clipboardMoves.current.delete(plan.request.id);
+        throw e;
+      }
+    } catch (e) {
+      notify(String(e));
+    } finally {
+      clipboardBusy.current = false;
+    }
+  }
+  async function copyPaths(
+    index = active,
+    entries = chosenEntries(index),
+    location = locationAt(index),
+  ) {
+    if (!location) return;
+    const profile = [
+      ...(catalog?.hosts.map((h) => h.profile) || []),
+      ...sessions,
+      ...(settings?.profiles || []),
+    ].find((p) => `sftp:${p.id}` === location.source);
+    const paths = entries.length ? entries.map((e) => e.path) : [location.path];
+    const text = paths
+      .map((path) =>
+        profile
+          ? formatRemoteAddress(profile, path)
+          : location.source.startsWith("zip:")
+            ? `${location.source.slice(4)}!${path}`
+            : path,
+      )
+      .join("\r\n");
+    try {
+      if (api.desktop) await api.command("write_clipboard_text", { text });
+      else await navigator.clipboard.writeText(text);
+      setFileClipboard(null);
+      clipboardRevision.current = -1;
+      notify(t.pathsCopied);
+    } catch (e) {
+      notify(String(e));
+    }
+  }
+  async function cancelCut() {
+    if (!fileClipboard?.cut) return;
+    try {
+      const value = api.desktop
+        ? await api.command<FileClipboard | null>("cancel_file_cut", {
+            clipboard: fileClipboard,
+          })
+        : null;
+      setFileClipboard(value);
+      clipboardRevision.current = value?.revision ?? -1;
+    } catch (e) {
+      notify(String(e));
+    }
+  }
   function action(
     operation: Operation | "mkdir",
     index = active,
@@ -635,6 +836,45 @@ export function App() {
         separator: true,
         disabled: !entries.length,
         run: () => action("copy", index, entries),
+      },
+      {
+        id: "clipboard-copy",
+        label: t.copyClipboard,
+        icon: <Copy size={15} />,
+        key: "Ctrl+C",
+        disabled: !entries.length,
+        run: () => {
+          void copyFiles(false, index, entries);
+        },
+      },
+      {
+        id: "clipboard-cut",
+        label: t.cutClipboard,
+        icon: <Scissors size={15} />,
+        key: "Ctrl+X",
+        disabled: !entries.length || readOnly,
+        run: () => {
+          void copyFiles(true, index, entries);
+        },
+      },
+      {
+        id: "clipboard-paste",
+        label: t.paste,
+        icon: <PasteIcon size={15} />,
+        key: "Ctrl+V",
+        disabled: !fileClipboard || readOnly,
+        run: () => {
+          void pasteFiles(index, location);
+        },
+      },
+      {
+        id: "copy-path",
+        label: t.copyPath,
+        icon: <Copy size={15} />,
+        key: "Ctrl+Shift+C",
+        run: () => {
+          void copyPaths(index, entries, location);
+        },
       },
       {
         id: "move",
@@ -849,6 +1089,42 @@ export function App() {
       .catch((e) => notify(String(e)));
   }
   const actions: PaletteAction[] = [
+    {
+      id: "clipboard-copy",
+      label: t.copyClipboard,
+      icon: <Copy size={16} />,
+      key: "Ctrl+C",
+      run: () => {
+        void copyFiles(false);
+      },
+    },
+    {
+      id: "clipboard-cut",
+      label: t.cutClipboard,
+      icon: <Scissors size={16} />,
+      key: "Ctrl+X",
+      run: () => {
+        void copyFiles(true);
+      },
+    },
+    {
+      id: "clipboard-paste",
+      label: t.paste,
+      icon: <PasteIcon size={16} />,
+      key: "Ctrl+V",
+      run: () => {
+        void pasteFiles();
+      },
+    },
+    {
+      id: "copy-path",
+      label: t.copyPath,
+      icon: <Copy size={16} />,
+      key: "Ctrl+Shift+C",
+      run: () => {
+        void copyPaths();
+      },
+    },
     {
       id: "sshConfig",
       label: t.sshCatalog,
@@ -1117,6 +1393,35 @@ export function App() {
         )
       )
         return;
+      if (ctrl && !e.altKey && name === "c" && e.shiftKey) {
+        e.preventDefault();
+        void copyPaths();
+        return;
+      }
+      if (
+        ctrl &&
+        !e.altKey &&
+        !e.shiftKey &&
+        (name === "c" || e.key === "Insert")
+      ) {
+        e.preventDefault();
+        void copyFiles(false);
+        return;
+      }
+      if (ctrl && !e.altKey && !e.shiftKey && name === "x") {
+        e.preventDefault();
+        void copyFiles(true);
+        return;
+      }
+      if (
+        !e.altKey &&
+        ((ctrl && !e.shiftKey && name === "v") ||
+          (!ctrl && e.shiftKey && e.key === "Insert"))
+      ) {
+        e.preventDefault();
+        void pasteFiles();
+        return;
+      }
       if (ctrl && e.key.toLowerCase() === "u" && settings) {
         e.preventDefault();
         update({ panes: [settings.panes[1], settings.panes[0]] });
@@ -1602,6 +1907,10 @@ export function App() {
                   state={state}
                   active={active === index}
                   settings={settings}
+                  clipboard={fileClipboard}
+                  onCancelCut={() => {
+                    void cancelCut();
+                  }}
                   profiles={[
                     ...sessions,
                     ...(catalog?.hosts.map((h) => h.profile) || []),
