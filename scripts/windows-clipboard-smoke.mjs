@@ -46,11 +46,21 @@ function shell(script, file = "") {
   ).trim();
 }
 const child = spawn(exe, [], {
-  stdio: "ignore",
+  stdio: ["ignore", "pipe", "pipe"],
   env: {
     ...process.env,
     WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: "--remote-debugging-port=9224",
+    WEBVIEW2_USER_DATA_FOLDER: path.join(root, "WebView"),
   },
+});
+let startupOutput = "",
+  startupError;
+for (const stream of [child.stdout, child.stderr])
+  stream.on("data", (data) => {
+    startupOutput = (startupOutput + data).slice(-16384);
+  });
+child.on("error", (error) => {
+  startupError = error;
 });
 let browser, page, original;
 const rpc = (command, args = {}) =>
@@ -59,7 +69,8 @@ const rpc = (command, args = {}) =>
     { command, args },
   );
 try {
-  for (let attempt = 0; attempt < 120; attempt++) {
+  for (let attempt = 0; attempt < 180; attempt++) {
+    if (startupError) throw startupError;
     if (child.exitCode !== null)
       throw new Error(`App exited during startup: ${child.exitCode}`);
     try {
@@ -224,6 +235,16 @@ try {
   assert.equal(await rpc("read_file_clipboard"), null);
   console.log("PASS copy full path as native Unicode text");
 } catch (error) {
+  console.error(`Native startup output: ${startupOutput || "(none)"}`);
+  try {
+    console.error(
+      shell(
+        "Get-Process supercommander,msedgewebview2 -ErrorAction SilentlyContinue | Select-Object Id,SessionId,MainWindowTitle,Path | ConvertTo-Json -Compress",
+      ),
+    );
+  } catch {
+    /* Preserve the original failure if process diagnostics are unavailable. */
+  }
   await fs.mkdir("artifacts", { recursive: true });
   await page
     ?.screenshot({ path: "artifacts/native-clipboard-failure.png" })
