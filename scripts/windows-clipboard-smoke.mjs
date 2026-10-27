@@ -49,12 +49,14 @@ const child = spawn(exe, [], {
   stdio: ["ignore", "pipe", "pipe"],
   env: {
     ...process.env,
-    WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: "--remote-debugging-port=9224",
+    WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS:
+      "--remote-debugging-port=9224 --remote-debugging-address=127.0.0.1",
     WEBVIEW2_USER_DATA_FOLDER: path.join(root, "WebView"),
   },
 });
 let startupOutput = "",
-  startupError;
+  startupError,
+  connectionError;
 for (const stream of [child.stdout, child.stderr])
   stream.on("data", (data) => {
     startupOutput = (startupOutput + data).slice(-16384);
@@ -76,7 +78,8 @@ try {
     try {
       browser = await chromium.connectOverCDP("http://127.0.0.1:9224");
       break;
-    } catch {
+    } catch (error) {
+      connectionError = error;
       await delay(250);
     }
   }
@@ -236,10 +239,18 @@ try {
   console.log("PASS copy full path as native Unicode text");
 } catch (error) {
   console.error(`Native startup output: ${startupOutput || "(none)"}`);
+  console.error(`Last CDP connection error: ${connectionError}`);
+  try {
+    console.error(
+      `CDP version endpoint: ${await fetch("http://127.0.0.1:9224/json/version").then((r) => r.text())}`,
+    );
+  } catch (error) {
+    console.error(`CDP endpoint probe: ${error}`);
+  }
   try {
     console.error(
       shell(
-        "Get-Process supercommander,msedgewebview2 -ErrorAction SilentlyContinue | Select-Object Id,SessionId,MainWindowTitle,Path | ConvertTo-Json -Compress",
+        "Get-CimInstance Win32_Process -Filter \"Name='msedgewebview2.exe' OR Name='supercommander.exe'\" | Select-Object ProcessId,SessionId,CommandLine | ConvertTo-Json -Compress",
       ),
     );
   } catch {
