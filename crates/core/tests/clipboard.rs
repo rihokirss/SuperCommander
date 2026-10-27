@@ -7,6 +7,7 @@ fn rejects_invalid_clipboard_payloads_and_cutting_archives() {
         paths: vec!["/path/Õun.txt".into()],
         cut: false,
         revision: 0,
+        connection: None,
     };
     assert!(value.validate().is_ok());
     assert!(Files {
@@ -38,6 +39,7 @@ fn clipboard_revisions_prevent_old_jobs_from_overwriting_new_copies() {
         paths: vec!["/tmp/a".into(), "/tmp/b".into()],
         cut: true,
         revision: 0,
+        connection: None,
     };
     let first = clipboard::write(0, &value).unwrap();
     let remaining = clipboard::replace_if_unchanged(0, &first, vec!["/tmp/b".into()])
@@ -108,6 +110,7 @@ fn windows_file_clipboard_interoperates_with_shell_formats() {
         paths: paths.clone(),
         cut: true,
         revision: 0,
+        connection: None,
     };
     let copied = clipboard::write(owner, &data).unwrap();
     assert_eq!(clipboard::read(owner).unwrap(), Some(copied.clone()));
@@ -131,6 +134,11 @@ fn windows_file_clipboard_interoperates_with_shell_formats() {
         GlobalUnlock(effect);
         CloseClipboard();
     }
+    let partial = clipboard::replace_if_unchanged(owner, &copied, vec![paths[1].clone()])
+        .unwrap()
+        .unwrap();
+    assert_eq!(partial.paths, vec![paths[1].clone()]);
+    assert_eq!(clipboard::read(owner).unwrap(), Some(partial.clone()));
     let new = clipboard::write(
         owner,
         &Files {
@@ -141,7 +149,7 @@ fn windows_file_clipboard_interoperates_with_shell_formats() {
     )
     .unwrap();
     assert_eq!(
-        clipboard::replace_if_unchanged(owner, &copied, vec![]).unwrap(),
+        clipboard::replace_if_unchanged(owner, &partial, vec![]).unwrap(),
         Some(new)
     );
     // Simulate an external producer such as Explorer: CF_HDROP + drop effect, without our format.
@@ -210,6 +218,7 @@ fn windows_file_clipboard_interoperates_with_shell_formats() {
         paths: vec!["/remote/file".into()],
         cut: false,
         revision: 0,
+        connection: None,
     };
     clipboard::write(owner, &remote).unwrap();
     assert_eq!(unsafe { IsClipboardFormatAvailable(CF_HDROP as u32) }, 0);

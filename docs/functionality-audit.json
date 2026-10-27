@@ -8,8 +8,9 @@
     "visualEvidence": ["artifacts/keyboard-menu-dark.png", "artifacts/keyboard-menu-light.png", "artifacts/shortcuts-dark.png", "artifacts/shortcuts-light.png"]
   },
   "currentBatch": {
-    "features": ["Windows file clipboard copy/cut/paste and full paths", "Same-folder file/tree duplication", "File identity checks before moves", "Single tooltip owner including inherited native titles"],
-    "checks": { "javascriptUnitTests": "14 passed", "browserTests": "25 passed", "coreTests": "platform-independent suites passed", "windowsCompilation": "workspace and all test targets passed", "nativeWindowsClipboard": "pending dedicated Windows CI test" },
+    "features": ["Windows file clipboard copy/cut/paste and full paths", "Same-folder file/tree duplication", "File identity checks before moves", "Canonical SFTP destination checks", "SSH clipboard and queue connection binding", "Single tooltip owner including inherited native titles"],
+    "checks": { "javascriptUnitTests": "14 passed", "browserTests": "25 passed", "coreTests": "platform-independent suites passed", "realOpenSshIntegration": "2 passed, including alias safety and queued reconnection isolation", "windowsCompilation": "workspace and all test targets passed", "nativeWindowsClipboard": "native core test passed in CI run 40586689666; full native UI test pending", "nativeWindows": "Full scripts/windows-smoke.mjs and windows-network-smoke.mjs passed on d2e2a4b build" },
+    "visualEvidence": ["artifacts/clipboard-menu-dark.png", "artifacts/clipboard-menu-light.png"],
     "completion": "in_progress; native clipboard integration evidence is still required"
   },
   "completionRule": "Implementation plus current functional, keyboard and visual evidence is required; source inspection or an older release alone does not prove completion.",

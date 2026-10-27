@@ -223,6 +223,12 @@ try {
     .toBe(path.join(dst, "external.txt"));
   assert.equal(await rpc("read_file_clipboard"), null);
   console.log("PASS copy full path as native Unicode text");
+} catch (error) {
+  await fs.mkdir("artifacts", { recursive: true });
+  await page
+    ?.screenshot({ path: "artifacts/native-clipboard-failure.png" })
+    .catch(() => {});
+  throw error;
 } finally {
   if (original) await rpc("save_settings", { value: original }).catch(() => {});
   await browser?.close();

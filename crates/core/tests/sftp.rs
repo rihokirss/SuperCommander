@@ -70,6 +70,126 @@ fn start() -> Server {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[ignore = "Requires local OpenSSH server and ssh-keygen"]
+async fn queued_ssh_jobs_and_clipboards_do_not_rebind_to_replacement_connections() {
+    use commander_core::{
+        clipboard::Files, engine::Engine, filesystem::Sources, Conflict, JobRequest, Location,
+        Operation,
+    };
+    use std::sync::{mpsc, Arc};
+    let server = start();
+    let (probe, _) = remote::connect(&server.profile, "", None).await.unwrap();
+    let (_, first) = remote::connect(&server.profile, "", Some(probe.fingerprint.clone()))
+        .await
+        .unwrap();
+    let (_, second) = remote::connect(&server.profile, "", Some(probe.fingerprint))
+        .await
+        .unwrap();
+    let first = first.unwrap();
+    let second = second.unwrap();
+    assert_ne!(first.connection_id(), second.connection_id());
+    let root = server._directory.path().to_path_buf();
+    tokio::task::spawn_blocking(move || {
+        let path = |p: &std::path::Path| p.to_string_lossy().into_owned();
+        let source = root.join("remote.txt");
+        fs::write(&source, "must remain on the original server").unwrap();
+        let clipboard = Files {
+            source: "sftp:test".into(),
+            paths: vec![path(&source)],
+            cut: true,
+            revision: 0,
+            connection: first.connection_id().map(str::to_owned),
+        };
+        assert!(clipboard.validate_source(first.as_ref()).is_ok());
+        assert!(clipboard.validate_source(second.as_ref()).is_err());
+        assert!(Files {
+            connection: None,
+            ..clipboard
+        }
+        .validate_source(first.as_ref())
+        .is_err());
+
+        let destination = root.join("destination");
+        fs::create_dir(&destination).unwrap();
+        let hold = root.join("hold.txt");
+        fs::write(&hold, "new").unwrap();
+        fs::write(destination.join("hold.txt"), "existing").unwrap();
+        let sources = Arc::new(Sources::default());
+        sources.insert("sftp:test".into(), first.clone());
+        let (tx, rx) = mpsc::channel();
+        let engine = Engine::new(
+            sources.clone(),
+            Arc::new(move |event| {
+                let _ = tx.send(event);
+            }),
+        );
+        let blocking = JobRequest {
+            id: "hold".into(),
+            operation: Operation::Copy,
+            source: "local".into(),
+            paths: vec![path(&hold)],
+            destination: Location {
+                source: "local".into(),
+                path: path(&destination),
+            },
+            conflict: Conflict::Ask,
+            source_connection: None,
+            destination_connection: None,
+        };
+        engine.enqueue(blocking.clone()).unwrap();
+        loop {
+            let event = rx.recv_timeout(Duration::from_secs(15)).unwrap();
+            if event.state == "conflict" {
+                break;
+            }
+            assert_ne!(event.state, "failed");
+        }
+        let queued = JobRequest {
+            id: "old-session".into(),
+            source: "sftp:test".into(),
+            paths: vec![path(&source)],
+            source_connection: first.connection_id().map(str::to_owned),
+            ..blocking
+        };
+        engine.enqueue(queued.clone()).unwrap();
+        sources.insert("sftp:test".into(), second.clone());
+        // A clipboard plan created before reconnecting must also be rejected at enqueue.
+        assert!(engine
+            .enqueue(JobRequest {
+                id: "stale-plan".into(),
+                ..queued
+            })
+            .is_err());
+        FileSystem::close(first.as_ref()).unwrap();
+        engine.cancel("hold");
+        loop {
+            let event = rx.recv_timeout(Duration::from_secs(15)).unwrap();
+            if event.id == "old-session"
+                && ["completed", "failed", "cancelled"].contains(&event.state.as_str())
+            {
+                assert_eq!(
+                    event.state, "failed",
+                    "an old job used the replacement SSH connection"
+                );
+                break;
+            }
+        }
+        assert!(!destination.join("remote.txt").exists());
+        assert_eq!(
+            fs::read_to_string(source).unwrap(),
+            "must remain on the original server"
+        );
+        assert!(
+            !second.list("/").unwrap().is_empty(),
+            "replacement connection remains usable"
+        );
+        FileSystem::close(second.as_ref()).unwrap();
+    })
+    .await
+    .unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "Requires local OpenSSH server and ssh-keygen"]
 async fn verifies_host_authenticates_and_transfers_over_real_sftp() {
     let server = start();
     let (probe, fs) = remote::connect(&server.profile, "", None).await.unwrap();
@@ -141,6 +261,8 @@ async fn verifies_host_authenticates_and_transfers_over_real_sftp() {
                         path: destination.into(),
                     },
                     conflict,
+                    source_connection: None,
+                    destination_connection: None,
                 })
                 .unwrap();
             loop {

@@ -74,6 +74,10 @@ pub struct JobRequest {
     pub paths: Vec<String>,
     pub destination: Location,
     pub conflict: Conflict,
+    #[serde(default)]
+    pub source_connection: Option<String>,
+    #[serde(default)]
+    pub destination_connection: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize)]

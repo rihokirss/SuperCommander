@@ -170,6 +170,7 @@ pub async fn connect(
         forward_errors: vec![],
     };
     let fs = RemoteFs {
+        connection_id: uuid::Uuid::new_v4().to_string(),
         sftp,
         runtime: Handle::current(),
         _ssh: ssh,
@@ -180,6 +181,7 @@ pub async fn connect(
 }
 
 pub struct RemoteFs {
+    connection_id: String,
     sftp: SftpSession,
     runtime: Handle,
     _ssh: client::Handle<Verify>,
@@ -412,6 +414,9 @@ impl Write for RemoteFile {
     }
 }
 impl FileSystem for RemoteFs {
+    fn connection_id(&self) -> Option<&str> {
+        Some(&self.connection_id)
+    }
     fn canonical_path(&self, path: &str) -> Result<String> {
         Ok(self.runtime.block_on(self.sftp.canonicalize(path))?)
     }

@@ -36,6 +36,9 @@ pub trait FileSystem: Send + Sync {
     fn canonical_path(&self, path: &str) -> Result<String> {
         Ok(self.stat(path)?.path)
     }
+    fn connection_id(&self) -> Option<&str> {
+        None
+    }
     fn reader(&self, path: &str) -> Result<Box<dyn Read + Send>>;
     fn writer(&self, path: &str) -> Result<Box<dyn Write + Send>>;
     fn mkdir(&self, path: &str) -> Result<()>;

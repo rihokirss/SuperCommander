@@ -15,8 +15,18 @@ pub struct Files {
     pub cut: bool,
     #[serde(default)]
     pub revision: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub connection: Option<String>,
 }
 impl Files {
+    pub fn validate_source(&self, source: &dyn crate::filesystem::FileSystem) -> Result<()> {
+        if self.source.starts_with("sftp:")
+            && (self.connection.is_none() || self.connection.as_deref() != source.connection_id())
+        {
+            bail!("The SSH clipboard belongs to a closed connection. Copy the files again.");
+        }
+        Ok(())
+    }
     pub fn validate(&self) -> Result<()> {
         if self.source.is_empty()
             || self.source.len() > 32768
@@ -227,6 +237,7 @@ mod platform {
             paths,
             cut: effect & 2 != 0,
             revision: revision(),
+            connection: None,
         };
         value.validate()?;
         Ok(Some(value))

@@ -86,12 +86,15 @@ export type JobRequest = {
   paths: string[];
   destination: Location;
   conflict: Conflict;
+  sourceConnection?: string | null;
+  destinationConnection?: string | null;
 };
 export type FileClipboard = {
   source: string;
   paths: string[];
   cut: boolean;
   revision: number;
+  connection?: string;
 };
 export type ClipboardPaste = { clipboard: FileClipboard; request: JobRequest };
 export type JobEvent = {

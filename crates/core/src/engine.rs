@@ -30,17 +30,28 @@ impl Default for Control {
     }
 }
 pub struct Engine {
-    queue: mpsc::Sender<(JobRequest, Arc<Control>)>,
+    queue: mpsc::Sender<QueuedJob>,
     controls: Arc<Mutex<HashMap<String, Arc<Control>>>>,
+    sources: Arc<Sources>,
+}
+struct QueuedJob {
+    request: JobRequest,
+    control: Arc<Control>,
+    sources: Sources,
 }
 
 impl Engine {
     pub fn new(sources: Arc<Sources>, sink: Sink) -> Self {
-        let (tx, rx) = mpsc::channel::<(JobRequest, Arc<Control>)>();
+        let (tx, rx) = mpsc::channel::<QueuedJob>();
         let controls: Arc<Mutex<HashMap<String, Arc<Control>>>> = Arc::default();
         let registry = controls.clone();
         std::thread::spawn(move || {
-            for (req, control) in rx {
+            for QueuedJob {
+                request: req,
+                control,
+                sources,
+            } in rx
+            {
                 let mut context = ContextJob {
                     event: JobEvent {
                         id: req.id.clone(),
@@ -76,19 +87,54 @@ impl Engine {
         Self {
             queue: tx,
             controls,
+            sources,
         }
     }
     pub fn enqueue(&self, request: JobRequest) -> Result<()> {
         if request.paths.is_empty() {
             bail!("Select at least one file");
         }
+        // Bind a queued job to these connections. Resolving profile IDs only when
+        // it starts could redirect an old job to a newly connected server.
+        let source = self.sources.get(&request.source)?;
+        let destination = if request.source == request.destination.source {
+            source.clone()
+        } else {
+            self.sources.get(&request.destination.source)?
+        };
+        if request
+            .source_connection
+            .as_deref()
+            .is_some_and(|id| Some(id) != source.connection_id())
+            || request
+                .destination_connection
+                .as_deref()
+                .is_some_and(|id| Some(id) != destination.connection_id())
+        {
+            bail!("An SSH connection changed. Start the operation again.");
+        }
+        let sources = Sources::default();
+        sources.insert(request.source.clone(), source);
+        sources.insert(request.destination.source.clone(), destination);
         let mut controls = self.controls.lock().unwrap();
         if controls.contains_key(&request.id) {
             bail!("Duplicate job ID");
         }
         let control = Arc::new(Control::default());
         controls.insert(request.id.clone(), control.clone());
-        self.queue.send((request, control))?;
+        let id = request.id.clone();
+        if self
+            .queue
+            .send(QueuedJob {
+                request,
+                control,
+                sources,
+            })
+            .is_err()
+        {
+            controls.remove(&id);
+            bail!("The file operation queue has stopped");
+        }
         Ok(())
     }
     pub fn cancel(&self, id: &str) {

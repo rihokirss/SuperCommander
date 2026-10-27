@@ -1056,6 +1056,8 @@ export function App() {
       .command("disconnect_sftp", { source })
       .then(() => {
         remoteHomes.current.delete(source);
+        setFileClipboard((value) => (value?.source === source ? null : value));
+        clipboardRevision.current = -1;
         closedTabs.current = closedTabs.current.map((tabs) =>
           tabs.filter((tab) => tab.location.source !== source),
         );

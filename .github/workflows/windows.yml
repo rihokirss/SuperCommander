@@ -30,7 +30,7 @@ jobs:
         if: always()
         with:
           name: native-clipboard-evidence
-          path: artifacts/native-clipboard-cut.png
+          path: artifacts/native-clipboard-*.png
           if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         with:

@@ -216,21 +216,35 @@ fn clipboard_revision() -> u32 {
     core::clipboard::revision()
 }
 #[tauri::command]
-async fn read_file_clipboard(window: tauri::Window) -> Reply<Option<core::clipboard::Files>> {
+async fn read_file_clipboard(
+    state: State<'_, AppState>,
+    window: tauri::Window,
+) -> Reply<Option<core::clipboard::Files>> {
     let owner = clipboard_owner(&window)?;
-    blocking(move || core::clipboard::read(owner)).await
+    let sources = state.sources.clone();
+    blocking(move || {
+        let value = core::clipboard::read(owner)?;
+        Ok(value.filter(|value| {
+            !value.source.starts_with("sftp:")
+                || sources
+                    .get(&value.source)
+                    .is_ok_and(|source| value.validate_source(source.as_ref()).is_ok())
+        }))
+    })
+    .await
 }
 #[tauri::command]
 async fn write_file_clipboard(
     state: State<'_, AppState>,
     window: tauri::Window,
-    value: core::clipboard::Files,
+    mut value: core::clipboard::Files,
 ) -> Reply<core::clipboard::Files> {
     value.validate().map_err(error)?;
     let fs = state.sources.get(&value.source).map_err(error)?;
     if value.cut && !fs.writable() {
         return Err("Source is read-only".into());
     }
+    value.connection = fs.connection_id().map(str::to_owned);
     let owner = clipboard_owner(&window)?;
     blocking(move || core::clipboard::write(owner, &value)).await
 }
@@ -258,6 +272,7 @@ async fn plan_file_paste(
     })
     .await?;
     let source = state.sources.get(&value.source).map_err(error)?;
+    value.validate_source(source.as_ref()).map_err(error)?;
     let dest = state.sources.get(&destination.source).map_err(error)?;
     blocking(move || {
         if !dest.writable() || value.cut && !source.writable() {
@@ -301,6 +316,8 @@ async fn plan_file_paste(
                 } else {
                     Conflict::Ask
                 },
+                source_connection: source.connection_id().map(str::to_owned),
+                destination_connection: dest.connection_id().map(str::to_owned),
             },
             clipboard: value,
         })
@@ -316,6 +333,7 @@ async fn finish_file_paste(
     clipboard.validate().map_err(error)?;
     let owner = clipboard_owner(&window)?;
     let fs = state.sources.get(&clipboard.source).map_err(error)?;
+    clipboard.validate_source(fs.as_ref()).map_err(error)?;
     blocking(move || {
         let mut remaining = Vec::new();
         for path in &clipboard.paths {
