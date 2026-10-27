@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { bookmarkKey, bookmarkPath, normalizeBookmarks } from "./bookmarks";
 describe("persistent bookmarks", () => {
+  it("retains differently cased folders on case-sensitive UNC shares", () => {
+    const bookmarks = normalizeBookmarks([
+      { name: "Upper", path: "\\\\wsl.localhost\\Ubuntu\\home\\rix\\Folder" },
+      { name: "Lower", path: "\\\\wsl.localhost\\Ubuntu\\home\\rix\\folder" },
+    ]);
+    expect(bookmarks).toHaveLength(2);
+    expect(
+      bookmarkKey({ path: "\\\\WSL.LOCALHOST\\UBUNTU\\home\\rix\\Folder\\" }),
+    ).toBe(bookmarkKey(bookmarks[0]));
+  });
   it("unifies Windows case/separators and SSH spellings while retaining remote path case", () => {
     expect(bookmarkKey({ path: "C:/Folder/" })).toBe(
       bookmarkKey({ path: "c:\\folder" }),

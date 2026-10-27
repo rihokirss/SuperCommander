@@ -64,6 +64,7 @@ export type PaneHandle = {
   clear: () => void;
   invert: () => void;
   pattern: (remove?: boolean) => void;
+  reveal: (folder: Location, path: string) => void;
 };
 type Props = {
   controls: Ref<PaneHandle>;
@@ -114,6 +115,7 @@ export function FilePane(p: Props) {
   const [focused, setFocused] = useState<string>();
   const [filter, setFilter] = useState("");
   const [loading, setLoading] = useState(true);
+  const [settled, setSettled] = useState("");
   const [error, setError] = useState("");
   const [sort, setSort] = useState<"name" | "size" | "modified" | "type">(
     "name",
@@ -142,6 +144,9 @@ export function FilePane(p: Props) {
   const scroller = useRef<HTMLDivElement>(null);
   const generation = useRef(0);
   const loadedLocation = useRef("");
+  const reveal = useRef<{ folder: Location; path: string } | undefined>(
+    undefined,
+  );
   useEffect(() => {
     // Tab changes return navigation to the list; merely clicking another pane's input must keep that input focused.
     if (p.active && !document.querySelector('[role="dialog"]'))
@@ -204,6 +209,11 @@ export function FilePane(p: Props) {
     );
   }
   useImperativeHandle(p.controls, () => ({
+    reveal: (folder, path) => {
+      reveal.current = { folder, path };
+      setFilter("");
+      setLocalRefresh((n) => n + 1);
+    },
     path: editPath,
     filter: () => {
       filterInput.current?.focus();
@@ -269,7 +279,10 @@ export function FilePane(p: Props) {
             if (id === generation.current) setEntries([...pending]);
           }, 40);
         if (batch.error) setError(batch.error);
-        if (batch.done) setLoading(false);
+        if (batch.done) {
+          setSettled(key);
+          setLoading(false);
+        }
       })
       .catch((e) => {
         if (id === generation.current) {
@@ -295,6 +308,26 @@ export function FilePane(p: Props) {
       focused: visible.find((e) => !e.isParent && e.path === focused),
     });
   }, [visible, selectedEntries, focused]);
+  useEffect(() => {
+    const request = reveal.current;
+    if (
+      !request ||
+      loading ||
+      settled !== `${state.activeTab}\0${location.source}\0${location.path}` ||
+      request.folder.source !== location.source ||
+      request.folder.path !== location.path
+    )
+      return;
+    const index = visible.findIndex((entry) => entry.path === request.path);
+    reveal.current = undefined;
+    if (index < 0) return;
+    setFocused(request.path);
+    setSelected(new Set([request.path]));
+    requestAnimationFrame(() => {
+      virtual.scrollToIndex(index, { align: "auto" });
+      root.current?.querySelector<HTMLElement>(".file-grid")?.focus();
+    });
+  }, [visible, loading, settled, location.source, location.path]);
   useEffect(() => {
     const node = root.current;
     const receive = (event: Event) => {

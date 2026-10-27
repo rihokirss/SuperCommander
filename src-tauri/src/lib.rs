@@ -117,7 +117,7 @@ async fn search_files(
     id: String,
     location: Location,
     filter: SearchFilter,
-    channel: Channel<Listing>,
+    channel: Channel<core::search::Batch>,
 ) -> Reply<()> {
     let fs = state.sources.get(&location.source).map_err(error)?;
     let cancel = Arc::new(AtomicBool::new(false));
@@ -127,8 +127,10 @@ async fn search_files(
         .unwrap()
         .insert(id.clone(), cancel.clone());
     let result = blocking(move || {
-        filesystem::search(fs.as_ref(), &location.path, &filter, &cancel, &|batch| {
-            let _ = channel.send(batch);
+        core::search::run(fs.as_ref(), &location.path, &filter, &cancel, &|batch| {
+            if channel.send(batch).is_err() {
+                cancel.store(true, Ordering::Relaxed);
+            }
         })?;
         Ok(())
     })
@@ -240,9 +242,33 @@ async fn rename_apply(
     .await
 }
 #[tauri::command]
-async fn get_preview(state: State<'_, AppState>, location: Location) -> Reply<Preview> {
+async fn get_preview(
+    state: State<'_, AppState>,
+    location: Location,
+    line: Option<u64>,
+    connection: Option<String>,
+    id: Option<String>,
+) -> Reply<Preview> {
     let fs = state.sources.get(&location.source).map_err(error)?;
-    blocking(move || filesystem::preview(fs.as_ref(), &location.path)).await
+    if connection.is_some() {
+        editor_connection(fs.as_ref(), connection.as_deref()).map_err(error)?;
+    }
+    let cancel = Arc::new(AtomicBool::new(false));
+    if let Some(id) = &id {
+        state
+            .searches
+            .lock()
+            .unwrap()
+            .insert(id.clone(), cancel.clone());
+    }
+    let result = blocking(move || {
+        filesystem::preview_at(fs.as_ref(), &location.path, line.unwrap_or(1), &cancel)
+    })
+    .await;
+    if let Some(id) = id {
+        state.searches.lock().unwrap().remove(&id);
+    }
+    result
 }
 fn clipboard_owner(window: &tauri::Window) -> Reply<usize> {
     #[cfg(windows)]
@@ -404,8 +430,12 @@ async fn cancel_file_cut(
 async fn read_document(
     state: State<'_, AppState>,
     location: Location,
+    connection: Option<String>,
 ) -> Reply<core::editor::Document> {
     let fs = state.sources.get(&location.source).map_err(error)?;
+    if connection.is_some() {
+        editor_connection(fs.as_ref(), connection.as_deref()).map_err(error)?;
+    }
     blocking(move || core::editor::read(fs.as_ref(), &location.path)).await
 }
 fn editor_connection(

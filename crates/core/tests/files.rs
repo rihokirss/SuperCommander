@@ -392,14 +392,23 @@ fn search_streams_results_and_respects_hidden_and_size_filters() {
     assert_eq!(results[0].name, "Hello.txt");
 }
 #[test]
-fn preview_limits_text_and_does_not_execute_html() {
+fn preview_bounds_windows_preserves_complete_lines_and_keeps_html_inert() {
     let tmp = TempDir::new().unwrap();
     let p = tmp.path().join("large.html");
     fs::write(&p, vec![b'x'; 400_000]).unwrap();
     let preview = filesystem::preview(&LocalFs, &path(&p)).unwrap();
     assert_eq!(preview.kind, "text");
-    assert!(preview.truncated);
-    assert_eq!(preview.data.len(), 256 * 1024);
+    assert!(!preview.truncated);
+    assert_eq!(
+        preview.data.len(),
+        400_000,
+        "Keep a complete line below the 8 MiB line limit"
+    );
+    fs::write(&p, "<script>inert()</script>\n".repeat(30_000)).unwrap();
+    let preview = filesystem::preview(&LocalFs, &path(&p)).unwrap();
+    assert!(preview.truncated && preview.has_more);
+    assert!(preview.data.len() <= 256 * 1024 + 24);
+    assert!(preview.data.starts_with("<script>inert()</script>\n"));
     let no_extension = tmp.path().join("config");
     fs::write(&no_extension, "Host example\n User alice\n").unwrap();
     assert_eq!(

@@ -8,6 +8,7 @@ import type {
   Location,
   Settings,
   SearchFilter,
+  SearchBatch,
   SshCatalog,
   FileProperties,
   SizeSummary,
@@ -180,18 +181,78 @@ export async function search(
   id: string,
   location: Location,
   filter: SearchFilter,
-  receive: (batch: Listing) => void,
+  receive: (batch: SearchBatch) => void,
 ) {
   if (!desktop) {
+    if (filter.content)
+      throw new Error("Content search is available in the desktop app.");
+    const mode = filter.nameMode || "contains";
+    const query = filter.query;
+    const flags = filter.caseSensitive ? "u" : "iu";
+    const patterns =
+      mode === "glob"
+        ? query
+            .split(";")
+            .map((p) => p.trim())
+            .filter(Boolean)
+            .map(
+              (p) =>
+                new RegExp(
+                  `^${Array.from(p)
+                    .map((c) =>
+                      c === "*"
+                        ? ".*"
+                        : c === "?"
+                          ? "."
+                          : c.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+                    )
+                    .join("")}$`,
+                  flags,
+                ),
+            )
+        : [
+            new RegExp(
+              mode === "regex"
+                ? query
+                : query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+              flags,
+            ),
+          ];
+    const entries = sample(location.path)
+      .filter(
+        (e) =>
+          (!e.hidden || filter.showHidden) &&
+          (!patterns.length || patterns.some((p) => p.test(e.name))) &&
+          (filter.kind !== "files" || !e.isDir) &&
+          (filter.kind !== "folders" || e.isDir) &&
+          (filter.minSize === undefined || e.size >= filter.minSize) &&
+          (filter.maxSize === undefined || e.size <= filter.maxSize),
+      )
+      .slice(0, filter.maxResults || 20000);
     receive({
-      entries: sample(location.path).filter((e) =>
-        e.name.toLowerCase().includes(filter.query.toLowerCase()),
-      ),
+      matches: entries.map((entry) => ({
+        entry,
+        line: null,
+        column: null,
+        preview: null,
+        start: 0,
+        end: 0,
+      })),
+      scanned: sample(location.path).length,
+      folders: 1,
+      found: entries.length,
+      skippedBinary: 0,
+      skippedLongLines: 0,
+      errors: [],
+      errorCount: 0,
       done: true,
+      cancelled: false,
+      limited: entries.length >= (filter.maxResults || 20000),
+      connection: null,
     });
     return;
   }
-  const channel = new Channel<Listing>();
+  const channel = new Channel<SearchBatch>();
   channel.onmessage = receive;
   await invoke("search_files", { id, location, filter, channel });
 }

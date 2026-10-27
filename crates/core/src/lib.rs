@@ -7,9 +7,11 @@ pub mod network;
 pub mod properties;
 pub mod remote;
 pub mod rename;
+pub mod search;
 pub mod settings;
 pub mod ssh_config;
 pub mod terminal;
+pub mod text;
 pub mod types;
 
 pub use types::*;

@@ -113,7 +113,7 @@ Each pane has independent tabs, history, sorting and filtering. Click its locati
 | Alt+Enter | Properties for marked items, the focused item or the current folder |
 | Ctrl+U | Swap panes |
 | Ctrl+H | Toggle hidden files |
-| Ctrl+F | Recursive filename search with size and date filters |
+| Ctrl+F | Search filenames and text contents |
 | Ctrl+K / Ctrl+P | Command palette |
 | Ctrl+B | Collapse / expand Workspace |
 | Ctrl+O | Full terminal / file panes, preserving the shell session |
@@ -133,6 +133,16 @@ File clipboard shortcuts work across local, SFTP and read-only ZIP sources, with
 
 SSH selections and queued operations stay bound to the authenticated connection they were created for. After disconnecting or reconnecting, copy the remote files again; an earlier job cannot silently use the replacement connection. Transfer checks resolve server paths before comparing aliases and reject copying a directory into itself through a symbolic link or `..`.
 
+### Search
+
+**Ctrl+F** searches the active location, including subfolders by default. Match part of a name, use semicolon-separated wildcard masks such as `*.rs;*.toml`, or choose a filename regular expression. Optional content search reads UTF-8 and BOM-marked UTF-16 text, with case and whole-word options and per-line regular expressions. Each matching file appears once, with its first matching line, column and highlighted excerpt.
+
+Details include excluded names/relative paths, recursion, hidden items, file/folder type, size/date ranges and a result limit (20,000 by default; up to 100,000). Size ranges and content filters apply to files. Child symbolic links and junctions are not traversed; known special files are refused. Stopped searches keep their partial results. Errors, binary/unsupported text and files with lines over 8 MiB are reported separately.
+
+Navigate results with arrows, Home/End or Page Up/Down. **Enter** opens the containing folder and marks the file; **Ctrl+Enter** uses the other pane. **F3/F4** open the viewer/editor at the matching position and return to the retained results when closed. **F1** opens the shortcut reference. Results from a replaced SSH connection require a new search before opening.
+
+![Text search with matching lines and excerpts](docs/screenshots/search.png)
+
 ### Viewer and quick editor
 
 Text files open in a spacious viewer with line numbers, search and optional word wrap. Image and PDF previews are also available. F4 opens the built-in editor; ZIP contents remain read-only.
@@ -148,6 +158,7 @@ Shift+F4 starts an unsaved new text file in the active pane. Save As supports lo
 | F1 | Editor and viewer shortcut reference |
 | F4 | Switch from viewer to editor |
 | F6 | Go to line |
+| Ctrl+Page Up / Ctrl+Page Down | Previous / next text page in the viewer |
 | F7 / Ctrl+F | Find text |
 | Ctrl+G / Shift+F7 | Next / previous match |
 | F8 | Toggle word wrap |
@@ -157,7 +168,9 @@ Shift+F4 starts an unsaved new text file in the active pane. Save As supports lo
 | Tab / Shift+Tab | Insert a tab, or indent / unindent selected lines |
 | F10 / Esc / Ctrl+W | Close the viewer or editor |
 
-The editor supports local and SFTP text files up to 4 MiB. It preserves UTF-8/UTF-16 encoding, BOM and LF/CRLF line endings, stages replacements in a temporary file, and rejects saves if the original content changed externally. Binary files, unsupported encodings, mixed line endings and symbolic links are not editable. Text previews of larger files are limited to the first 256 KiB.
+The editor supports local and SFTP text files up to 4 MiB. It preserves UTF-8/UTF-16 encoding, BOM and LF/CRLF line endings, stages replacements in a temporary file, and rejects saves if the original content changed externally. Binary files, unsupported encodings, mixed line endings and symbolic links are not editable.
+
+The text viewer reads bounded pages of about 256 KiB or 2,000 lines, preserving complete lines up to 8 MiB each. **Ctrl+Page Up/Down** loads the previous/next part and **F6** jumps to a file line. This also lets content-search results open beyond the editor's size limit. Viewer Find currently searches the loaded text page; source-wide viewer Find remains part of the ongoing audit.
 
 Closing a modified editor or the application window offers Save, Discard and Cancel. Save completes before closing; a failed save leaves the edits available. Esc in Save As or an overwrite confirmation closes that inner dialog. No file is created for a new buffer until it is saved.
 
@@ -166,6 +179,8 @@ Closing a modified editor or the application window offers Save, Discard and Can
 Bookmarks can point to local/UNC folders, SSH addresses or folders inside ZIP archives. SSH catalog connections are saved by their Host alias, so later config changes apply to the bookmark too. Use **Ctrl+D** to toggle the current location or **Ctrl+Shift+D** to manage bookmarks. On a sidebar bookmark, **F2** edits it, **Delete** removes the bookmark, and **Ctrl+Enter** opens it in the other pane. Removing a bookmark leaves the files untouched.
 
 ![Bookmark management](docs/screenshots/bookmarks.png)
+
+UNC bookmarks preserve folder-path case, so differently cased locations on case-sensitive shares such as WSL remain separate.
 
 **Alt+Enter** opens file properties, also available from the file context menu. Inspect sizes, timestamps, Windows flags, SSH owner/group IDs and link targets. Read-only and hidden flags are editable where Windows supports them; SSH permissions support octal input and owner/group/other checkboxes. Mixed selections show indeterminate values and preserve permission bits that you do not change. Attribute changes affect the selected items themselves; they do not recurse into folders. A changed file or replacement SSH connection requires refreshing before applying.
 
@@ -262,5 +277,7 @@ Source: [rihokirss/SuperCommander](https://github.com/rihokirss/SuperCommander).
 `node scripts/windows-properties-smoke.mjs [path-to-supercommander.exe]`, run with Windows Node, checks real Windows read-only/hidden changes, stale metadata protection, mixed selections, folder sizes and junction handling, persistent local/ZIP bookmarks and one collapsed sidebar tooltip. With the SFTP fixture running, it also checks SSH permissions, direct-connection reuse and alias bookmarks after reload. It launches and closes its own test app on port 9224 with temporary settings and a separate WebView profile. The default executable is `target/release/supercommander.exe`; pass the executable path when testing a cross-build. The Windows workflow runs this test after the native clipboard test.
 
 `SUPERCOMMANDER_DATA_DIR` can override the application settings directory with an absolute path. Tests use it to keep their settings and backups separate from your working profile. The default remains the per-user SuperCommander configuration directory. SSH config files and Credential Manager credentials retain their existing locations.
+
+`node scripts/windows-search-smoke.mjs [path-to-supercommander.exe]` owns an isolated test instance and checks content search, Unicode positions, UTF-16 viewing, retaining results through F3/F4, large-file paging, F6 and focusing a file in its containing pane. With the temporary SFTP fixture it also tests remote content search/editing, connection replacement protection and refreshing pane metadata after a save. The Windows workflow runs the local cases.
 
 `node scripts/windows-editor-smoke.mjs [path-to-supercommander.exe]`, run with Windows Node, launches its own isolated test app and tests new files, Save As, encoding conversions, overwrite conflicts, and native window close protection. The Save & Close assertion closes only that test window. Run native test scripts sequentially; they reserve port 9224.

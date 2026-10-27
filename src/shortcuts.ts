@@ -76,6 +76,10 @@ export function shortcutGroups(t: Text) {
         ["F1", t.keyboard],
         ["F4", t.edit],
         ["F6", t.goToLine],
+        [
+          "Ctrl+PgUp / Ctrl+PgDn",
+          `${t.view}: ${t.previousTextPage} / ${t.nextTextPage}`,
+        ],
         ["F7 / Ctrl+F", t.findText],
         ["Ctrl+G / Shift+F7", `${t.nextMatch} / ${t.previousMatch}`],
         ["Ctrl+H", t.replace],
@@ -83,6 +87,17 @@ export function shortcutGroups(t: Text) {
         ["Ctrl+C / Ctrl+V", t.copyPasteText],
         ["F8", t.wordWrap],
         ["F10 / Esc / Ctrl+W", t.close],
+      ],
+    },
+    {
+      title: t.search,
+      items: [
+        ["Enter", `${t.search} / ${t.goToFile}`],
+        ["↓", t.searchResults],
+        ["↑ / ↓ / Home / End / PgUp / PgDn", t.menuNavigation],
+        ["F3 / F4", `${t.view} / ${t.edit}`],
+        ["Ctrl+Enter", t.openOtherPane],
+        ["F1 / Esc", `${t.keyboard} / ${t.close}`],
       ],
     },
     {

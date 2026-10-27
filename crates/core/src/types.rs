@@ -113,17 +113,23 @@ pub struct RenameItem {
     pub error: Option<String>,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Preview {
     pub kind: String,
     pub data: String,
     pub truncated: bool,
     pub size: u64,
     pub mime: String,
+    pub start_line: u64,
+    pub end_line: u64,
+    pub has_more: bool,
+    pub encoding: String,
+    pub line_ending: String,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
 pub struct SearchFilter {
     pub query: String,
     pub min_size: Option<u64>,
@@ -131,4 +137,34 @@ pub struct SearchFilter {
     pub after: Option<u64>,
     pub before: Option<u64>,
     pub show_hidden: bool,
+    pub name_mode: String,
+    pub case_sensitive: bool,
+    pub content: String,
+    pub content_regex: bool,
+    pub whole_word: bool,
+    pub recursive: bool,
+    pub kind: String,
+    pub exclude: String,
+    pub max_results: usize,
+}
+impl Default for SearchFilter {
+    fn default() -> Self {
+        Self {
+            query: String::new(),
+            min_size: None,
+            max_size: None,
+            after: None,
+            before: None,
+            show_hidden: false,
+            name_mode: "contains".into(),
+            case_sensitive: false,
+            content: String::new(),
+            content_regex: false,
+            whole_word: false,
+            recursive: true,
+            kind: "all".into(),
+            exclude: String::new(),
+            max_results: 20_000,
+        }
+    }
 }

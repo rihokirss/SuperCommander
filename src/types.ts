@@ -170,6 +170,11 @@ export type Preview = {
   truncated: boolean;
   size: number;
   mime: string;
+  startLine?: number;
+  endLine?: number;
+  hasMore?: boolean;
+  encoding?: string;
+  lineEnding?: string;
 };
 export type Bootstrap = {
   home: string;
@@ -187,4 +192,35 @@ export type SearchFilter = {
   after?: number;
   before?: number;
   showHidden: boolean;
+  nameMode?: "contains" | "glob" | "regex";
+  content?: string;
+  contentRegex?: boolean;
+  caseSensitive?: boolean;
+  wholeWord?: boolean;
+  recursive?: boolean;
+  kind?: "all" | "files" | "folders";
+  exclude?: string;
+  maxResults?: number;
+};
+export type SearchHit = {
+  entry: Entry;
+  line: number | null;
+  column: number | null;
+  preview: string | null;
+  start: number;
+  end: number;
+};
+export type SearchBatch = {
+  matches: SearchHit[];
+  scanned: number;
+  folders: number;
+  found: number;
+  skippedBinary: number;
+  skippedLongLines: number;
+  errors: string[];
+  errorCount: number;
+  done: boolean;
+  cancelled: boolean;
+  limited: boolean;
+  connection: string | null;
 };

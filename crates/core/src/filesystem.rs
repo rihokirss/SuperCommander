@@ -242,6 +242,9 @@ impl FileSystem for LocalFs {
         Self::entry(Path::new(path))
     }
     fn reader(&self, path: &str) -> Result<Box<dyn Read + Send>> {
+        if !fs::metadata(path)?.is_file() {
+            bail!("Choose a regular file; special files cannot be read as documents");
+        }
         Ok(Box::new(fs::File::open(path)?))
     }
     fn writer(&self, path: &str) -> Result<Box<dyn Write + Send>> {
@@ -386,59 +389,24 @@ pub fn search(
     cancel: &AtomicBool,
     send: &dyn Fn(Listing),
 ) -> Result<()> {
-    let mut stack = vec![path.to_string()];
-    let mut batch = Vec::new();
-    let mut errors = Vec::new();
-    let query = filter.query.to_lowercase();
-    while let Some(dir) = stack.pop() {
-        if cancel.load(Ordering::Relaxed) {
-            break;
-        }
-        match fs.list(&dir) {
-            Err(e) => errors.push(format!("{dir}: {e}")),
-            Ok(entries) => {
-                for e in entries {
-                    if cancel.load(Ordering::Relaxed) {
-                        break;
-                    }
-                    if e.hidden && !filter.show_hidden {
-                        continue;
-                    }
-                    if e.is_dir && !e.is_symlink {
-                        stack.push(e.path.clone());
-                    }
-                    if e.name.to_lowercase().contains(&query)
-                        && filter.min_size.is_none_or(|n| e.size >= n)
-                        && filter.max_size.is_none_or(|n| e.size <= n)
-                        && filter.after.is_none_or(|n| e.modified >= n)
-                        && filter.before.is_none_or(|n| e.modified <= n)
-                    {
-                        batch.push(e);
-                        if batch.len() >= 128 {
-                            send(Listing {
-                                entries: std::mem::take(&mut batch),
-                                done: false,
-                                error: None,
-                            });
-                        }
-                    }
-                }
-            }
-        }
-    }
-    send(Listing {
-        entries: batch,
-        done: true,
-        error: if errors.is_empty() {
-            None
-        } else {
-            Some(errors.into_iter().take(10).collect::<Vec<_>>().join("\n"))
-        },
-    });
-    Ok(())
+    crate::search::run(fs, path, filter, cancel, &|batch| {
+        send(Listing {
+            entries: batch.matches.into_iter().map(|hit| hit.entry).collect(),
+            done: batch.done,
+            error: (batch.done && !batch.errors.is_empty()).then(|| batch.errors.join("\n")),
+        });
+    })
 }
 
 pub fn preview(fs: &dyn FileSystem, path: &str) -> Result<Preview> {
+    preview_at(fs, path, 1, &AtomicBool::new(false))
+}
+pub fn preview_at(
+    fs: &dyn FileSystem,
+    path: &str,
+    line: u64,
+    cancel: &AtomicBool,
+) -> Result<Preview> {
     let meta = fs.stat(path)?;
     if meta.is_dir {
         bail!("Choose a file to preview");
@@ -470,48 +438,36 @@ pub fn preview(fs: &dyn FileSystem, path: &str) -> Result<Preview> {
         data: String::new(),
         truncated: meta.size > limit,
         size: meta.size,
+        ..Preview::default()
     };
-    if limit == 0 {
-        return Ok(out);
-    }
-    if kind != "text" && out.truncated {
-        bail!("Preview is too large ({} MiB limit)", limit / 1024 / 1024);
-    }
-    let mut bytes = Vec::new();
-    fs.reader(path)?.take(limit).read_to_end(&mut bytes)?;
-    if detect_text
-        && !bytes.starts_with(&[0xff, 0xfe])
-        && !bytes.starts_with(&[0xfe, 0xff])
-        && (bytes.contains(&0)
-            || std::str::from_utf8(&bytes).is_err_and(|e| e.error_len().is_some()))
-    {
-        out.kind = "unsupported".into();
-        out.mime = "application/octet-stream".into();
-        return Ok(out);
-    }
-    out.data = if kind == "text" {
-        if bytes.starts_with(&[0xff, 0xfe]) || bytes.starts_with(&[0xfe, 0xff]) {
-            let le = bytes[0] == 0xff;
-            String::from_utf16_lossy(
-                &bytes[2..]
-                    .as_chunks::<2>()
-                    .0
-                    .iter()
-                    .map(|b| {
-                        if le {
-                            u16::from_le_bytes([b[0], b[1]])
-                        } else {
-                            u16::from_be_bytes([b[0], b[1]])
-                        }
-                    })
-                    .collect::<Vec<_>>(),
-            )
-        } else {
-            String::from_utf8_lossy(&bytes).into_owned()
+    if kind == "text" {
+        match crate::text::window(fs.reader(path)?, line, cancel) {
+            Ok(window) => {
+                out.data = window.text;
+                out.start_line = window.first_line;
+                out.end_line = window.last_line;
+                out.has_more = window.more;
+                out.encoding = window.encoding;
+                out.line_ending = window.line_ending;
+                out.truncated = window.more || window.first_line > 1;
+            }
+            Err(error) if detect_text && error.to_string().contains("not supported") => {
+                out.kind = "unsupported".into();
+                out.mime = "application/octet-stream".into();
+            }
+            Err(error) => return Err(error),
         }
     } else {
-        base64::engine::general_purpose::STANDARD.encode(bytes)
-    };
+        if out.truncated {
+            bail!("Preview is too large ({} MiB limit)", limit / 1024 / 1024);
+        }
+        let mut bytes = Vec::new();
+        fs.reader(path)?.take(limit + 1).read_to_end(&mut bytes)?;
+        if bytes.len() as u64 > limit {
+            bail!("The file grew beyond the preview limit");
+        }
+        out.data = base64::engine::general_purpose::STANDARD.encode(bytes);
+    }
     Ok(out)
 }
 

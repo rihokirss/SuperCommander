@@ -63,13 +63,13 @@ import {
   ConnectDialog,
   Palette,
   RenameDialog,
-  SearchDialog,
   SettingsDialog,
   ShortcutsDialog,
   type ActionData,
   type PaletteAction,
 } from "./components/Dialogs";
 import { PreviewDialog } from "./components/PreviewDialog";
+import { SearchDialog } from "./components/SearchDialog";
 import { TextWorkbench } from "./components/TextWorkbench";
 import { QueuePanel } from "./components/QueuePanel";
 import { TerminalPanel } from "./components/TerminalPanel";
@@ -103,8 +103,21 @@ import type {
 type Dialog =
   | { kind: "action"; data: ActionData }
   | { kind: "rename"; entries: Entry[]; source: string }
-  | { kind: "preview"; location: Location }
-  | { kind: "edit"; location: Location; newFile?: boolean }
+  | {
+      kind: "preview";
+      location: Location;
+      line?: number;
+      column?: number;
+      connection?: string | null;
+    }
+  | {
+      kind: "edit";
+      location: Location;
+      newFile?: boolean;
+      line?: number;
+      column?: number;
+      connection?: string | null;
+    }
   | {
       kind: "connect";
       profile?: SftpProfile;
@@ -2369,12 +2382,22 @@ export function App() {
       {dialog?.kind === "preview" && (
         <PreviewDialog
           location={dialog.location}
+          initialLine={dialog.line}
+          initialColumn={dialog.column}
+          connection={dialog.connection}
           t={t}
           onClose={closeDialog}
           onEdit={
             dialog.location.source.startsWith("zip:")
               ? undefined
-              : () => setDialog({ kind: "edit", location: dialog.location })
+              : (line, column) =>
+                  setDialog({
+                    kind: "edit",
+                    location: dialog.location,
+                    line: line || dialog.line,
+                    column: column || dialog.column,
+                    connection: dialog.connection,
+                  })
           }
         />
       )}
@@ -2384,6 +2407,9 @@ export function App() {
           t={t}
           editable
           newFile={dialog.newFile}
+          initialLine={dialog.line}
+          initialColumn={dialog.column}
+          connection={dialog.connection}
           destinations={[
             { source: "local", folder: boot.home, label: t.local },
             ...sessions
@@ -2405,8 +2431,46 @@ export function App() {
           location={current}
           t={t}
           showHidden={settings.showHidden}
+          onSaved={() => setRefresh((value) => value + 1)}
           onClose={closeDialog}
-          onNavigate={navigate}
+          destinations={[
+            { source: "local", folder: boot.home, label: t.local },
+            ...sessions
+              .filter((profile) =>
+                remoteHomes.current.has(`sftp:${profile.id}`),
+              )
+              .map((profile) => ({
+                source: `sftp:${profile.id}`,
+                folder: remoteHomes.current.get(`sftp:${profile.id}`)!,
+                label: `${profile.name} · ${profile.username}@${profile.host}:${profile.port}`,
+              })),
+          ]}
+          onAction={async (hit, action, connection) => {
+            const location = { ...current, path: hit.entry.path };
+            if (api.desktop) {
+              const info = await api.properties(location);
+              if (connection !== info.connection)
+                throw new Error(
+                  "The connection changed. Run the search again.",
+                );
+            }
+            if (action === "view" || action === "edit") {
+              return;
+            } else {
+              const index = action === "other" ? 1 - active : active;
+              const folder = {
+                ...current,
+                path: hit.entry.isDir ? hit.entry.path : parent(hit.entry.path),
+              };
+              if (hit.entry.hidden && !settings.showHidden)
+                update({ showHidden: true });
+              closeDialog();
+              setActive(index);
+              if (!hit.entry.isDir)
+                paneControls.current[index]?.reveal(folder, hit.entry.path);
+              navigate(folder, index);
+            }
+          }}
         />
       )}
       {dialog?.kind === "settings" && (

@@ -8,6 +8,7 @@ import { basename, parent, join } from "../utils";
 import { IconButton, Modal } from "./Primitives";
 import { Select } from "./Select";
 import { shortcutGroups } from "../shortcuts";
+import { textMatches } from "../textMatches";
 import { indentEdit } from "../editor";
 
 type Document = {
@@ -29,6 +30,16 @@ export function TextWorkbench({
   onEdit,
   newFile = false,
   destinations = [],
+  initialLine = 1,
+  initialColumn = 1,
+  initialEncoding = "UTF-8",
+  initialLineEnding = "LF",
+  lineOffset = 0,
+  connection,
+  onGotoLine,
+  onPage,
+  hasPrevious,
+  hasNext,
 }: {
   location: Location;
   t: Text;
@@ -37,9 +48,19 @@ export function TextWorkbench({
   truncated?: boolean;
   onClose: () => void;
   onSaved?: () => void;
-  onEdit?: () => void;
+  onEdit?: (line?: number, column?: number) => void;
   newFile?: boolean;
   destinations?: SaveDestination[];
+  initialLine?: number;
+  initialColumn?: number;
+  initialEncoding?: string;
+  initialLineEnding?: string;
+  lineOffset?: number;
+  connection?: string | null;
+  onGotoLine?: (line: number) => void;
+  onPage?: (delta: number) => void;
+  hasPrevious?: boolean;
+  hasNext?: boolean;
 }) {
   const [fileLocation, setFileLocation] = useState<Location | undefined>(
     newFile ? undefined : location,
@@ -93,33 +114,28 @@ export function TextWorkbench({
       lineEnding !== doc.lineEnding);
   lifecycle.current = { dirty, request: requestClose };
   const lines = useMemo(() => text.split("\n").length, [text]);
-  const matches = useMemo(() => {
-    const matches: number[] = [];
-    if (!query) return matches;
-    const haystack = text.toLowerCase(),
-      needle = query.toLowerCase();
-    for (let start = 0; matches.length < 10000; ) {
-      const index = haystack.indexOf(needle, start);
-      if (index < 0) break;
-      matches.push(index);
-      start = index + query.length;
-    }
-    return matches;
-  }, [text, query]);
+  const matches = useMemo(() => textMatches(text, query), [text, query]);
   useEffect(() => {
     let alive = true;
     const load =
-      newFile && !desktop
+      !editable && initial !== undefined
         ? Promise.resolve({
-            text: "",
+            text: initial,
             revision: "",
-            encoding: "UTF-8",
-            lineEnding: "CRLF",
+            encoding: initialEncoding,
+            lineEnding: initialLineEnding,
           })
-        : command<Document>(
-            newFile ? "new_document" : "read_document",
-            newFile ? { folder: location } : { location },
-          );
+        : newFile && !desktop
+          ? Promise.resolve({
+              text: "",
+              revision: "",
+              encoding: "UTF-8",
+              lineEnding: "CRLF",
+            })
+          : command<Document>(
+              newFile ? "new_document" : "read_document",
+              newFile ? { folder: location } : { location, connection },
+            );
     load
       .then((value) => {
         if (alive) {
@@ -135,7 +151,26 @@ export function TextWorkbench({
       .finally(() => {
         if (alive) {
           setBusy(false);
-          requestAnimationFrame(() => area.current?.focus());
+          requestAnimationFrame(() => {
+            const element = area.current;
+            if (!element) return;
+            element.focus();
+            const rows = element.value.split("\n");
+            const row = Math.max(
+              0,
+              Math.min(rows.length - 1, initialLine - lineOffset - 1),
+            );
+            const index =
+              rows
+                .slice(0, row)
+                .reduce((sum, text) => sum + text.length + 1, 0) +
+              Array.from(rows[row])
+                .slice(0, Math.max(0, initialColumn - 1))
+                .join("").length;
+            element.setSelectionRange(index, index);
+            element.scrollTop = Math.max(0, (row - 4) * 20);
+            setPosition({ line: row + lineOffset + 1, col: initialColumn });
+          });
         }
       });
     return () => {
@@ -309,15 +344,15 @@ export function TextWorkbench({
   function find(previous = false) {
     const el = area.current;
     if (!el || !matches.length) return;
-    const index = previous
-      ? ([...matches].reverse().find((n) => n < el.selectionStart) ??
+    const match = previous
+      ? ([...matches].reverse().find((n) => n.start < el.selectionStart) ??
         matches.at(-1)!)
-      : (matches.find((n) => n >= el.selectionEnd) ?? matches[0]);
+      : (matches.find((n) => n.start >= el.selectionEnd) ?? matches[0]);
     el.focus();
-    el.setSelectionRange(index, index + query.length);
+    el.setSelectionRange(match.start, match.end);
     el.scrollTop = Math.max(
       0,
-      (text.slice(0, index).split("\n").length - 4) * 20,
+      (text.slice(0, match.start).split("\n").length - 4) * 20,
     );
     if (gutter.current) gutter.current.scrollTop = el.scrollTop;
   }
@@ -377,7 +412,16 @@ export function TextWorkbench({
         setGoOpen((v) => !v);
       } else if (!editable && e.key === "F4" && onEdit) {
         e.preventDefault();
-        onEdit();
+        onEdit(position.line, position.col);
+      } else if (
+        !editable &&
+        ctrl &&
+        ["PageUp", "PageDown"].includes(e.key) &&
+        onPage
+      ) {
+        e.preventDefault();
+        if (e.key === "PageUp" && hasPrevious) onPage(-1);
+        if (e.key === "PageDown" && hasNext) onPage(1);
       }
     };
     document.addEventListener("keydown", key);
@@ -385,7 +429,10 @@ export function TextWorkbench({
   });
   function updatePosition() {
     const before = text.slice(0, area.current?.selectionStart || 0).split("\n");
-    setPosition({ line: before.length, col: before.at(-1)!.length + 1 });
+    setPosition({
+      line: before.length + lineOffset,
+      col: Array.from(before.at(-1)!).length + 1,
+    });
   }
   const encodingControl = (dialog = false) => (
     <Select
@@ -468,7 +515,27 @@ export function TextWorkbench({
           ) : saved ? (
             <span>{t.savedText}</span>
           ) : null}
-          {!doc && truncated && <span>{t.truncated}</span>}
+          {truncated && <span>{t.truncated}</span>}
+          {!editable && onPage && (
+            <div className="text-page-controls">
+              <IconButton
+                title={t.previousTextPage}
+                shortcut="Ctrl+PgUp"
+                disabled={!hasPrevious}
+                onClick={() => onPage(-1)}
+              >
+                <ChevronUp size={14} />
+              </IconButton>
+              <IconButton
+                title={t.nextTextPage}
+                shortcut="Ctrl+PgDn"
+                disabled={!hasNext}
+                onClick={() => onPage(1)}
+              >
+                <ChevronDown size={14} />
+              </IconButton>
+            </div>
+          )}
         </div>
         {searchOpen && (
           <div className="text-search">
@@ -515,9 +582,11 @@ export function TextWorkbench({
                     const el = area.current;
                     if (!el) return;
                     if (
-                      text
-                        .slice(el.selectionStart, el.selectionEnd)
-                        .toLowerCase() !== query.toLowerCase()
+                      !matches.some(
+                        (match) =>
+                          match.start === el.selectionStart &&
+                          match.end === el.selectionEnd,
+                      )
                     ) {
                       find();
                       return;
@@ -547,6 +616,14 @@ export function TextWorkbench({
             className="text-search"
             onSubmit={(e) => {
               e.preventDefault();
+              if (!editable && onGotoLine) {
+                const requested = Number(line);
+                if (Number.isSafeInteger(requested) && requested > 0) {
+                  setGoOpen(false);
+                  onGotoLine(requested);
+                }
+                return;
+              }
               const n = Math.max(1, Math.min(lines, Number(line)));
               const index = text
                 .split("\n")
@@ -566,7 +643,7 @@ export function TextWorkbench({
                 autoFocus
                 type="number"
                 min={1}
-                max={lines}
+                max={onGotoLine && !editable ? undefined : lines}
                 value={line}
                 onChange={(e) => setLine(e.target.value)}
               />
@@ -590,7 +667,7 @@ export function TextWorkbench({
                       Math.min(300, lines - Math.floor(scrollTop / 20)),
                     ),
                   },
-                  (_, i) => Math.floor(scrollTop / 20) + i + 1,
+                  (_, i) => Math.floor(scrollTop / 20) + i + 1 + lineOffset,
                 ).join("\n")}
               </pre>
             </div>
@@ -652,7 +729,10 @@ export function TextWorkbench({
               <small>Ctrl+S</small>
             </button>
           ) : (
-            <button onClick={onEdit} disabled={!onEdit}>
+            <button
+              onClick={() => onEdit?.(position.line, position.col)}
+              disabled={!onEdit}
+            >
               <kbd>F4</kbd>
               {t.edit}
             </button>

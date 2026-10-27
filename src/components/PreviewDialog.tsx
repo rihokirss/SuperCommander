@@ -7,7 +7,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import * as api from "../api";
-import { basename, size } from "../utils";
+import { basename, size, uid } from "../utils";
 import { IconButton, Modal } from "./Primitives";
 import type { Location, Preview } from "../types";
 import type { Text } from "../i18n";
@@ -18,20 +18,28 @@ export function PreviewDialog({
   t,
   onClose,
   onEdit,
+  initialLine = 1,
+  initialColumn = 1,
+  connection,
 }: {
   location: Location;
   t: Text;
   onClose: () => void;
-  onEdit?: () => void;
+  onEdit?: (line?: number, column?: number) => void;
+  initialLine?: number;
+  initialColumn?: number;
+  connection?: string | null;
 }) {
+  const [line, setLine] = useState(initialLine);
   const [data, setData] = useState<Preview>();
   const [error, setError] = useState("");
   useEffect(() => {
     let alive = true;
+    const id = uid();
     setData(undefined);
     setError("");
     api
-      .command<Preview>("get_preview", { location })
+      .command<Preview>("get_preview", { location, line, connection, id })
       .then((d) => {
         if (alive) setData(d);
       })
@@ -40,8 +48,10 @@ export function PreviewDialog({
       });
     return () => {
       alive = false;
+      if (api.desktop)
+        void api.command("cancel_search", { id }).catch(() => {});
     };
-  }, [location.source, location.path]);
+  }, [location.source, location.path, line, connection]);
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       if (e.key === "F10" || e.key === "F3") {
@@ -55,10 +65,26 @@ export function PreviewDialog({
   if (data?.kind === "text")
     return (
       <TextWorkbench
+        key={`${data.startLine}:${line}`}
         location={location}
         t={t}
         initial={data.data}
         truncated={data.truncated}
+        lineOffset={(data.startLine || 1) - 1}
+        initialEncoding={data.encoding}
+        initialLineEnding={data.lineEnding}
+        initialLine={line}
+        initialColumn={line === initialLine ? initialColumn : 1}
+        onGotoLine={setLine}
+        onPage={(delta) =>
+          setLine(
+            delta > 0
+              ? (data.endLine || 1) + 1
+              : Math.max(1, (data.startLine || 1) - 2000),
+          )
+        }
+        hasPrevious={(data.startLine || 1) > 1}
+        hasNext={!!data.hasMore}
         onClose={onClose}
         onEdit={onEdit}
       />

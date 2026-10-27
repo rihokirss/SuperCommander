@@ -72,8 +72,9 @@
   "followUpFindings": [
     "Transfer safety still needs an audit of physical aliases reached through different protocols (for example UNC and SFTP), cancellation/rollback and metadata preservation.",
     "Editor create/Save As/format conversion and application-close protection are implemented and tested; the overall viewer/editor audit still needs its remaining larger-file and search behavior checks.",
-    "Content search, directory comparison and the remaining viewer, navigation and transfer audits are still required. Bookmark management and file properties are now implemented and verified.",
-    "All native smoke scripts now launch owned processes with isolated settings and WebView profiles. Full file/SSH/terminal, network and editor-close tests passed after migration, with the user's settings checksum unchanged. An earlier interrupted properties test lost previous pane locations; owned test bookmarks were removed and affected panes reset to Home/Downloads. No file contents, SSH config or stored credentials were changed by that cleanup."
+    "Content search is implemented; directory comparison and the remaining search-lifecycle, viewer, navigation and transfer audits are still required. Bookmark management and file properties are implemented and verified.",
+    "All native smoke scripts now launch owned processes with isolated settings and WebView profiles. Full file/SSH/terminal, network and editor-close tests passed after migration, with the user's settings checksum unchanged. An earlier interrupted properties test lost previous pane locations; owned test bookmarks were removed and affected panes reset to Home/Downloads. No file contents, SSH config or stored credentials were changed by that cleanup.",
+    "Source-wide viewer Find and immediate cancellation registration are explicit follow-ups; paged viewing is implemented but these are not treated as completed. The existing entire objective and all other pending requirements remain in scope."
   ],
   "completionRule": "Implementation plus current functional, keyboard and visual evidence is required; source inspection or an older release alone does not prove completion.",
   "requirements": [
@@ -81,27 +82,19 @@
       "id": "navigation",
       "status": "in_progress",
       "scope": "Independent panes, history, parent entries, roots, path editing, tabs, closed-tab restoration, refresh and keyboard access",
-      "evidence": [
-        "tests/ui/workspace.spec.ts",
-        "tests/ui/keyboard.spec.ts"
-      ]
+      "evidence": ["tests/ui/workspace.spec.ts", "tests/ui/keyboard.spec.ts"]
     },
     {
       "id": "selection",
       "status": "in_progress",
       "scope": "MC Insert behavior, ranges, all/none/inverse and wildcard masks, preserving marks and excluding the parent entry",
-      "evidence": [
-        "src/selection.test.ts",
-        "tests/ui/keyboard.spec.ts"
-      ]
+      "evidence": ["src/selection.test.ts", "tests/ui/keyboard.spec.ts"]
     },
     {
       "id": "context-actions-and-menus",
       "status": "in_progress",
       "scope": "Correct pane/selection targets, keyboard-accessible context and command menus, focus restoration, edge positioning and both themes",
-      "evidence": [
-        "tests/ui/keyboard.spec.ts"
-      ]
+      "evidence": ["tests/ui/keyboard.spec.ts"]
     },
     {
       "id": "file-clipboard",
@@ -117,10 +110,7 @@
       "id": "transfer-safety",
       "status": "needs_current_audit",
       "scope": "Copy/move/delete/rename, conflicts, cancellation, partial failures, metadata handling and source/destination preservation",
-      "evidence": [
-        "crates/core/tests/files.rs",
-        "scripts/windows-smoke.mjs"
-      ]
+      "evidence": ["crates/core/tests/files.rs", "scripts/windows-smoke.mjs"]
     },
     {
       "id": "bookmarks-and-places",
@@ -137,10 +127,7 @@
       "id": "network",
       "status": "needs_current_audit",
       "scope": "Explorer network locations, custom UNC entries, mapped drives, server/share navigation and errors",
-      "evidence": [
-        "scripts/windows-network-smoke.mjs",
-        "src/network.test.ts"
-      ]
+      "evidence": ["scripts/windows-network-smoke.mjs", "src/network.test.ts"]
     },
     {
       "id": "ssh",
@@ -156,24 +143,23 @@
       "id": "port-forwarding",
       "status": "needs_current_audit",
       "scope": "Multiple tunnels, persistence, start/stop/remove, conflicts and connection lifecycle",
-      "evidence": [
-        "crates/core/tests/sftp.rs",
-        "scripts/windows-smoke.mjs"
-      ]
+      "evidence": ["crates/core/tests/sftp.rs", "scripts/windows-smoke.mjs"]
     },
     {
       "id": "terminal",
       "status": "needs_current_audit",
       "scope": "Local and remote interactive shells, Ctrl+O, docking, independent persistent sessions, resize and lifecycle",
-      "evidence": [
-        "scripts/windows-smoke.mjs",
-        "crates/core/tests/sftp.rs"
-      ]
+      "evidence": ["scripts/windows-smoke.mjs", "crates/core/tests/sftp.rs"]
     },
     {
       "id": "viewer",
-      "status": "pending",
-      "scope": "Practical text/image/PDF viewing, search/navigation, copy, zoom, large-file behavior and keyboard controls"
+      "status": "in_progress",
+      "scope": "Practical text/image/PDF viewing, search/navigation, copy, zoom, large-file behavior and keyboard controls",
+      "evidence": [
+        "crates/core/src/text.rs",
+        "crates/core/tests/search.rs",
+        "scripts/windows-search-smoke.mjs"
+      ]
     },
     {
       "id": "editor",
@@ -183,21 +169,25 @@
         "crates/core/tests/editor.rs",
         "tests/ui/editor.spec.ts",
         "scripts/windows-smoke.mjs",
-        "scripts/windows-editor-smoke.mjs"
+        "scripts/windows-editor-smoke.mjs",
+        "src/textMatches.test.ts"
       ]
     },
     {
       "id": "search",
-      "status": "pending",
-      "scope": "Names and masks, recursive filters, useful content search, results navigation, progress/cancellation and error reporting"
+      "status": "in_progress",
+      "scope": "Names and masks, recursive filters, useful content search, results navigation, progress/cancellation and error reporting",
+      "evidence": [
+        "crates/core/tests/search.rs",
+        "tests/ui/search.spec.ts",
+        "scripts/windows-search-smoke.mjs"
+      ]
     },
     {
       "id": "archives",
       "status": "needs_current_audit",
       "scope": "Practical common archive workflows, safe browsing/creation/extraction, path and symlink protection, and explicit format limitations",
-      "evidence": [
-        "crates/core/tests/files.rs"
-      ]
+      "evidence": ["crates/core/tests/files.rs"]
     },
     {
       "id": "properties-and-attributes",
@@ -224,10 +214,7 @@
       "id": "shortcut-discoverability",
       "status": "in_progress",
       "scope": "Practical shortcuts for all implemented actions, searchable F1 help, accurate tooltips, no context collisions or accidental browser reloads",
-      "evidence": [
-        "src/shortcuts.ts",
-        "tests/ui/keyboard.spec.ts"
-      ]
+      "evidence": ["src/shortcuts.ts", "tests/ui/keyboard.spec.ts"]
     },
     {
       "id": "persistence-and-recovery",
@@ -269,5 +256,37 @@
       "artifacts/native-permissions.png"
     ],
     "ci": "Full Windows CI run 40599062130 on 1fb5d2a passed, including native Windows core tests, file clipboard tests and the isolated properties/bookmarks UI test."
+  },
+  "searchAndPagingBatch": {
+    "features": [
+      "Filename contains, wildcard lists and regular expressions",
+      "Streaming UTF-8/UTF-16 content search with match excerpts and Unicode positions",
+      "Recursion/exclusion/type/size/date filters, result limits, cancellation and partial error reporting",
+      "Result keyboard navigation, reveal/mark in either pane and retained results around F3/F4",
+      "Connection checks before opening SSH results and refreshing metadata after a search-driven save",
+      "Paged text viewing beyond the quick-editor limit, Ctrl+PgUp/PgDn and F6 file-line navigation",
+      "Whole-line decoding, encoding/line-ending labels and refusing known special files",
+      "Unicode-safe literal text-match offsets and nested dialog focus restoration",
+      "Preserving differently cased UNC bookmarks across settings reloads"
+    ],
+    "checks": {
+      "javascriptUnitTests": "23 passed, including preservation of differently cased UNC bookmarks",
+      "browserTests": "39 passed",
+      "coreTests": "51 passed on Linux, including 8 search/streaming-text tests",
+      "realOpenSshIntegration": "3 passed, including content search, connection ID reporting and FIFO refusal",
+      "nativeWindows": "Owned-instance windows-search-smoke.mjs passed with UTF-16, Unicode positions, results restored after F3/F4, late matches in a >4 MiB file, paging/F6, real SSH search, stale connection rejection and saving/refreshing through search. Full windows-smoke.mjs and editor window-close tests passed on the initial search build. After the UNC bookmark key fix, native properties/bookmarks tests passed including both differently cased UNC entries surviving reload.",
+      "windowsCompilation": "Workspace and all test targets checked; x64 executable and NSIS installer built; final candidate SHA256 b66c303ed6fffd62e2c672adce104784d8a2fa91db0cb20a81ca297b2f7eb9c4; initial search regression build SHA256 fc5429f8b20d51db97e6b96dd1c5788d4e04cc7dec94fa66d468f7143b3417e4"
+    },
+    "visualEvidence": [
+      "docs/screenshots/search.png",
+      "artifacts/search-dark.png",
+      "artifacts/search-light.png"
+    ],
+    "remaining": [
+      "Viewer Find currently covers the loaded page; implement source-wide next/previous matching.",
+      "Audit immediate cancellation before worker registration and interrupted search/view lifecycle.",
+      "Continue the transfer alias/rollback audit and implement directory comparison; these remain part of the original scope."
+    ],
+    "ci": "Windows workflow includes native local search/view tests; verification of the new source run is pending."
   }
 }

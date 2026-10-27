@@ -112,6 +112,30 @@ async fn remote_properties_preserve_permissions_and_reject_replaced_connections(
         assert_eq!(info.link_target.as_deref(), Some(path));
         assert!(properties::apply(first.as_ref(), link, &info.revision, &changes).is_err());
         assert_eq!(fs::read_to_string(&file).unwrap(), "preserved");
+        let search_result = Mutex::new(commander_core::search::Batch::default());
+        commander_core::search::run(
+            first.as_ref(),
+            directory.to_str().unwrap(),
+            &commander_core::SearchFilter {
+                content: "preserved".into(),
+                ..Default::default()
+            },
+            &AtomicBool::new(false),
+            &|batch| *search_result.lock().unwrap() = batch,
+        )
+        .unwrap();
+        let search_result = search_result.into_inner().unwrap();
+        assert_eq!(search_result.found, 1);
+        assert_eq!(search_result.error_count, 0);
+        assert_eq!(search_result.connection.as_deref(), first.connection_id());
+        let fifo = directory.join("pipe");
+        assert!(Command::new("mkfifo")
+            .arg(&fifo)
+            .status()
+            .unwrap()
+            .success());
+        assert!(first.reader(fifo.to_str().unwrap()).is_err());
+        fs::remove_file(fifo).unwrap();
         let result = Mutex::new(SizeSummary::default());
         properties::calculate(
             first.as_ref(),

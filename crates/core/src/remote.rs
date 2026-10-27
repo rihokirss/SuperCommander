@@ -490,6 +490,13 @@ impl FileSystem for RemoteFs {
         Ok(self.runtime.block_on(self.sftp.try_exists(path))?)
     }
     fn reader(&self, path: &str) -> Result<Box<dyn Read + Send>> {
+        let metadata = self.runtime.block_on(self.sftp.metadata(path))?;
+        if metadata
+            .permissions
+            .is_some_and(|mode| mode & 0o170000 != 0 && mode & 0o170000 != 0o100000)
+        {
+            bail!("Choose a regular file; special files cannot be read as documents");
+        }
         Ok(Box::new(RemoteFile {
             file: self.runtime.block_on(self.sftp.open(path))?,
             runtime: self.runtime.clone(),

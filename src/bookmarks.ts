@@ -3,9 +3,25 @@ import { parseRemoteAddress, formatRemoteAddress } from "./address";
 import { clipboardPathKey } from "./clipboard";
 import { basename } from "./utils";
 
+function localKey(path: string) {
+  const windows = path
+    .replaceAll("/", "\\")
+    .replace(/^\\\\\?\\UNC\\/i, "\\\\")
+    .replace(/^\\\\\?\\/, "");
+  if (windows.startsWith("\\\\")) {
+    // Share names are insensitive; the filesystem beneath a share may be sensitive.
+    return `\\\\${windows
+      .slice(2)
+      .split("\\")
+      .filter(Boolean)
+      .map((part, index) => (index < 2 ? part.toLowerCase() : part))
+      .join("\\")}`;
+  }
+  return clipboardPathKey(path);
+}
 export function bookmarkKey(bookmark: Pick<Bookmark, "path" | "source">) {
   if (bookmark.source?.startsWith("zip:"))
-    return `zip:${clipboardPathKey(bookmark.source.slice(4))}\0${bookmark.path.replace(/\/+$/, "") || "/"}`;
+    return `zip:${localKey(bookmark.source.slice(4))}\0${bookmark.path.replace(/\/+$/, "") || "/"}`;
   try {
     const remote = parseRemoteAddress(bookmark.path);
     if (remote)
@@ -13,7 +29,7 @@ export function bookmarkKey(bookmark: Pick<Bookmark, "path" | "source">) {
   } catch {
     /* Invalid stored paths are handled by normalizeBookmarks. */
   }
-  return `local:${clipboardPathKey(bookmark.path)}`;
+  return `local:${localKey(bookmark.path)}`;
 }
 
 export function bookmarkPath(

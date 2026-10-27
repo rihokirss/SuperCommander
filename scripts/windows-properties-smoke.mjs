@@ -481,6 +481,35 @@ try {
       "PASS real SSH permission changes and persistent alias bookmark requesting authentication after reload",
     );
   }
+  const saved = (await rpc("bootstrap")).settings;
+  await rpc("save_settings", {
+    value: {
+      ...saved,
+      bookmarks: [
+        ...saved.bookmarks,
+        {
+          name: "Case upper",
+          path: "\\\\wsl.localhost\\Ubuntu\\tmp\\Folder",
+          kind: "bookmark",
+        },
+        {
+          name: "Case lower",
+          path: "\\\\wsl.localhost\\Ubuntu\\tmp\\folder",
+          kind: "bookmark",
+        },
+      ],
+    },
+  });
+  await page.reload();
+  await expect(
+    page.locator(".bookmark-item").getByText("Case upper", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.locator(".bookmark-item").getByText("Case lower", { exact: true }),
+  ).toBeVisible();
+  console.log(
+    "PASS reload preserves differently cased UNC bookmarks without contacting their shares",
+  );
   assert.deepEqual(pageErrors, [], "No WebView JavaScript errors");
 } finally {
   try {

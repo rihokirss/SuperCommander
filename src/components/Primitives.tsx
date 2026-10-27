@@ -136,11 +136,25 @@ export function Modal({
     document.addEventListener("keydown", key, true);
     return () => {
       document.removeEventListener("keydown", key, true);
-      if (previous?.isConnected) previous.focus();
+      const remaining = Array.from(
+        document.querySelectorAll<HTMLElement>(
+          '[role="dialog"][aria-modal="true"]',
+        ),
+      )
+        .filter((dialog) => dialog !== node)
+        .at(-1);
+      if (previous?.isConnected && (!remaining || remaining.contains(previous)))
+        previous.focus();
       else
-        document
-          .querySelector<HTMLElement>(".file-pane.active .file-grid")
-          ?.focus();
+        (
+          remaining?.querySelector<HTMLElement>(
+            '[role="listbox"][tabindex="0"]',
+          ) ||
+          remaining?.querySelector<HTMLElement>(
+            'textarea:not(:disabled),input:not(:disabled):not([type="hidden"]),button:not(:disabled)',
+          ) ||
+          document.querySelector<HTMLElement>(".file-pane.active .file-grid")
+        )?.focus();
     };
   }, []);
   return (
