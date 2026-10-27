@@ -1,0 +1,36 @@
+name: Native Windows artifact test
+on:
+  workflow_dispatch:
+    inputs:
+      build_run:
+        description: Windows build workflow run containing SuperCommander-windows-x64
+        required: true
+        type: string
+permissions:
+  contents: read
+  actions: read
+jobs:
+  native-clipboard:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - name: Ensure WebView2 runtime for native tests
+        run: ./scripts/ci-webview.ps1
+      - uses: actions/download-artifact@v4
+        with:
+          name: SuperCommander-windows-x64
+          path: native-build
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ inputs.build_run }}
+      - run: node scripts/windows-clipboard-smoke.mjs native-build/supercommander.exe
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-clipboard-evidence
+          path: artifacts/native-clipboard-*.png
+          if-no-files-found: ignore
