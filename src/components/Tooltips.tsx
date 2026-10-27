@@ -19,18 +19,25 @@ export function Tooltips() {
       target = null;
     };
     const show = (event: Event) => {
-      const node = (event.target as Element)?.closest<HTMLElement>(
-        "button,[data-tooltip]",
-      );
+      const element = event.target;
+      if (!(element instanceof Element)) return;
+      // The whole button owns its hint, including events from its icon or label.
+      const node =
+        element.closest<HTMLElement>("button") ||
+        element.closest<HTMLElement>("[data-tooltip]");
       if (!node) {
+        hide();
+        return;
+      }
+      // Native titles can also come from an icon, label or ancestor of the button.
+      // An empty title explicitly stops native title inheritance.
+      if (element.closest("[title]")?.getAttribute("title")) {
         hide();
         return;
       }
       if (node === target) return;
       hide();
       target = node;
-      // A native title already supplies a tooltip. Do not stack a second one over it.
-      if (node.hasAttribute("title")) return;
       if (
         node.matches('[role="menuitem"],[role="option"]') &&
         !node.dataset.tooltip
@@ -38,7 +45,6 @@ export function Tooltips() {
         return;
       const text =
         node.dataset.tooltip ||
-        node.getAttribute("title") ||
         node.getAttribute("aria-label") ||
         node.textContent?.trim();
       if (!text) return;

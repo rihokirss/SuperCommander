@@ -274,6 +274,37 @@ test("workspace groups, rail, density and transparency persist", async ({
   await page.keyboard.press("Control+b");
   await expect(page.locator(".sidebar")).toHaveCSS("width", "54px");
 });
+test("collapsed workspace uses one tooltip owner for icons and labels", async ({ page }) => {
+  await page.getByRole("button", { name: "Collapse workspace", exact: true }).click();
+  const item = page.locator(".sidebar-item").first();
+  const icon = item.locator("svg").first();
+  const label = (await item.textContent())!.trim();
+  await icon.hover();
+  await expect(page.getByRole("tooltip")).toHaveText(label);
+  await expect(page.getByRole("tooltip")).toHaveCount(1);
+
+  // A nested hint must not compete with the owning sidebar button.
+  await icon.evaluate(el => el.setAttribute("data-tooltip", "Nested icon hint"));
+  await page.mouse.move(500, 500);
+  await icon.hover();
+  await expect(page.getByRole("tooltip")).toHaveText(label);
+
+  // Native titles on descendants and ancestors also provide their own tooltip.
+  for (const nativeOwner of [icon, page.locator(".sidebar")]) {
+    await nativeOwner.evaluate(el => el.setAttribute("title", "Native hint"));
+    await page.mouse.move(500, 500);
+    await icon.hover();
+    await page.waitForTimeout(500);
+    await expect(page.getByRole("tooltip")).toHaveCount(0);
+    await nativeOwner.evaluate(el => el.removeAttribute("title"));
+  }
+  await page.mouse.move(500, 500);
+  await icon.hover();
+  await expect(page.getByRole("tooltip")).toHaveText(label);
+  await page.getByRole("button", { name: "Expand workspace", exact: true }).click();
+  await expect(page.getByRole("tooltip")).toHaveCount(0);
+});
+
 test("keyboard cursor has a filled row while Insert marks remain distinct", async ({
   page,
 }) => {
