@@ -96,6 +96,12 @@ fn failed_replacement_preserves_both_external_file_and_original_backup() {
         fn writer(&self, p: &str) -> anyhow::Result<Box<dyn Write + Send>> {
             LocalFs.writer(p)
         }
+        fn private_writer(&self, p: &str) -> anyhow::Result<Box<dyn Write + Send>> {
+            LocalFs.private_writer(p)
+        }
+        fn remove_file(&self, p: &str) -> anyhow::Result<()> {
+            LocalFs.remove_file(p)
+        }
         fn mkdir(&self, p: &str) -> anyhow::Result<()> {
             LocalFs.mkdir(p)
         }
@@ -138,7 +144,15 @@ fn failed_replacement_preserves_both_external_file_and_original_backup() {
         .collect();
     assert_eq!(backups.len(), 1);
     assert_eq!(fs::read_to_string(&backups[0]).unwrap(), "original");
-    assert_eq!(fs::read_dir(tmp.path()).unwrap().count(), 2);
+    let record: serde_json::Value = serde_json::from_slice(
+        &fs::read(format!("{}.recovery.json", backups[0].display())).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        record["original"],
+        tmp.path().join("target.txt").to_str().unwrap()
+    );
+    assert_eq!(fs::read_dir(tmp.path()).unwrap().count(), 3);
 }
 
 #[test]

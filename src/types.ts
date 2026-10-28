@@ -114,7 +114,55 @@ export type Operation =
   | "trash"
   | "zip"
   | "extract"
-  | "synchronize";
+  | "synchronize"
+  | "restore";
+export type RecoveryItem = {
+  key: string;
+  folder: string;
+  payload: string;
+  record: string | null;
+  original: string | null;
+  kind: string;
+  entry: Entry | null;
+  created: number | null;
+  active: boolean;
+  error: string | null;
+  revision: string;
+  connection: string | null;
+};
+export type RecoveryBatch = {
+  items: RecoveryItem[];
+  scanned: number;
+  done: boolean;
+  cancelled: boolean;
+  limited: boolean;
+  errors: string[];
+};
+export type RecoveryOptions = {
+  key: string;
+  revision: string;
+  connection: string | null;
+  destination: Location;
+  name: string;
+  replace: boolean;
+};
+export type RecoveryReview = {
+  id: string;
+  summary: {
+    destination: Location;
+    files: number;
+    folders: number;
+    bytes: number;
+    replace: number;
+    checksumChanged: boolean;
+    rows: {
+      path: string;
+      directory: boolean;
+      replace: boolean;
+      size: number;
+    }[];
+  };
+};
 export type ComparisonOptions = {
   content: boolean;
   recursive: boolean;
@@ -200,7 +248,12 @@ export type JobEvent = {
   errors: string[];
   conflictPath?: string;
   preservedCount?: number;
-  preserved?: { original: string; path: string; record: string }[];
+  preserved?: {
+    original: string;
+    path: string;
+    record: string;
+    source?: string;
+  }[];
 };
 export type Job = JobEvent & { operation: Operation; count: number };
 export type RenameRules = {

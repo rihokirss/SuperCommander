@@ -410,6 +410,14 @@ impl FileSystem for LocalFs {
     }
     fn remove_file(&self, path: &str) -> Result<()> {
         guard_destructive(path)?;
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::FileTypeExt;
+            if fs::symlink_metadata(path)?.file_type().is_symlink_dir() {
+                fs::remove_dir(path)?;
+                return Ok(());
+            }
+        }
         fs::remove_file(path)?;
         Ok(())
     }

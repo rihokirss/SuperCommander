@@ -8,7 +8,7 @@ Browse local drives, UNC paths, ZIP archives and SSH/SFTP servers. Work with fam
 
 The first public release is **[SuperCommander 0.2.0](https://github.com/rihokirss/SuperCommander/releases/tag/v0.2.0)**.
 
-The `main` branch contains ongoing improvements beyond that release, including keyboard-accessible menus, bookmark management, file properties, native file clipboard support, quick editing, content search and reviewed folder synchronization. The shortcuts below describe the current source.
+The `main` branch contains ongoing improvements beyond that release, including keyboard-accessible menus, bookmark management, file properties, native file clipboard support, quick editing, content search, reviewed folder synchronization and recovery of saved copies. The shortcuts below describe the current source.
 
 - [Windows x64 installer](https://github.com/rihokirss/SuperCommander/releases/download/v0.2.0/SuperCommander_0.2.0_x64-setup.exe) — recommended.
 - [Standalone Windows x64 executable](https://github.com/rihokirss/SuperCommander/releases/download/v0.2.0/SuperCommander_0.2.0_x64.exe) — requires WebView2.
@@ -93,6 +93,7 @@ Each pane has independent tabs, history, sorting and filtering. Click its locati
 | Enter | Open the current file or folder |
 | Ctrl+L / Alt+D | Edit the active pane's location |
 | Ctrl+R | Refresh the active pane |
+| Ctrl+Shift+R | Recovery and previous versions |
 | Ctrl+Shift+F | Focus the pane's filename filter |
 | Alt+Up / Backspace | Parent folder |
 | Alt+Home | Home directory of the current source |
@@ -155,6 +156,20 @@ Review differences, filter their relative paths with **Ctrl+F**, and choose each
 **Ctrl+Enter** opens a review of every selected path, its direction and the create/replace counts; press it again to queue those copies. Synchronization does not delete files. Replacements keep their previous versions beside the destination, with recovery records listing the original paths; expand **Previous versions** in Transfers for their locations. These copies are retained until you remove them yourself. Source contents, destinations and SSH sessions are checked again before copying, including after a wait in the queue. Changed files, new conflicting destinations, replaced connections, incomplete scans and entry-limited results require a new comparison. Symlinks, junctions, ambiguous case matches and file/folder conflicts remain blocked for review.
 
 ![Folder comparison with per-file copy directions](docs/screenshots/comparison.png)
+
+### Recovery and previous versions
+
+Press **Ctrl+Shift+R**, or choose **Recovery & previous versions** from F9 or the command palette. Scan the active folder for saved copies and recovery records, including hidden files; enable **Include subfolders** to search deeper. The view supports local/UNC and connected SSH folders. Windows Recycle Bin recovery remains in the Recycle Bin.
+
+Select a saved copy with the arrows, Home/End or Page Up/Down. **Ctrl+F** filters names; **F3** opens a read-only file view or reveals a preserved folder. **Enter / Ctrl+Enter** prepares a restoration: choose a name and destination, optionally select the other pane's folder, then review every path and its create/replace action. **Ctrl+Enter** in the review queues the copies. Conflicting existing files require explicit replacement; their current versions are retained as previous versions. Restoration keeps the saved copy and its record, including when copying from SSH to a local folder.
+
+Expand **Previous versions** in Transfers to open recovery at the corresponding destination. **F5 / Ctrl+R** rescans after a transfer finishes. Copies being used by a current operation cannot be restored or removed. A changed file, record, destination or SSH session requires a new review. A checksum mismatch can be copied under a new name without replacement. Temporary files without records may contain only partial data; inspect their contents first.
+
+**Delete** asks before permanently removing the selected saved copy and its record. If removal fails, the record remains available. An interrupted directory operation may leave nested recovery records inside the remaining tree: restore the folder, then scan that restored folder to recover individual names. Permanent deletion cannot recover files already removed before cancellation or a process exit.
+
+Recovery view with fictional sample data (restoration is enabled in the desktop app):
+
+![Compact recovery and previous versions view](docs/screenshots/recovery.png)
 
 ### Viewer and quick editor
 
@@ -250,13 +265,15 @@ File operations run in a queue. Copy/move directory listings are captured in a p
 
 Sources are checked against the copied contents before publication. Moves delete only their privately claimed source file. They never recursively remove a source tree: completed files move individually, skipped/unprocessed files stay at their source, and only empty source directories are removed. Cross-source directory moves also check for aliases and descendants before writing. Cancellation is remembered even if it arrives before enqueue; it cleans up the current partial copy and restores its claimed source, while already completed files stay at their destination. A failed restoration preserves the original and reports its exact path in the queue's **Details**.
 
-Before temporarily renaming any original, the app writes a sibling `.recovery.json` record containing its `original` and `preserved` paths. Normal completion/restoration removes this record. After an unexpected process exit, enable hidden files and open the record with F3; inspect the preserved file/folder before using F2 to restore its original name. If that name is occupied, keep both copies for review. Remove the record after confirming recovery. Recovery currently uses these files and queue details; automatic discovery after restarting the app is not implemented.
+Before temporarily renaming any original, the app writes a sibling `.recovery.json` record containing its original path, saved path and available checksum. Normal completion or rollback removes transient records; retained previous versions keep theirs. After an unexpected process exit, use **Ctrl+Shift+R** to scan the affected folder. Recovery resolves payloads beside their records rather than following an arbitrary absolute path in a record, so a saved tree can also be inspected through another path namespace.
 
-Copies preserve modification times and supported permissions; newly created directories receive their source metadata after their contents finish. Copy/move staging files and recovery records start with owner-only POSIX permissions on Unix/SFTP backends; Windows uses the destination directory's ACL. Windows copies also preserve hidden/read-only flags. Protected Windows sources must have their read-only attribute cleared before moving, and read-only destinations are not replaced. Ownership, ACLs and alternate data streams are not cloned. Explicit directory deletion remains recursive and cannot be interrupted halfway through one directory.
+Copies preserve modification times and supported permissions; newly created directories receive their source metadata after their contents finish. Copy/move staging files and recovery records start with owner-only POSIX permissions on Unix/SFTP backends; Windows uses the destination directory's ACL. Windows copies also preserve hidden/read-only flags. Protected Windows sources must have their read-only attribute cleared before moving, and read-only destinations are not replaced. Ownership, ACLs and alternate data streams are not cloned.
+
+Permanent deletion uses the captured selection and privately claims each file or directory before removing it. It unlinks checked files and removes only empty directories, rather than handing a live tree to recursive removal. Cancellation and errors restore the remaining claimed data where possible; already deleted files stay deleted. Newly appeared children stop directory cleanup. A disconnected destination in the other pane does not prevent deletion from the active source.
 
 Recursive searches and copies do not follow symbolic links or Windows junctions. ZIP extraction validates paths and prevents escapes through symbolic links. Extract an archive instead of copying an individual file larger than 128 MiB from the ZIP browser.
 
-Current archive operations support local ZIP files. Server-to-server direct transfers, a remote recycle bin, 7z/RAR and directory synchronization are not implemented; SFTP transfers pass through the client.
+Current archive operations support local ZIP files. Server-to-server direct transfers, a remote recycle bin and 7z/RAR are not implemented; SFTP transfers pass through the client. Folder synchronization copies explicitly reviewed differences without automatic deletion.
 
 ## Tests
 
@@ -302,3 +319,5 @@ Source: [rihokirss/SuperCommander](https://github.com/rihokirss/SuperCommander).
 `node scripts/windows-search-smoke.mjs [path-to-supercommander.exe]` owns an isolated test instance and checks content search, Unicode positions, UTF-16 viewing, retaining results through F3/F4, large-file paging, F6 and focusing a file in its containing pane. With the temporary SFTP fixture it also tests remote content search/editing, connection replacement protection and refreshing pane metadata after a save. The Windows workflow runs the local cases.
 
 `node scripts/windows-editor-smoke.mjs [path-to-supercommander.exe]`, run with Windows Node, launches its own isolated test app and tests new files, Save As, encoding conversions, overwrite conflicts, and native window close protection. The Save & Close assertion closes only that test window. Run native test scripts sequentially; they reserve port 9224.
+
+`node scripts/windows-recovery-smoke.mjs [path-to-supercommander.exe]` owns an isolated Windows app and verifies discovery, read-only viewing, previous-version links in Transfers, file/folder restoration, complete virtualized review, empty folders, orphan copies, record cleanup and stale reviews. With the WSL SFTP fixture it also verifies remote records written through UNC, SSH-to-local recovery, cross-protocol directory aliases and replaced sessions. `windows-tooltip-smoke.mjs` checks collapsed workspace hints in WebView2, including native HTML/SVG hints appearing after hover.

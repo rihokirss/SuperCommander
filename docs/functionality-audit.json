@@ -2,7 +2,7 @@
   "objectiveOriginal": "jätka niikaua kuni kõik mõistlik funktsionaalsus olemas, UI ühetaolisus ja sobivus kontrollitud, kõik mõistlikud shortcut keyd olemas",
   "status": "in_progress",
   "baselineRelease": "v0.2.0",
-  "lastVerifiedBatchId": "queueVersionsBatch",
+  "lastVerifiedBatchId": "recoveryBatch",
   "lastVerifiedBatch": {
     "features": [
       "Keyboard-accessible command and context menus",
@@ -114,6 +114,8 @@
       "evidence": [
         "crates/core/tests/files.rs",
         "crates/core/tests/transfers.rs",
+        "crates/core/tests/deletion.rs",
+        "crates/core/tests/recovery.rs",
         "crates/core/tests/sftp.rs",
         "scripts/windows-transfer-smoke.mjs",
         "scripts/windows-smoke.mjs"
@@ -407,11 +409,46 @@
       "artifacts/native-transfers.png"
     ],
     "remaining": [
-      "Verify the matching public Windows CI run after pushing; native clipboard tests remain confined to the dedicated CI desktop.",
       "Clipboard object identity before paste remains to be audited; the new source snapshot begins when a file operation is submitted.",
-      "Continue live delete/rename/archive mutation and recovery audits. Permanent directory deletion still calls the backend's recursive removal after validation; this batch does not prove safety against a change in that final interval.",
-      "Implement discovery and reviewable restoration of interrupted-operation recovery records; current recovery remains manual.",
-      "Verify deletion independently of the other pane's disconnected destination, plus the remaining source/terminal/tunnel lifecycle and original-scope requirements."
+      "Continue rename/archive mutation and the remaining source/terminal/tunnel lifecycle and original-scope requirements. Delete boundaries, disconnected destinations and recovery UI are covered by recoveryBatch."
+    ],
+    "ci": "Public Windows CI run 40618564714 passed on d8db43f3368d37ed0e0f37f9e3c0c83851b49f43."
+  },
+  "recoveryBatch": {
+    "features": [
+      "Ctrl+Shift+R opens local/UNC/connected-SSH discovery of saved copies and records, including hidden files, orphan parts and missing payloads",
+      "Optional recursive scan with cancellation, bounded collection/results, path-safe record interpretation and session-bound entries",
+      "Compact virtualized selection, arrows/Home/End/Page Up/Down, Ctrl+F, retained read-only F3, folder reveal and searchable F1 help",
+      "Reviewable copy restoration to a chosen folder/name or the other pane, complete virtualized path review and Ctrl+Enter confirmation",
+      "Saved data remains available; explicit replacement keeps current versions and records; checksum mismatches require a new name without replacement",
+      "Active claims cannot be restored or purged; explicit saved-copy removal re-derives paths and keeps its record if payload removal fails",
+      "Previous-version links in Transfers carry the actual destination source, including either synchronization direction",
+      "Shared write-ahead claims cover transfer, editor and permanent deletion; private remaining data can be found after interruption",
+      "Permanent deletion claims and validates each manifest entry, unlinks only checked leaves and removes only empty directories; late children and disconnected other panes are handled",
+      "Restoration checks physical directory aliases with a temporary destination probe before copying, including same-source unresolved aliases and UNC/SFTP namespaces",
+      "Confirmed actions hand ownership to Transfers immediately; delayed enqueue/inspection does not lock the recovery dialog",
+      "English README recovery instructions and sample screenshot; native recovery checks added to Windows CI"
+    ],
+    "checks": {
+      "coreTests": "103 passed on Linux, including 9 recovery integration tests, an active-claim unit test and 4 deletion boundary tests. Cases cover malformed/foreign-namespace records, changed checksums, late destinations, retained previous/current data, folders, physical aliases, payload removal failure and untrusted client paths.",
+      "javascriptUnitTests": "26 passed",
+      "browserTests": "47 passed in the full regression; the 3 recovery cases and 4 comparison cases passed again after layout/progress changes, and the 3 recovery cases passed after queue handoff. Dark/light recovery views fit 960x640; browser preview cannot bypass disabled writes with Ctrl+Enter.",
+      "realOpenSshIntegration": "5 passed; owned native recovery additionally verified SSH file/tree copies, Windows-namespace records through SFTP, UNC/SFTP descendant rejection and replacement-session checks.",
+      "nativeWindows": "windows-recovery-smoke.mjs passed on final 3afa7979, including retained read-only viewing, file/folder/empty-folder recovery, full 128-row review, previous-version queue navigation, orphan restoration, missing-record cleanup, intentionally delayed removal handoff, stale records and cancellation before worker registration. windows-comparison-smoke.mjs and windows-tooltip-smoke.mjs passed on b1d5bf1a before enabling the same probe for same-source folder restoration. windows-transfer-smoke.mjs, windows-queue-smoke.mjs, windows-editor-smoke.mjs and full windows-smoke.mjs passed on 1d7ea570, before the final recovery-only handoff/progress/probe changes and comparison internal-file exclusions. Those checks covered real SSH/UNC aliases, queue cancellation, editor/native close, ZIP, previews, tunnels, ConPTY, Ctrl+O and recycle bin. User settings checksum remained unchanged.",
+      "windowsCompilation": "fmt, workspace clippy and Windows all-target checks passed; x64 executable and NSIS installer built. Final executable SHA256 3afa7979aa4adb5eba4c54828efa1fe9ab80b066a03e917388fde5ca73a8ce54."
+    },
+    "visualEvidence": [
+      "docs/screenshots/recovery.png",
+      "artifacts/recovery-dark.png",
+      "artifacts/recovery-light.png",
+      "artifacts/native-recovery.png",
+      "artifacts/native-recovery-review.png"
+    ],
+    "remaining": [
+      "Verify the new public Windows CI run after pushing. Prior tooltip run 40621753566 reached the native app's bootstrap screen but failed its 5-second readiness wait before clipboard assertions; native startup/settings readiness now allows 30 seconds without restarting the owned process. Clipboard UI tests remain CI-only.",
+      "Continue clipboard identity before paste, live rename/archive mutation, source/terminal/tunnel lifecycle, navigation/selection, UI consistency and distribution audits against the original requirements. Overall completion remains unproven.",
+      "Audit allocation bounds for unusually large recovery trees: discovery is bounded, but restoration planning currently materializes a directory listing before applying its 200,000-node limit.",
+      "Permanent deletion is irreversible for already removed entries; recovery restores remaining saved data, not an undelete history. Process-local active guards do not claim interprocess locking."
     ]
   }
 }

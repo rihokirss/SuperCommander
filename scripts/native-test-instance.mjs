@@ -83,14 +83,18 @@ export async function startNativeTest(name, executable) {
       .contexts()[0]
       .pages()
       .find((p) => p.url().includes("tauri.localhost"));
-    await expect(page.locator(".app-shell")).toBeVisible();
+    // CDP can be ready while bootstrap still reads Explorer's network catalog.
+    // Wait for this owned process to finish loading, without relaunching it.
+    await expect(page.locator(".app-shell")).toBeVisible({ timeout: 30000 });
     await expect
-      .poll(() =>
-        page.evaluate(() =>
-          window.__TAURI_INTERNALS__
-            .invoke("bootstrap")
-            .then((value) => value.settings?.panes?.length),
-        ),
+      .poll(
+        () =>
+          page.evaluate(() =>
+            window.__TAURI_INTERNALS__
+              .invoke("bootstrap")
+              .then((value) => value.settings?.panes?.length),
+          ),
+        { timeout: 30000 },
       )
       .toBe(2);
     return { browser, page, root, close };

@@ -97,9 +97,12 @@ try {
     .contexts()[0]
     .pages()
     .find((p) => p.url().includes("tauri.localhost"));
-  await expect(page.locator(".app-shell")).toBeVisible();
+  // First-run Explorer/PowerShell discovery can outlast the default 5s on CI.
+  await expect(page.locator(".app-shell")).toBeVisible({ timeout: 30000 });
   await expect
-    .poll(async () => (await rpc("bootstrap")).settings?.panes?.length)
+    .poll(async () => (await rpc("bootstrap")).settings?.panes?.length, {
+      timeout: 30000,
+    })
     .toBe(2);
   original = (await rpc("bootstrap")).settings;
   const panes = original.panes.map((p, i) => ({

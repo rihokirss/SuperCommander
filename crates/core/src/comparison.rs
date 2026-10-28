@@ -46,6 +46,8 @@ pub struct Root {
     pub writable: bool,
     #[serde(skip)]
     pub canonical: String,
+    #[serde(skip)]
+    pub identity: Option<String>,
 }
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -121,6 +123,7 @@ pub struct Action {
 pub struct Prepared {
     pub plan: Arc<Plan>,
     pub actions: Vec<Action>,
+    pub operation: crate::Operation,
 }
 
 fn check(cancel: &AtomicBool) -> Result<()> {
@@ -146,6 +149,8 @@ fn internal(name: &str) -> bool {
             ".backup",
             ".move-source",
             ".move-directory",
+            ".delete-source",
+            ".delete-directory",
             ".check-directory",
             ".directory-check",
             ".recovery.json",
@@ -180,6 +185,7 @@ fn root(fs: &dyn FileSystem, location: Location) -> Result<Root> {
         bail!("Choose a directory to compare");
     }
     Ok(Root {
+        identity: fs.fingerprint(&canonical)?.map(|(id, _)| id),
         location,
         canonical,
         connection: fs.connection_id().map(str::to_owned),
@@ -513,6 +519,7 @@ fn blocked_parent(path: &str, blocked: &HashSet<String>) -> bool {
 pub fn validate_root(fs: &dyn FileSystem, root: &Root) -> Result<()> {
     if fs.connection_id() != root.connection.as_deref()
         || fs.canonical_path(&root.location.path)? != root.canonical
+        || fs.fingerprint(&root.canonical)?.map(|(id, _)| id) != root.identity
     {
         bail!("A comparison location or SSH connection changed. Compare again.");
     }
@@ -687,5 +694,9 @@ pub fn prepare(
                 &right.relative,
             ))
     });
-    Ok(Prepared { plan, actions })
+    Ok(Prepared {
+        plan,
+        actions,
+        operation: crate::Operation::Synchronize,
+    })
 }

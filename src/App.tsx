@@ -28,6 +28,7 @@ import {
   Folder,
   FolderPlus,
   HardDrive,
+  History,
   Home,
   Image,
   Keyboard,
@@ -70,6 +71,7 @@ import {
 } from "./components/Dialogs";
 import { PreviewDialog } from "./components/PreviewDialog";
 import { ComparisonDialog } from "./components/ComparisonDialog";
+import { RecoveryDialog } from "./components/RecoveryDialog";
 import { SearchDialog } from "./components/SearchDialog";
 import { TextWorkbench } from "./components/TextWorkbench";
 import { QueuePanel } from "./components/QueuePanel";
@@ -129,6 +131,7 @@ type Dialog =
   | { kind: "bookmarks"; seed?: Bookmark | null }
   | { kind: "properties"; location: Location; entries: Entry[] }
   | { kind: "comparison"; left: Location; right: Location }
+  | { kind: "recovery"; location: Location; selectedKey?: string }
   | { kind: "settings" | "search" | "palette" | "network" | "shortcuts" };
 const emptySnapshot: PaneSnapshot = { entries: [], selected: [] };
 export function App() {
@@ -624,6 +627,10 @@ export function App() {
     return profile
       ? `${profile.name} · ${profile.username}@${profile.host}:${profile.port}`
       : t.remoteFiles;
+  }
+  function openRecovery(location = locationAt(active), selectedKey?: string) {
+    if (location)
+      setDialog({ kind: "recovery", location: { ...location }, selectedKey });
   }
   async function enqueue(request: JobRequest) {
     const job: Job = {
@@ -1336,6 +1343,13 @@ export function App() {
       run: () => setDialog({ kind: "search" }),
     },
     {
+      id: "recovery",
+      label: t.recovery,
+      icon: <History size={16} />,
+      key: "Ctrl+Shift+R",
+      run: () => openRecovery(),
+    },
+    {
       id: "mkdir",
       label: t.mkdir,
       icon: <FolderPlus size={16} />,
@@ -1513,6 +1527,11 @@ export function App() {
       if ((ctrl && name === "l") || (e.altKey && !ctrl && name === "d")) {
         e.preventDefault();
         paneControls.current[active]?.path();
+        return;
+      }
+      if (ctrl && name === "r" && e.shiftKey) {
+        e.preventDefault();
+        openRecovery();
         return;
       }
       if (ctrl && name === "r") {
@@ -2331,6 +2350,7 @@ export function App() {
                 )
               }
               onError={notify}
+              onRecovery={(location, key) => openRecovery(location, key)}
             />
           )}
           <div className="shortcut-bar" hidden={terminalView === "full"}>
@@ -2513,6 +2533,61 @@ export function App() {
           update={update}
           onClose={closeDialog}
           onShortcuts={() => setDialog({ kind: "shortcuts" })}
+        />
+      )}
+      {dialog?.kind === "recovery" && (
+        <RecoveryDialog
+          location={dialog.location}
+          selectedKey={dialog.selectedKey}
+          other={locationAt(1 - active)}
+          label={comparisonLabel(dialog.location)}
+          otherLabel={
+            locationAt(1 - active) && comparisonLabel(locationAt(1 - active)!)
+          }
+          density={settings.density}
+          t={t}
+          onClose={closeDialog}
+          onReveal={(location) => {
+            closeDialog();
+            navigate(location);
+          }}
+          onQueue={async (id, operation, source, item, review) => {
+            setJobs((old) => [
+              ...old,
+              {
+                id,
+                operation,
+                count: review?.summary.rows.length || 1,
+                state: "queued",
+                current: item.original || item.payload,
+                bytes: 0,
+                total: 0,
+                completed: 0,
+                errors: [],
+              },
+            ]);
+            setQueueOpen(true);
+            try {
+              if (operation === "restore" && review)
+                await api.command("enqueue_recovery", { id, plan: review.id });
+              else await api.command("remove_recovery", { id, source, item });
+            } catch (error) {
+              setJobs((old) =>
+                old.map((job) =>
+                  job.id === id
+                    ? {
+                        ...job,
+                        state: String(error).includes("Cancelled")
+                          ? "cancelled"
+                          : "failed",
+                        errors: [String(error)],
+                      }
+                    : job,
+                ),
+              );
+              throw error;
+            }
+          }}
         />
       )}
       {dialog?.kind === "comparison" && (

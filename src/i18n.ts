@@ -1,5 +1,48 @@
 import type { Language } from "./types";
 const en = {
+  recovery: "Recovery & previous versions",
+  restore: "Restore",
+  recoveryHint:
+    "Find saved copies in this folder. Windows Recycle Bin items are managed in the Recycle Bin.",
+  scanRecovery: "Scan for saved copies",
+  recoveryEmpty: "No saved copies found in this scope.",
+  recoveryFilter: "Filter saved copies…",
+  recoveryName: "Restore as",
+  recoveryFolder: "Destination folder",
+  recoverySource: "Scan folder",
+  recoveryOriginal: "Original path",
+  recoverySaved: "Saved copy",
+  recoveryUnknown: "Original name unknown",
+  recoveryBackup: "Previous version",
+  recoveryPart: "Temporary copy",
+  recoveryClaim: "Interrupted operation",
+  recoveryActive: "In use by an active operation",
+  recoveryMissing: "Saved copy missing",
+  recoveryReplace: "Replace matching files (keep current versions)",
+  recoveryReview: "Review restoration",
+  recoveryKeep:
+    "Restoration copies the saved data. The saved copy and its record stay available; replaced files are kept as previous versions.",
+  recoveryNested:
+    "This folder contains remaining data from an interrupted operation. After restoring it, scan the restored folder for any nested recovery records.",
+  recoveryChecksum:
+    "The saved contents differ from their recorded checksum. This review copies their current contents under the new name.",
+  recoveryRemove: "Remove saved copy",
+  recoveryRemoveHint:
+    "Permanently delete this saved copy and its recovery record? This cannot be undone. Other files are kept.",
+  recoveryMissingHint:
+    "Only the record remains. Removing it does not restore the missing data.",
+  recoveryQueued: "Restoration queued. Refresh after transfers finish.",
+  recoveryRemoved: "Removal queued. Refresh after transfers finish.",
+  recoveryLimited:
+    "Scan limit reached. Choose a narrower folder; the copies found so far remain available.",
+  recoveryStopped: "Scan stopped; the copies found so far remain available.",
+  recoveryPreparing: "Checking saved data and destination…",
+  recoveryKeys: "Recovery shortcuts",
+  recoveryReviewKey: "Review the selected saved copy",
+  recoveryOpenFolder: "Open saved folder",
+  recoveryScanned: "Entries checked",
+  recoverySourceFolder: "Saved copy's folder",
+  recoveryOtherPane: "Other pane's folder",
   appTagline: "A little order. A lot of possibility.",
   compareDirectories: "Compare folders",
   compareStart: "Compare",
@@ -422,6 +465,52 @@ const en = {
 };
 type Dictionary = { [K in keyof typeof en]: string };
 const et: Dictionary = {
+  recovery: "Taastamine ja eelmised versioonid",
+  restore: "Taasta",
+  recoveryHint:
+    "Leia sellest kaustast säilinud koopiad. Windowsi prügikasti faile saab taastada prügikastist.",
+  scanRecovery: "Otsi säilinud koopiaid",
+  recoveryEmpty: "Sellest asukohast säilinud koopiaid ei leitud.",
+  recoveryFilter: "Filtreeri säilinud koopiaid…",
+  recoveryName: "Taasta nimega",
+  recoveryFolder: "Sihtkaust",
+  recoverySource: "Otsitav kaust",
+  recoveryOriginal: "Algne failitee",
+  recoverySaved: "Säilinud koopia",
+  recoveryUnknown: "Algne nimi teadmata",
+  recoveryBackup: "Eelmine versioon",
+  recoveryPart: "Ajutine koopia",
+  recoveryClaim: "Katkestatud toiming",
+  recoveryActive: "Käimasoleva toimingu kasutuses",
+  recoveryMissing: "Säilinud koopia puudub",
+  recoveryReplace: "Asenda kattuvad failid (säilita praegused versioonid)",
+  recoveryReview: "Vaata taastamine üle",
+  recoveryKeep:
+    "Taastamine kopeerib säilinud andmed. Koopia ja selle kirje jäävad alles; asendatavad failid säilitatakse eelmiste versioonidena.",
+  recoveryNested:
+    "Kaust sisaldab katkestatud toimingust alles jäänud andmeid. Pärast taastamist otsi taastatud kaustast ka võimalikke sisemisi taastamiskirjeid.",
+  recoveryChecksum:
+    "Säilinud andmed erinevad kirjes olevast kontrollsummast. Taastatakse nende praegune sisu uue nime all.",
+  recoveryRemove: "Eemalda säilinud koopia",
+  recoveryRemoveHint:
+    "Kustutada see säilinud koopia ja taastamiskirje jäädavalt? Seda ei saa tagasi võtta. Muud failid jäävad alles.",
+  recoveryMissingHint:
+    "Alles on ainult kirje. Selle eemaldamine puuduvaid andmeid ei taasta.",
+  recoveryQueued:
+    "Taastamine on järjekorras. Värskenda vaadet pärast toimingute lõppu.",
+  recoveryRemoved:
+    "Eemaldamine on järjekorras. Värskenda vaadet pärast toimingute lõppu.",
+  recoveryLimited:
+    "Otsingu piir saavutatud. Vali kitsam kaust; seni leitud koopiad jäävad kättesaadavaks.",
+  recoveryStopped:
+    "Otsing peatatud; seni leitud koopiad jäävad kättesaadavaks.",
+  recoveryPreparing: "Kontrollin säilinud andmeid ja sihtkohta…",
+  recoveryKeys: "Taastamise kiirklahvid",
+  recoveryReviewKey: "Vaata valitud koopia taastamine üle",
+  recoveryOpenFolder: "Ava säilinud kaust",
+  recoveryScanned: "Kontrollitud kirjed",
+  recoverySourceFolder: "Säilinud koopia kaust",
+  recoveryOtherPane: "Teise paneeli kaust",
   appTagline: "Veidi korda. Palju võimalusi.",
   compareDirectories: "Võrdle kaustu",
   compareStart: "Võrdle",

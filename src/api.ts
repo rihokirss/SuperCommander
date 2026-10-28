@@ -6,6 +6,9 @@ import type {
   ComparisonProgress,
   ComparisonNode,
   ComparisonRow,
+  RecoveryBatch,
+  RecoveryOptions,
+  RecoveryReview,
 } from "./types";
 import type {
   Bootstrap,
@@ -146,6 +149,100 @@ export function subscribe<T>(event: string, callback: (data: T) => void) {
 }
 export const onJob = (callback: (job: JobEvent) => void) =>
   subscribe("job-progress", callback);
+
+export async function scanRecovery(
+  id: string,
+  location: Location,
+  recursive: boolean,
+  receive: (batch: RecoveryBatch) => void,
+) {
+  if (desktop) {
+    const channel = new Channel<RecoveryBatch>();
+    channel.onmessage = receive;
+    await command("scan_recovery", { id, location, recursive, channel });
+    return;
+  }
+  const join = (name: string) =>
+    location.path.replace(/[\\/]$/, "") + "\\" + name;
+  const items = ["backup", "part", "delete-directory", "backup", "backup"].map(
+    (kind, i) => {
+      const payload = join(
+        `.supercommander-00000000-0000-4000-8000-${String(i).padStart(12, "0")}.${kind}`,
+      );
+      const record = kind === "part" ? null : payload + ".recovery.json";
+      return {
+        key: record || payload,
+        folder: location.path,
+        payload,
+        record,
+        original:
+          kind === "part"
+            ? null
+            : join(i === 2 ? "Project" : `Notes${i || ""}.txt`),
+        kind,
+        created: 1793142000 - i * 60,
+        active: i === 3,
+        revision: "preview",
+        connection: null,
+        entry:
+          i === 4
+            ? null
+            : {
+                name: payload.split("\\").at(-1)!,
+                path: payload,
+                isDir: i === 2,
+                isSymlink: false,
+                hidden: true,
+                size: i === 2 ? 0 : 2048,
+                modified: 1793142000,
+              },
+        error:
+          i === 4 ? "The saved copy is missing; only its record remains" : null,
+      };
+    },
+  );
+  receive({
+    items,
+    scanned: 58,
+    done: true,
+    cancelled: false,
+    limited: false,
+    errors: [],
+  });
+}
+
+export async function planRecovery(
+  id: string,
+  source: string,
+  options: RecoveryOptions,
+  receive: (value: { files: number; bytes: number }) => void,
+): Promise<RecoveryReview> {
+  if (desktop) {
+    const channel = new Channel<{ files: number; bytes: number }>();
+    channel.onmessage = receive;
+    return command("plan_recovery", { id, source, options, channel });
+  }
+  const rows = [
+    {
+      path: options.name,
+      directory: false,
+      replace: options.replace,
+      size: 2048,
+    },
+  ];
+  return {
+    id,
+    summary: {
+      destination: options.destination,
+      files: 1,
+      folders: 0,
+      bytes: 2048,
+      replace: Number(options.replace),
+      checksumChanged: false,
+      rows,
+    },
+  };
+}
 
 export async function properties(
   location: Location,

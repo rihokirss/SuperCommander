@@ -3,7 +3,7 @@ use super::{
     snapshot::{Node, Snapshot},
     ContextJob,
 };
-use crate::{filesystem::FileSystem, Entry};
+use crate::{filesystem::FileSystem, recovery::Claim, Entry};
 use anyhow::{bail, Context, Result};
 use sha2::{Digest, Sha256};
 use std::{
@@ -187,59 +187,6 @@ fn private_name(fs: &dyn FileSystem, path: &str, extension: &str) -> String {
 fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
-struct Claim<'a> {
-    fs: &'a dyn FileSystem,
-    original: String,
-    preserved: String,
-    journal: String,
-}
-impl<'a> Claim<'a> {
-    fn start(fs: &'a dyn FileSystem, path: &str, kind: &str) -> Result<Self> {
-        let preserved = private_name(fs, path, kind);
-        let journal = format!("{preserved}.recovery.json");
-        let mut writer = fs.private_writer(&journal)?;
-        let record = serde_json::json!({ "version": 1, "kind": kind, "original": path, "preserved": preserved });
-        let written = (|| -> Result<()> {
-            serde_json::to_writer_pretty(&mut writer, &record)?;
-            writer.write_all(b"\n")?;
-            writer.flush()?;
-            Ok(())
-        })();
-        drop(writer);
-        if let Err(error) = written {
-            let _ = fs.remove_file(&journal);
-            return Err(error);
-        }
-        if let Err(error) = fs.rename_new(path, &preserved) {
-            return match fs.remove_file(&journal) {
-                Ok(()) => Err(error),
-                Err(cleanup) => Err(anyhow::anyhow!(
-                    "{error:#}; unused recovery record remains at {journal}: {cleanup:#}"
-                )),
-            };
-        }
-        Ok(Self {
-            fs,
-            original: path.into(),
-            preserved,
-            journal,
-        })
-    }
-    fn restore(&self, error: anyhow::Error) -> anyhow::Error {
-        match self.fs.rename_new(&self.preserved, &self.original) {
-            Ok(()) => match self.clear() { Ok(()) => error, Err(cleanup) => anyhow::anyhow!("{error:#}; {cleanup:#}") },
-            Err(restore) => anyhow::anyhow!("{error:#}; source/original preserved at {}; recovery record {}; restore failed: {restore:#}", self.preserved, self.journal),
-        }
-    }
-    fn clear(&self) -> Result<()> {
-        self.fs.remove_file(&self.journal).with_context(|| {
-            format!(
-                "Operation finalized; unused recovery record remains at {}",
-                self.journal
-            )
-        })
-    }
-}
 fn digest(fs: &dyn FileSystem, path: &str, ctx: &ContextJob) -> Result<String> {
     let mut input = fs.reader(path)?;
     let mut hash = Sha256::new();
@@ -293,6 +240,7 @@ fn transfer_file(
     }
     let original = stamp(src, &entry.path)?;
     let temp = private_name(dst, &target, "part");
+    let _active_temp = crate::recovery::Active::new(&temp);
     let mut owned_temp = false;
     let result = (|| -> Result<()> {
         let mut reader = src.reader(&entry.path)?;
@@ -352,7 +300,7 @@ fn transfer_file(
                 Ok(())
             });
         }
-        let claim = Claim::start(src, &entry.path, "move-source")?;
+        let claim = Claim::checked(src, &entry.path, "move-source", Some(&copied_digest))?;
         let claimed = &claim.preserved;
         let publish = (|| -> Result<()> {
             if !node.same_object(src, claimed)?
@@ -562,7 +510,7 @@ pub(super) fn commit(
         validate()?;
         return fs.rename_new(temp, target);
     }
-    let claim = Claim::start(fs, target, "backup")?;
+    let claim = Claim::checked(fs, target, "backup", Some(&expected.unwrap().content))?;
     let backup = &claim.preserved;
     let result = (|| -> Result<()> {
         if stamp(fs, backup)? != expected.unwrap().metadata
@@ -578,6 +526,7 @@ pub(super) fn commit(
     }
     if ctx.keep_backups {
         ctx.preserve(crate::PreservedFile {
+            source: ctx.destination_source.clone(),
             original: target.into(),
             path: backup.clone(),
             record: claim.journal.clone(),

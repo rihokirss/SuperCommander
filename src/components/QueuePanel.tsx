@@ -8,9 +8,9 @@ import {
   X,
 } from "lucide-react";
 import { command } from "../api";
-import { basename, size } from "../utils";
+import { basename, parent, size } from "../utils";
 import { IconButton } from "./Primitives";
-import type { Job } from "../types";
+import type { Job, Location } from "../types";
 import type { Text } from "../i18n";
 export function QueuePanel({
   jobs,
@@ -18,12 +18,14 @@ export function QueuePanel({
   onClose,
   onClear,
   onError,
+  onRecovery,
 }: {
   jobs: Job[];
   t: Text;
   onClose: () => void;
   onClear: () => void;
   onError: (error: string) => void;
+  onRecovery: (location: Location, key: string) => void;
 }) {
   return (
     <section className="queue-panel glass">
@@ -55,7 +57,13 @@ export function QueuePanel({
           [...jobs]
             .reverse()
             .map((job) => (
-              <JobRow key={job.id} job={job} t={t} onError={onError} />
+              <JobRow
+                key={job.id}
+                job={job}
+                t={t}
+                onError={onError}
+                onRecovery={onRecovery}
+              />
             ))
         )}
       </div>
@@ -66,10 +74,12 @@ function JobRow({
   job,
   t,
   onError,
+  onRecovery,
 }: {
   job: Job;
   t: Text;
   onError: (error: string) => void;
+  onRecovery: (location: Location, key: string) => void;
 }) {
   const [all, setAll] = useState(false);
   const pending = ["preparing", "running", "queued", "conflict"].includes(
@@ -154,6 +164,23 @@ function JobRow({
               {t.previousVersions} ({job.preservedCount})
             </summary>
             <p>{t.previousVersionsHint}</p>
+            {job.preserved?.[0]?.source && (
+              <button
+                className="text-button"
+                onClick={() => {
+                  const entry = job.preserved![0];
+                  onRecovery(
+                    {
+                      source: entry.source!,
+                      path: parent(entry.record),
+                    },
+                    entry.record,
+                  );
+                }}
+              >
+                {t.recovery}
+              </button>
+            )}
             <pre>
               {job.preserved
                 ?.map(

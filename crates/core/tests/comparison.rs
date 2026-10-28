@@ -85,6 +85,17 @@ fn content_comparison_finds_same_size_same_time_changes_and_filters_recursively(
     fs::write(right.join("only-right.txt"), "right").unwrap();
     fs::write(left.join(".hidden"), "hidden").unwrap();
     fs::write(left.join(".supercommander-test.backup"), "old").unwrap();
+    fs::write(
+        left.join(".supercommander-test.delete-source"),
+        "retained source",
+    )
+    .unwrap();
+    fs::create_dir(left.join(".supercommander-test.delete-directory")).unwrap();
+    fs::write(
+        left.join(".supercommander-test.delete-directory/remaining.txt"),
+        "remaining data",
+    )
+    .unwrap();
     let plan = compare(&left, &right, Options::default());
     assert_eq!(
         plan.rows

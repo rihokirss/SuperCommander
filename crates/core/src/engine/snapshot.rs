@@ -20,6 +20,7 @@ pub(super) struct Node {
     pub digest: Option<String>,
     children: Option<String>,
     regular: bool,
+    portable: String,
 }
 fn children(entries: &[Entry]) -> String {
     let mut names: Vec<_> = entries
@@ -93,6 +94,45 @@ impl Node {
             (None, None) => true,
             _ => false,
         })
+    }
+    pub fn validate_claim(
+        &self,
+        fs: &dyn FileSystem,
+        path: &str,
+        ctx: &ContextJob,
+        contents: bool,
+    ) -> Result<()> {
+        ctx.check()?;
+        if !self.same_object(fs, path)?
+            || crate::recovery::metadata_signature(fs.properties(path)?)? != self.portable
+            || !self.entry.is_dir
+                && !self.entry.is_symlink
+                && fs.regular_file(path)? != self.regular
+        {
+            bail!(
+                "Claimed source changed; remaining data preserved: {}",
+                self.entry.path
+            );
+        }
+        if let Some(expected) = &self.children {
+            if children(&list(fs, path, ctx)?) != *expected {
+                bail!(
+                    "Claimed folder contents changed; remaining data preserved: {}",
+                    self.entry.path
+                );
+            }
+        }
+        if contents {
+            if let Some(expected) = &self.digest {
+                if crate::comparison::hash(fs, path, &ctx.control.cancel, |_| {})? != *expected {
+                    bail!(
+                        "Claimed source contents changed; remaining data preserved: {}",
+                        self.entry.path
+                    );
+                }
+            }
+        }
+        Ok(())
     }
 }
 pub(super) type Destination = (String, String, Option<String>);
@@ -223,6 +263,7 @@ fn capture(
         None
     };
     let mut node = Node {
+        portable: crate::recovery::metadata_signature(info.clone())?,
         regular: !info.file.is_dir && !info.file.is_symlink && fs.regular_file(path)?,
         canonical: if info.file.is_symlink {
             None

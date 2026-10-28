@@ -1,3 +1,4 @@
+mod delete;
 mod snapshot;
 mod synchronize;
 mod transfer;
@@ -49,6 +50,8 @@ struct QueuedJob {
     sources: Sources,
     synchronization: Option<crate::comparison::Prepared>,
     preparation: mpsc::Receiver<std::result::Result<Option<snapshot::Snapshot>, String>>,
+    stop_on_error: bool,
+    lease: Option<crate::recovery::Active>,
 }
 
 impl Engine {
@@ -64,6 +67,8 @@ impl Engine {
                 sources,
                 synchronization,
                 preparation,
+                stop_on_error,
+                lease: _lease,
             } in rx
             {
                 let mut context = ContextJob {
@@ -83,6 +88,7 @@ impl Engine {
                     sink: worker_sink.clone(),
                     policy: req.conflict.clone(),
                     keep_backups: synchronization.is_some(),
+                    destination_source: req.destination.source.clone(),
                     preserved: std::cell::RefCell::new(Vec::new()),
                     preserved_count: std::cell::Cell::new(0),
                     expected_copy: None,
@@ -97,9 +103,9 @@ impl Engine {
                             context.emit();
                             synchronize::run(&sources, plan, &mut context)
                         }
-                        None => snapshot
-                            .context("Missing queued source snapshot")
-                            .and_then(|snapshot| run(&sources, &req, snapshot, &mut context)),
+                        None => snapshot.context("Missing queued source snapshot").and_then(
+                            |snapshot| run(&sources, &req, snapshot, stop_on_error, &mut context),
+                        ),
                     },
                 };
                 context.event.conflict_path = None;
@@ -115,6 +121,7 @@ impl Engine {
                 } else {
                     "completed".into()
                 };
+                drop(_lease);
                 context.emit();
                 registry.lock().unwrap().remove(&req.id);
             }
@@ -128,20 +135,31 @@ impl Engine {
         }
     }
     pub fn enqueue(&self, request: JobRequest) -> Result<()> {
-        if request.operation == Operation::Synchronize {
+        if matches!(
+            request.operation,
+            Operation::Synchronize | Operation::Restore
+        ) {
             bail!("Use a reviewed comparison to synchronize");
         }
-        self.enqueue_inner(request, None)
+        self.enqueue_inner(request, None, false, None)
     }
     pub fn enqueue_synchronization(
         &self,
         id: String,
         prepared: crate::comparison::Prepared,
     ) -> Result<()> {
+        self.enqueue_prepared(id, prepared, None)
+    }
+    fn enqueue_prepared(
+        &self,
+        id: String,
+        prepared: crate::comparison::Prepared,
+        lease: Option<crate::recovery::Active>,
+    ) -> Result<()> {
         let plan = &prepared.plan;
         let request = JobRequest {
             id,
-            operation: Operation::Synchronize,
+            operation: prepared.operation.clone(),
             source: plan.left.location.source.clone(),
             paths: prepared
                 .actions
@@ -153,12 +171,64 @@ impl Engine {
             source_connection: plan.left.connection.clone(),
             destination_connection: plan.right.connection.clone(),
         };
-        self.enqueue_inner(request, Some(prepared))
+        self.enqueue_inner(request, Some(prepared), false, lease)
+    }
+    pub fn enqueue_recovery(&self, id: String, prepared: crate::recovery::Prepared) -> Result<()> {
+        let fs = self.sources.get(&prepared.copy.plan.left.location.source)?;
+        let current = crate::recovery::inspect(fs.as_ref(), &prepared.item.key)?;
+        if current.revision != prepared.item.revision
+            || current.connection != prepared.item.connection
+        {
+            bail!("Saved copy or connection changed; scan again");
+        }
+        let lease = crate::recovery::Active::acquire(&prepared.item.key)?;
+        self.enqueue_prepared(id, prepared.copy, Some(lease))
+    }
+    pub fn enqueue_recovery_cleanup(
+        &self,
+        id: String,
+        source: String,
+        item: crate::recovery::Item,
+    ) -> Result<()> {
+        let fs = self.sources.get(&source)?;
+        let current = crate::recovery::inspect(fs.as_ref(), &item.key)?;
+        if current.revision != item.revision || current.connection != item.connection {
+            bail!("Saved copy or connection changed; scan again");
+        }
+        let item = current;
+        let lease = crate::recovery::Active::acquire(&item.key)?;
+        let mut paths = Vec::new();
+        if item.entry.is_some() {
+            paths.push(item.payload);
+        }
+        if let Some(record) = item.record {
+            paths.push(record);
+        }
+        self.enqueue_inner(
+            JobRequest {
+                id,
+                operation: Operation::Delete,
+                source: source.clone(),
+                paths,
+                destination: crate::Location {
+                    source,
+                    path: item.folder,
+                },
+                conflict: Conflict::Replace,
+                source_connection: item.connection,
+                destination_connection: None,
+            },
+            None,
+            true,
+            Some(lease),
+        )
     }
     fn enqueue_inner(
         &self,
         request: JobRequest,
         synchronization: Option<crate::comparison::Prepared>,
+        stop_on_error: bool,
+        lease: Option<crate::recovery::Active>,
     ) -> Result<()> {
         if request.paths.is_empty() {
             bail!("Select at least one file");
@@ -167,7 +237,8 @@ impl Engine {
         // Bind a queued job to these connections. Resolving profile IDs only when
         // it starts could redirect an old job to a newly connected server.
         let source = self.sources.get(&request.source)?;
-        let destination = if request.source == request.destination.source {
+        let needs_destination = !matches!(request.operation, Operation::Delete | Operation::Trash);
+        let destination = if !needs_destination || request.source == request.destination.source {
             source.clone()
         } else {
             self.sources.get(&request.destination.source)?
@@ -176,10 +247,11 @@ impl Engine {
             .source_connection
             .as_deref()
             .is_some_and(|id| Some(id) != source.connection_id())
-            || request
-                .destination_connection
-                .as_deref()
-                .is_some_and(|id| Some(id) != destination.connection_id())
+            || needs_destination
+                && request
+                    .destination_connection
+                    .as_deref()
+                    .is_some_and(|id| Some(id) != destination.connection_id())
         {
             bail!("An SSH connection changed. Start the operation again.");
         }
@@ -215,6 +287,7 @@ impl Engine {
             sink: self.sink.clone(),
             policy: request.conflict.clone(),
             keep_backups: false,
+            destination_source: request.destination.source.clone(),
             preserved: std::cell::RefCell::new(Vec::new()),
             preserved_count: std::cell::Cell::new(0),
             expected_copy: None,
@@ -229,6 +302,8 @@ impl Engine {
                 sources,
                 synchronization,
                 preparation,
+                stop_on_error,
+                lease,
             })
             .is_err()
         {
@@ -312,6 +387,7 @@ struct ContextJob {
     sink: Sink,
     policy: Conflict,
     keep_backups: bool,
+    destination_source: String,
     preserved: std::cell::RefCell<Vec<crate::PreservedFile>>,
     preserved_count: std::cell::Cell<u64>,
     expected_copy: Option<CopyExpectation>,
@@ -387,6 +463,7 @@ fn run(
     sources: &Sources,
     req: &JobRequest,
     mut snapshot: snapshot::Snapshot,
+    stop_on_error: bool,
     ctx: &mut ContextJob,
 ) -> Result<()> {
     ctx.check()?;
@@ -394,7 +471,9 @@ fn run(
     ctx.event.state = "preparing".into();
     ctx.emit();
     snapshot.validate(source.as_ref(), ctx)?;
-    snapshot.validate_destination(sources.get(&req.destination.source)?.as_ref())?;
+    if !matches!(req.operation, Operation::Delete | Operation::Trash) {
+        snapshot.validate_destination(sources.get(&req.destination.source)?.as_ref())?;
+    }
     ctx.event.state = "running".into();
     ctx.event.total = snapshot.total;
     ctx.emit();
@@ -465,11 +544,9 @@ fn run(
                 .unwrap()
                 .validate_root(source.as_ref(), index, ctx)
                 .and_then(|_| trash::delete(path).map_err(anyhow::Error::from)),
-            Operation::Delete => snapshot
-                .as_mut()
-                .unwrap()
-                .validate_root(source.as_ref(), index, ctx)
-                .and_then(|_| source.remove(path)),
+            Operation::Delete => {
+                delete::run(snapshot.as_mut().unwrap(), source.as_ref(), index, ctx)
+            }
             Operation::Copy | Operation::Move => {
                 let entry = source.stat(path)?;
                 crate::filesystem::valid_name(&entry.name)?;
@@ -509,6 +586,9 @@ fn run(
         match result {
             Ok(()) => ctx.event.completed += 1,
             Err(e) => {
+                if stop_on_error {
+                    return Err(e);
+                }
                 if e.to_string() != "Cancelled" {
                     ctx.event.errors.push(format!("{path}: {e:#}"));
                 }

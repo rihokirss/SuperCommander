@@ -222,12 +222,9 @@ pub fn write(
         &parent,
         &format!(".supercommander-{}.part", uuid::Uuid::new_v4()),
     );
-    let backup = fs.join(
-        &parent,
-        &format!(".supercommander-{}.backup", uuid::Uuid::new_v4()),
-    );
+    let _active_temp = crate::recovery::Active::new(&temp);
     let result = (|| -> Result<()> {
-        let mut writer = fs.writer(&temp)?;
+        let mut writer = fs.private_writer(&temp)?;
         writer.write_all(&encoded)?;
         writer.flush()?;
         drop(writer);
@@ -240,24 +237,28 @@ pub fn write(
         if expected.is_none() {
             return fs.rename_new(&temp, path);
         }
-        fs.rename_new(path, &backup)?;
+        let claim = crate::recovery::Claim::checked(fs, path, "backup", expected)?;
+        let backup = &claim.preserved;
         let committed = (|| -> Result<()> {
-            if revision(&bytes(fs, &backup)?) != expected.unwrap() {
+            if revision(&bytes(fs, backup)?) != expected.unwrap() {
                 bail!("The file changed while saving. Your edits were not written over it.");
             }
             fs.rename_new(&temp, path)
         })();
         if let Err(e) = committed {
-            if let Err(restore) = fs.rename_new(&backup, path) {
-                bail!("{e}; original preserved at {backup}; restore failed: {restore}");
-            }
-            return Err(e);
+            return Err(claim.restore(e));
         }
-        fs.remove(&backup)?;
+        fs.remove_file(backup).with_context(|| {
+            format!(
+                "File saved; previous version preserved at {backup}; recovery record {}",
+                claim.journal
+            )
+        })?;
+        claim.clear()?;
         Ok(())
     })();
     if result.is_err() {
-        let _ = fs.remove(&temp);
+        let _ = fs.discard_temp(&temp);
     }
     result?;
     let mut document = read(fs, path)?;

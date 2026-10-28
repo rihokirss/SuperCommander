@@ -55,6 +55,7 @@ pub enum Operation {
     Zip,
     Extract,
     Synchronize,
+    Restore,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -98,6 +99,7 @@ pub struct JobEvent {
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PreservedFile {
+    pub source: String,
     pub original: String,
     pub path: String,
     pub record: String,

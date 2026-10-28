@@ -108,6 +108,13 @@ pub(super) fn run(sources: &Sources, prepared: Prepared, ctx: &mut ContextJob) -
     let fs = [bindings[0].as_ref(), bindings[1].as_ref()];
     comparison::validate_root(fs[0], &prepared.plan.left)?;
     comparison::validate_root(fs[1], &prepared.plan.right)?;
+    if matches!(prepared.operation, crate::Operation::Restore)
+        && prepared.plan.trees[0]
+            .values()
+            .any(|node| node.entry.is_dir)
+    {
+        guard_recovery_destination(fs, &prepared, ctx)?;
+    }
     // Validate the entire reviewed selection before any user data is written.
     for action in &prepared.actions {
         validate_action(fs, action, ctx)?;
@@ -137,6 +144,11 @@ pub(super) fn run(sources: &Sources, prepared: Prepared, ctx: &mut ContextJob) -
                 ctx,
             )?;
             if !action.source.entry.is_dir {
+                ctx.destination_source = if action.side == 0 {
+                    prepared.plan.right.location.source.clone()
+                } else {
+                    prepared.plan.left.location.source.clone()
+                };
                 let total = ctx.event.total;
                 let mut copy = transfer::Plan::build(
                     fs[action.side],
@@ -190,4 +202,40 @@ pub(super) fn run(sources: &Sources, prepared: Prepared, ctx: &mut ContextJob) -
         }
     }
     result
+}
+
+// UNC and SFTP can reach the same tree through different source names. This
+// probe runs only after confirmation, before any restored user data is written.
+fn guard_recovery_destination(
+    fs: [&dyn FileSystem; 2],
+    prepared: &Prepared,
+    ctx: &ContextJob,
+) -> Result<()> {
+    use std::io::Write;
+    let name = format!(".supercommander-{}.part", uuid::Uuid::new_v4());
+    let probe = fs[1].join(&prepared.plan.right.location.path, &name);
+    let _active = crate::recovery::Active::new(&probe);
+    let mut writer = fs[1].private_writer(&probe)?;
+    let result = (|| -> Result<()> {
+        writer.write_all(b"SuperCommander recovery destination check\n")?;
+        writer.flush()?;
+        drop(writer);
+        for node in prepared.plan.trees[0]
+            .values()
+            .filter(|node| node.entry.is_dir)
+        {
+            ctx.check()?;
+            if fs[0].exists(&fs[0].join(&node.entry.path, &name))? {
+                bail!("Recover into a folder outside the saved copy; these sources reach the same tree");
+            }
+        }
+        Ok(())
+    })();
+    match fs[1].remove_file(&probe) {
+        Ok(()) => result,
+        Err(error) => Err(anyhow::anyhow!(
+            "{}; destination check file remains at {probe}: {error:#}",
+            result.err().map(|e| format!("{e:#}")).unwrap_or_default()
+        )),
+    }
 }

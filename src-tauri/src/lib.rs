@@ -23,6 +23,7 @@ struct AppState {
     terminals: Terminals,
     searches: core::tasks::Tasks,
     comparisons: Mutex<HashMap<String, ComparisonRecord>>,
+    recovery_plans: Mutex<HashMap<String, (std::time::Instant, core::recovery::Prepared)>>,
     watchers: Mutex<HashMap<String, RecommendedWatcher>>,
 }
 struct ComparisonRecord {
@@ -35,6 +36,117 @@ struct ComparisonResult {
     plan: Arc<core::comparison::Plan>,
 }
 type Reply<T> = Result<T, String>;
+#[derive(Clone, Serialize)]
+struct RecoveryProgress {
+    files: u64,
+    bytes: u64,
+}
+#[derive(Serialize)]
+struct RecoveryReview {
+    id: String,
+    summary: core::recovery::RestoreSummary,
+}
+
+#[tauri::command]
+async fn scan_recovery(
+    state: State<'_, AppState>,
+    id: String,
+    location: Location,
+    recursive: bool,
+    channel: Channel<core::recovery::Batch>,
+) -> Reply<()> {
+    let task = state.searches.start(id).map_err(error)?;
+    let fs = state.sources.get(&location.source).map_err(error)?;
+    blocking(move || {
+        core::recovery::scan(
+            fs.as_ref(),
+            &location.path,
+            recursive,
+            &task.cancel,
+            &|batch| {
+                if channel.send(batch).is_err() {
+                    task.cancel.store(true, Ordering::Relaxed);
+                }
+            },
+        )
+    })
+    .await
+}
+#[tauri::command]
+async fn plan_recovery(
+    state: State<'_, AppState>,
+    id: String,
+    source: String,
+    options: core::recovery::RestoreOptions,
+    channel: Channel<RecoveryProgress>,
+) -> Reply<RecoveryReview> {
+    let task = state.searches.start(id.clone()).map_err(error)?;
+    let cancel = task.cancel.clone();
+    let fs = state.sources.get(&source).map_err(error)?;
+    let dst = state
+        .sources
+        .get(&options.destination.source)
+        .map_err(error)?;
+    let prepared = blocking(move || {
+        core::recovery::prepare(
+            fs.as_ref(),
+            &source,
+            dst.as_ref(),
+            &options,
+            &task.cancel,
+            &|files, bytes| {
+                if channel.send(RecoveryProgress { files, bytes }).is_err() {
+                    task.cancel.store(true, Ordering::Relaxed);
+                }
+            },
+        )
+    })
+    .await?;
+    if cancel.load(Ordering::Relaxed) {
+        return Err("Cancelled".into());
+    }
+    let summary = prepared.summary.clone();
+    let mut cache = state.recovery_plans.lock().unwrap();
+    cache.retain(|_, (created, _)| created.elapsed().as_secs() < 1800);
+    while cache.len() >= 4 {
+        let oldest = cache
+            .iter()
+            .min_by_key(|(_, (created, _))| *created)
+            .map(|(id, _)| id.clone())
+            .unwrap();
+        cache.remove(&oldest);
+    }
+    cache.insert(id.clone(), (std::time::Instant::now(), prepared));
+    Ok(RecoveryReview { id, summary })
+}
+#[tauri::command]
+fn release_recovery(state: State<AppState>, id: String) {
+    state.recovery_plans.lock().unwrap().remove(&id);
+}
+#[tauri::command]
+async fn enqueue_recovery(state: State<'_, AppState>, id: String, plan: String) -> Reply<()> {
+    let (created, prepared) = state
+        .recovery_plans
+        .lock()
+        .unwrap()
+        .remove(&plan)
+        .ok_or("Recovery review expired; prepare it again")?;
+    if created.elapsed().as_secs() >= 1800 {
+        return Err("Recovery review expired; prepare it again".into());
+    }
+    let engine = state.engine.clone();
+    blocking(move || engine.enqueue_recovery(id, prepared)).await
+}
+#[tauri::command]
+async fn remove_recovery(
+    state: State<'_, AppState>,
+    id: String,
+    source: String,
+    item: core::recovery::Item,
+) -> Reply<()> {
+    let engine = state.engine.clone();
+    blocking(move || engine.enqueue_recovery_cleanup(id, source, item)).await
+}
 fn error(e: impl std::fmt::Display) -> String {
     format!("{e:#}")
 }
@@ -960,6 +1072,7 @@ pub fn run() {
                 terminals: Terminals::default(),
                 searches: core::tasks::Tasks::default(),
                 comparisons: Mutex::default(),
+                recovery_plans: Mutex::default(),
                 watchers: Mutex::default(),
             });
             #[cfg(windows)]
@@ -985,6 +1098,11 @@ pub fn run() {
             cancel_search,
             compare_directories,
             release_comparison,
+            scan_recovery,
+            plan_recovery,
+            release_recovery,
+            enqueue_recovery,
+            remove_recovery,
             enqueue_comparison,
             get_properties,
             apply_properties,

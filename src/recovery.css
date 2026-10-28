@@ -1,0 +1,260 @@
+.modal:has(> .recovery-workbench) {
+  width: min(1080px, 94vw);
+  height: min(780px, 92vh);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.recovery-workbench {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  gap: 10px;
+}
+.recovery-workbench p {
+  margin: 0;
+}
+.recovery-scan {
+  display: flex;
+  gap: 12px;
+  align-items: end;
+}
+.recovery-scan .field {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+.recovery-scan > label:not(.field),
+.recovery-check {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 11px;
+}
+.recovery-scan > label:not(.field) {
+  padding-bottom: 8px;
+  white-space: nowrap;
+}
+.recovery-scan > button {
+  min-height: 32px;
+  white-space: nowrap;
+}
+.recovery-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+}
+.recovery-filter input {
+  flex: 1;
+  min-width: 0;
+}
+.recovery-filter small {
+  white-space: nowrap;
+}
+.recovery-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 14px;
+  flex: 1;
+  min-height: 0;
+}
+.recovery-list,
+.recovery-review-list {
+  position: relative;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  min-height: 0;
+  background: var(--panel);
+}
+.recovery-list:focus-visible,
+.recovery-review-list:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 1px;
+}
+.recovery-row,
+.recovery-review-row {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px;
+  font-size: 11px;
+  border-bottom: 1px solid var(--line);
+}
+.recovery-row {
+  cursor: default;
+}
+.recovery-row.selected {
+  background: var(--accent-soft);
+  box-shadow: inset 3px 0 var(--accent);
+}
+.recovery-row > span:not(.file-icon) {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+.recovery-row strong {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.recovery-row small {
+  color: var(--muted);
+  font-size: 10px;
+  white-space: nowrap;
+}
+.recovery-row.selected strong {
+  color: var(--bright);
+}
+.recovery-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 4px;
+  font-size: 11px;
+}
+.recovery-detail-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 24px;
+}
+.recovery-detail dl {
+  margin: 0;
+  display: grid;
+  gap: 4px;
+}
+.recovery-detail dt {
+  color: var(--muted);
+  font-size: 10px;
+}
+.recovery-detail dd {
+  margin: 0 0 7px;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+  user-select: text;
+}
+.recovery-detail .field {
+  margin: 0;
+}
+.recovery-detail .text-button {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+}
+.recovery-workbench .hint,
+.recovery-review .hint {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.recovery-status,
+.recovery-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.recovery-footer > div {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.recovery-paths {
+  color: var(--muted);
+}
+.recovery-paths summary {
+  cursor: pointer;
+}
+.recovery-paths dl {
+  margin-top: 8px;
+  color: var(--text);
+}
+.recovery-row .file-icon {
+  flex: 0 0 18px;
+}
+.recovery-row > svg {
+  flex-shrink: 0;
+}
+.recovery-footer {
+  justify-content: space-between;
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+}
+.recovery-review {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+.recovery-counts {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 11px;
+}
+.recovery-review-roots {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.recovery-review-roots > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.recovery-review-roots small {
+  font-size: 10px;
+  color: var(--muted);
+}
+.recovery-review-roots strong {
+  font-size: 11px;
+  font-weight: 400;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+.recovery-review-list {
+  height: min(400px, 45vh);
+}
+.recovery-review-row > span {
+  width: 70px;
+  flex-shrink: 0;
+  color: var(--muted);
+}
+.recovery-review-row code {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.recovery-remove-path {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 11px;
+  user-select: text;
+}
+@media (max-width: 1050px) {
+  .recovery-body {
+    grid-template-columns: minmax(0, 1fr) 285px;
+    gap: 10px;
+  }
+  .recovery-row > span:not(.file-icon) {
+    flex-direction: column;
+    gap: 1px;
+  }
+}
