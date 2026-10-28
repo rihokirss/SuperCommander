@@ -2,7 +2,7 @@
   "objectiveOriginal": "jätka niikaua kuni kõik mõistlik funktsionaalsus olemas, UI ühetaolisus ja sobivus kontrollitud, kõik mõistlikud shortcut keyd olemas",
   "status": "in_progress",
   "baselineRelease": "v0.2.0",
-  "lastVerifiedBatchId": "renameBatch",
+  "lastVerifiedBatchId": "dependencyBatch",
   "lastVerifiedBatch": {
     "features": [
       "Keyboard-accessible command and context menus",
@@ -544,7 +544,7 @@
     ]
   },
   "archiveAuditPending": {
-    "status": "addressed_by_archive_batch_awaiting_ci",
+    "status": "addressed_by_archive_batch_verified_in_release",
     "addressedByBatch": "archiveBatch",
     "confirmedOnSource": "77273ebf9b1f4afdb11ba37668f0bb6d28b8ed1b",
     "runtimeEvidence": "artifacts/archive-timestamp-audit.json; standalone Rust probe linked the built core, used only an owned temporary directory and removed its probe files afterward",
@@ -587,7 +587,7 @@
       "nativeWindows": "Final f72327ae passed windows-archive-smoke.mjs, including actual Alt+F5/Alt+F6, F3/F5 and F4/F8 readonly guards, exact UTC times, empty directories, read-only flags, retained versions, hard links, early cancellation, junction rejection and dark/light 960x640 layout. Full windows-smoke.mjs passed on this executable with the new actual-SSH-other-pane ZIP case, plus copy/move/recycle, editor, image/PDF, SSH config/catalog, transfers, tunnels, remote shell, PowerShell/ConPTY and Ctrl+O.",
       "windowsCompilation": "fmt, workspace/all-target clippy and Windows checks passed; executable and NSIS installer built. Final executable SHA256 f72327ae68e62456943ba7fc650eb128d5fda4979ccf9b164e44b25723616edf.",
       "fixtureOwnership": "Full native smoke now creates and removes its own remote folder per run, so repeated runs do not edit the shared fixture's baseline file. A repeated-run failure correctly exposed that stale baseline rather than weakening the editor content assertion.",
-      "ci": "Run 40636622188 on 57f3f25 passed compilation, core/unit/browser tests and native clipboard checks, then failed because the properties smoke test still expected the old Create ZIP menu label without its shortcut. The release preparation fixes this locator; matching release CI is pending. Clipboard UI tests remain dedicated-CI-only."
+      "ci": "Windows CI run 40638032494 completed successfully on release commit 246d05718ebdf0b7db44cdfe867c68551d8b8301 with ZIP 9, including Rust tests, 26 JavaScript tests, 50 browser tests, executable/installer builds and all native clipboard, properties, search, transfer, queue, comparison, tooltip, recovery, rename and archive checks. This is the public v0.3.0 build."
     },
     "visualEvidence": [
       "docs/screenshots/archives.png",
@@ -601,7 +601,7 @@
     ]
   },
   "dependencyBatch": {
-    "status": "implemented_awaiting_release_ci",
+    "status": "verified_in_release_v0.3.0",
     "date": "2026-10-28",
     "review": "docs/dependencies.md",
     "changes": [
@@ -618,10 +618,44 @@
       "rustAudit": "1 unpatched RSA advisory; cross-platform-only warnings documented in docs/dependencies.md",
       "nativeWindows": "Final 474abb80 executable passed windows-archive-smoke.mjs and full windows-smoke.mjs, including real SSH/SFTP, remote editing/shells, remembered forwards and PowerShell/ConPTY. The ZIP 9 DOS creator default was caught by the Windows permissions regression and corrected to explicit Unix metadata. All 17 ordinary Windows archive tests and the >4 GiB ZIP64 acceptance passed (22.88 seconds). Legacy Windows credential compatibility passed. Properties/bookmarks passed with SSH, and the corrected UI-based UNC bookmark test passed again without an SSH fixture, matching the hosted runner.",
       "lint": "cargo fmt and workspace/all-target clippy with warnings denied passed",
-      "ci": "Matching final public Windows CI pending after the properties test fix. Run 40637481339 exposed a test-only backend settings write racing the UI debounce; the test now adds both UNC bookmarks through the UI and waits for actual persistence before reloading."
+      "ci": "Release CI run 40638032494 passed on 246d05718ebdf0b7db44cdfe867c68551d8b8301. The published Windows executable was additionally checked locally for version 0.3.0, F9 comparison/recovery and the full native search smoke test. Later main commit 1794267 changed only the properties test and audit documentation; its CI run 40638318391 timed out waiting five seconds for the owned WebView page before search testing began. The test helper now waits up to 30 seconds for that same page, consistent with its other startup checks; the local native search check passed with this helper."
     },
     "remaining": [
-      "Release packaging and native checks remain pending; broader original objective is still in progress."
+      "The unpatched upstream RSA advisory and non-Windows lockfile warnings are documented in docs/dependencies.md. Broader original-scope functionality and UI audits remain in progress."
     ]
+  },
+  "release030": {
+    "status": "published",
+    "version": "0.3.0",
+    "url": "https://github.com/rihokirss/SuperCommander/releases/tag/v0.3.0",
+    "publishedAt": "2026-10-28T05:40:26Z",
+    "sourceCommit": "246d05718ebdf0b7db44cdfe867c68551d8b8301",
+    "windowsCI": {
+      "runId": 40638032494,
+      "url": "https://github.com/rihokirss/SuperCommander/actions/runs/40638032494",
+      "conclusion": "success"
+    },
+    "assets": {
+      "SuperCommander_0.3.0_x64-setup.exe": {
+        "sha256": "3769cf1d69963fbaf9d6e67f82b50ddf08edb386e6fa29e86c1ab11e1dd5fc54",
+        "bytes": 5266597
+      },
+      "SuperCommander_0.3.0_x64.exe": {
+        "sha256": "3b8c49ed2eb096f45a0044d78dc2b79d8f054e1df372eee4393bc8dc251c117d",
+        "bytes": 20628992
+      }
+    },
+    "additionalAssets": [
+      "SHA256SUMS.txt",
+      "BUILDINFO.json"
+    ],
+    "verification": [
+      "Public unauthenticated release API and latest-release endpoint identify v0.3.0",
+      "Git tag resolves to the verified release commit",
+      "Uploaded asset digests match prepared files; downloaded public assets pass SHA-256 verification",
+      "Installer payload matches standalone bytes except for the single Tauri NSIS bundle-type marker",
+      "Published Windows artifact reports version 0.3.0 and passes isolated native F9/independent pane and search checks"
+    ],
+    "mainBranchDifference": "Only test helpers and audit documentation differ from the release commit; production source and dependency lockfiles are identical."
   }
 }

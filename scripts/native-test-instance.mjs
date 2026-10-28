@@ -128,11 +128,13 @@ export async function startNativeTest(name, executable) {
     }
     assert.ok(browser, "The test app did not expose its debugging endpoint");
     await expect
-      .poll(() =>
-        browser
-          .contexts()[0]
-          .pages()
-          .some((p) => p.url().includes("tauri.localhost")),
+      .poll(
+        () =>
+          browser
+            .contexts()[0]
+            .pages()
+            .some((p) => p.url().includes("tauri.localhost")),
+        { timeout: 30000 },
       )
       .toBe(true);
     const page = browser
