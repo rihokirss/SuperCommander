@@ -10,6 +10,7 @@ pub mod rename;
 pub mod search;
 pub mod settings;
 pub mod ssh_config;
+pub mod tasks;
 pub mod terminal;
 pub mod text;
 pub mod types;

@@ -2390,13 +2390,13 @@ export function App() {
           onEdit={
             dialog.location.source.startsWith("zip:")
               ? undefined
-              : (line, column) =>
+              : (line, column, connection) =>
                   setDialog({
                     kind: "edit",
                     location: dialog.location,
                     line: line || dialog.line,
                     column: column || dialog.column,
-                    connection: dialog.connection,
+                    connection,
                   })
           }
         />

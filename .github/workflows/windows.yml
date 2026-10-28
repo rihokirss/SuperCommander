@@ -43,6 +43,7 @@ jobs:
             artifacts/native-bookmarks*.png
             artifacts/native-permissions*.png
             artifacts/native-search*.png
+            artifacts/native-viewer-find*.png
           if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         if: always()

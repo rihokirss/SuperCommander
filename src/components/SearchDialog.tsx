@@ -595,10 +595,11 @@ export function SearchDialog({
           onEdit={
             location.source.startsWith("zip:")
               ? undefined
-              : (line, column) =>
+              : (line, column, connection) =>
                   setDocument({
                     ...document,
                     mode: "edit",
+                    connection: connection ?? document.connection,
                     line: line || document.line,
                     column: column || document.column,
                   })

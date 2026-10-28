@@ -9,7 +9,7 @@ import {
 import * as api from "../api";
 import { basename, size, uid } from "../utils";
 import { IconButton, Modal } from "./Primitives";
-import type { Location, Preview } from "../types";
+import type { Location, Preview, TextHit, TextPosition } from "../types";
 import type { Text } from "../i18n";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { TextWorkbench } from "./TextWorkbench";
@@ -25,35 +25,117 @@ export function PreviewDialog({
   location: Location;
   t: Text;
   onClose: () => void;
-  onEdit?: (line?: number, column?: number) => void;
+  onEdit?: (line?: number, column?: number, connection?: string | null) => void;
   initialLine?: number;
   initialColumn?: number;
   connection?: string | null;
 }) {
-  const [line, setLine] = useState(initialLine);
+  const [target, setTarget] = useState({
+    line: initialLine,
+    column: initialColumn,
+    length: 0,
+    version: 0,
+  });
   const [data, setData] = useState<Preview>();
   const [error, setError] = useState("");
-  useEffect(() => {
-    let alive = true;
+  const [loading, setLoading] = useState(true);
+  const [findStatus, setFindStatus] = useState("");
+  const request = useRef<{ id: string; kind: "page" | "find" } | undefined>(
+    undefined,
+  );
+  const boundConnection = useRef(connection);
+  function cancelRequest() {
+    const active = request.current;
+    request.current = undefined;
+    if (active && api.desktop)
+      void api.command("cancel_search", { id: active.id }).catch(() => {});
+  }
+  function begin(kind: "page" | "find") {
+    cancelRequest();
     const id = uid();
-    setData(undefined);
+    request.current = { id, kind };
+    setLoading(true);
     setError("");
+    return id;
+  }
+  function accept(preview: Preview, position: TextPosition, length = 0) {
+    boundConnection.current = preview.connection;
+    setData(preview);
+    setTarget((target) => ({
+      ...position,
+      length,
+      version: target.version + 1,
+    }));
+  }
+  function loadPage(line: number, column = 1) {
+    const id = begin("page");
+    setFindStatus("");
     api
-      .command<Preview>("get_preview", { location, line, connection, id })
+      .command<Preview>("get_preview", {
+        location,
+        line,
+        connection: boundConnection.current,
+        id,
+      })
       .then((d) => {
-        if (alive) setData(d);
+        if (request.current?.id === id) accept(d, { line, column });
       })
       .catch((e) => {
-        if (alive) setError(String(e));
+        if (request.current?.id === id) setError(String(e));
+      })
+      .finally(() => {
+        if (request.current?.id === id) {
+          request.current = undefined;
+          setLoading(false);
+        }
       });
-    return () => {
-      alive = false;
-      if (api.desktop)
-        void api.command("cancel_search", { id }).catch(() => {});
-    };
-  }, [location.source, location.path, line, connection]);
+  }
+  function find(query: string, from: TextPosition, previous: boolean) {
+    const id = begin("find");
+    setFindStatus("");
+    api
+      .command<{ hit: TextHit | null; preview: Preview | null }>("find_text", {
+        id,
+        location,
+        query,
+        from,
+        previous,
+        connection: boundConnection.current,
+      })
+      .then(({ hit, preview }) => {
+        if (request.current?.id !== id) return;
+        if (hit && preview) {
+          accept(preview, hit, hit.length);
+          setFindStatus(hit.wrapped ? t.searchWrapped : "");
+        } else setFindStatus(t.noTextMatch);
+      })
+      .catch((e) => {
+        if (request.current?.id === id) setError(String(e));
+      })
+      .finally(() => {
+        if (request.current?.id === id) {
+          request.current = undefined;
+          setLoading(false);
+        }
+      });
+  }
+  function cancelFind() {
+    if (request.current?.kind === "find") {
+      cancelRequest();
+      setLoading(false);
+    }
+    setFindStatus("");
+  }
   useEffect(() => {
+    boundConnection.current = connection;
+    setData(undefined);
+    loadPage(initialLine, initialColumn);
+    return cancelRequest;
+  }, [location.source, location.path, connection]);
+  useEffect(() => {
+    if (data?.kind === "text") return;
     const key = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
       if (e.key === "F10" || e.key === "F3") {
         e.preventDefault();
         onClose();
@@ -61,11 +143,10 @@ export function PreviewDialog({
     };
     document.addEventListener("keydown", key);
     return () => document.removeEventListener("keydown", key);
-  }, [onClose]);
+  }, [onClose, data?.kind]);
   if (data?.kind === "text")
     return (
       <TextWorkbench
-        key={`${data.startLine}:${line}`}
         location={location}
         t={t}
         initial={data.data}
@@ -73,11 +154,19 @@ export function PreviewDialog({
         lineOffset={(data.startLine || 1) - 1}
         initialEncoding={data.encoding}
         initialLineEnding={data.lineEnding}
-        initialLine={line}
-        initialColumn={line === initialLine ? initialColumn : 1}
-        onGotoLine={setLine}
+        initialLine={target.line}
+        initialColumn={target.column}
+        initialSelectionLength={target.length}
+        initialVersion={target.version}
+        viewLoading={loading}
+        viewError={error}
+        findStatus={findStatus}
+        findLoading={loading && request.current?.kind === "find"}
+        onFind={find}
+        onCancelFind={cancelFind}
+        onGotoLine={loadPage}
         onPage={(delta) =>
-          setLine(
+          loadPage(
             delta > 0
               ? (data.endLine || 1) + 1
               : Math.max(1, (data.startLine || 1) - 2000),
@@ -86,7 +175,11 @@ export function PreviewDialog({
         hasPrevious={(data.startLine || 1) > 1}
         hasNext={!!data.hasMore}
         onClose={onClose}
-        onEdit={onEdit}
+        onEdit={
+          onEdit
+            ? (line, column) => onEdit(line, column, boundConnection.current)
+            : undefined
+        }
       />
     );
   return (

@@ -74,7 +74,7 @@
     "Editor create/Save As/format conversion and application-close protection are implemented and tested; the overall viewer/editor audit still needs its remaining larger-file and search behavior checks.",
     "Content search is implemented; directory comparison and the remaining search-lifecycle, viewer, navigation and transfer audits are still required. Bookmark management and file properties are implemented and verified.",
     "All native smoke scripts now launch owned processes with isolated settings and WebView profiles. Full file/SSH/terminal, network and editor-close tests passed after migration, with the user's settings checksum unchanged. An earlier interrupted properties test lost previous pane locations; owned test bookmarks were removed and affected panes reset to Home/Downloads. No file contents, SSH config or stored credentials were changed by that cleanup.",
-    "Source-wide viewer Find and immediate cancellation registration are explicit follow-ups; paged viewing is implemented but these are not treated as completed. The existing entire objective and all other pending requirements remain in scope."
+    "Source-wide viewer Find and cancellation before worker registration are now implemented and exercised by owned native tests. The remaining viewer, navigation, comparison and transfer requirements retain their original scope."
   ],
   "completionRule": "Implementation plus current functional, keyboard and visual evidence is required; source inspection or an older release alone does not prove completion.",
   "requirements": [
@@ -283,10 +283,32 @@
       "artifacts/search-light.png"
     ],
     "remaining": [
-      "Viewer Find currently covers the loaded page; implement source-wide next/previous matching.",
-      "Audit immediate cancellation before worker registration and interrupted search/view lifecycle.",
+      "Source-wide Find and immediate cancellation registration are addressed by viewerFindBatch; continue the remaining search/view lifecycle audit.",
       "Continue the transfer alias/rollback audit and implement directory comparison; these remain part of the original scope."
     ],
-    "ci": "Windows workflow includes native local search/view tests; verification of the new source run is pending."
+    "ci": "Windows run 40604903142 passed on abbf923, including native clipboard, properties and search/view tests."
+  },
+  "viewerFindBatch": {
+    "features": [
+      "Streaming whole-file literal Find in both directions with wraparound and Unicode positions",
+      "Retained query and word-wrap state while loading the matching page",
+      "No-match/wrap feedback, cancellation on query change and ignoring obsolete replies",
+      "SSH connection binding across viewer searches, paging and switching to the editor",
+      "Bounded pending cancellations for IPC scheduling races and task guards owned by workers",
+      "Viewer shortcuts respect a nested help dialog"
+    ],
+    "checks": {
+      "javascriptUnitTests": "23 passed",
+      "browserTests": "39 passed, including collapsed workspace tooltip ownership",
+      "coreTests": "56 passed on Linux; 11 streaming search/text tests and 2 cancellation-registry tests",
+      "realOpenSshIntegration": "3 passed",
+      "nativeWindows": "windows-search-smoke.mjs passed on final 6f651d33 build with >4 MiB next/previous/wrap, exact Unicode selection, query/wrap persistence, nested help, real transport-delayed cancellation on query change before worker registration, pre-cancelled preview/find/search/size workers, and real SSH search/reconnect/F3-to-F4 binding. windows-properties-smoke.mjs also passed on this build, including native flags, directory size, SSH modes, persistent bookmarks and one collapsed workspace tooltip. The user's settings checksum remained unchanged.",
+      "windowsCompilation": "Workspace and all test targets checked; x64 executable and NSIS installer built. Final executable SHA256 6f651d3361201b4df80a481fbf08e65f25f2ce1e0c2ee2c5d8334333fed7c9b6; cargo fmt and workspace clippy passed."
+    },
+    "visualEvidence": ["artifacts/native-viewer-find.png"],
+    "remaining": [
+      "Continue transfer alias, cancellation/rollback and metadata audit.",
+      "Directory comparison and other outstanding requirements remain in scope; this batch does not establish overall completion."
+    ]
   }
 }

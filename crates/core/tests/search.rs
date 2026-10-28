@@ -342,3 +342,186 @@ fn content_search_refuses_named_pipes_without_blocking() {
     assert_eq!(summary.error_count, 1);
     assert!(summary.errors[0].contains("special files"));
 }
+
+#[test]
+fn viewer_find_searches_both_directions_wraps_and_preserves_unicode_positions() {
+    let source = "İ 🚀 NEEDLE and needle\r\nno match\r\nÕunad needLE end";
+    let cancel = AtomicBool::new(false);
+    for encoding in ["UTF-8", "UTF-16 LE", "UTF-16 BE"] {
+        let bytes = match encoding {
+            "UTF-16 LE" => [
+                vec![0xff, 0xfe],
+                source.encode_utf16().flat_map(u16::to_le_bytes).collect(),
+            ]
+            .concat(),
+            "UTF-16 BE" => [
+                vec![0xfe, 0xff],
+                source.encode_utf16().flat_map(u16::to_be_bytes).collect(),
+            ]
+            .concat(),
+            _ => source.as_bytes().to_vec(),
+        };
+        let find = |line, column, previous| {
+            text::find(
+                Box::new(Cursor::new(bytes.clone())),
+                "needle",
+                &text::Position { line, column },
+                previous,
+                &cancel,
+            )
+            .unwrap()
+            .unwrap()
+        };
+        assert_eq!(
+            find(1, 1, false),
+            text::Match {
+                line: 1,
+                column: 5,
+                length: 6,
+                wrapped: false
+            }
+        );
+        assert_eq!(
+            find(1, 11, false),
+            text::Match {
+                line: 1,
+                column: 16,
+                length: 6,
+                wrapped: false
+            }
+        );
+        assert_eq!(
+            find(1, 22, false),
+            text::Match {
+                line: 3,
+                column: 7,
+                length: 6,
+                wrapped: false
+            }
+        );
+        assert_eq!(
+            find(3, 13, false),
+            text::Match {
+                line: 1,
+                column: 5,
+                length: 6,
+                wrapped: true
+            }
+        );
+        assert_eq!(
+            find(1, 5, true),
+            text::Match {
+                line: 3,
+                column: 7,
+                length: 6,
+                wrapped: true
+            }
+        );
+        assert_eq!(
+            find(3, 7, true),
+            text::Match {
+                line: 1,
+                column: 16,
+                length: 6,
+                wrapped: false
+            }
+        );
+        assert_eq!(find(1, 16, true).column, 5);
+    }
+    let hit = text::find(
+        Box::new(Cursor::new("X 🚀 İ K".as_bytes().to_vec())),
+        "🚀",
+        &text::Position { line: 1, column: 1 },
+        false,
+        &cancel,
+    )
+    .unwrap()
+    .unwrap();
+    assert_eq!((hit.column, hit.length), (3, 2));
+}
+
+#[test]
+fn viewer_find_handles_absence_literal_patterns_large_files_and_nonoverlapping_hits() {
+    let find = |data: String, query: &str, line, column, previous| {
+        text::find(
+            Box::new(Cursor::new(data.into_bytes())),
+            query,
+            &text::Position { line, column },
+            previous,
+            &AtomicBool::new(false),
+        )
+    };
+    assert!(find("".into(), "text", 1, 1, false).unwrap().is_none());
+    assert!(find("no match".into(), "absent", 1, 1, true)
+        .unwrap()
+        .is_none());
+    assert_eq!(
+        find("hit\n\0binary".into(), "hit", 1, 4, true)
+            .unwrap()
+            .unwrap()
+            .line,
+        1
+    );
+    assert_eq!(
+        find("a.*b\na.*b".into(), ".*", 1, 4, false)
+            .unwrap()
+            .unwrap()
+            .line,
+        2
+    );
+    assert!(
+        find("aaaa".into(), "aa", 1, 4, false)
+            .unwrap()
+            .unwrap()
+            .wrapped
+    );
+    assert_eq!(
+        find("aaaa".into(), "aa", 1, 3, true)
+            .unwrap()
+            .unwrap()
+            .column,
+        1
+    );
+    let mut large = "no match\n".repeat(100_000);
+    large.push_str("late target");
+    assert_eq!(
+        find(large, "target", 1, 1, false).unwrap().unwrap().line,
+        100_001
+    );
+    for query in ["", "\n", "\r", &"x".repeat(4097)] {
+        assert!(find("text".into(), query, 1, 1, false).is_err());
+    }
+    assert!(find("text\n\0binary".into(), "absent", 1, 1, false)
+        .unwrap_err()
+        .to_string()
+        .contains("not supported"));
+    assert!(find("x".repeat(text::MAX_LINE + 1), "absent", 1, 1, false)
+        .unwrap_err()
+        .to_string()
+        .contains("8 MiB"));
+}
+
+#[test]
+fn viewer_find_stops_on_cancellation_before_and_during_reading() {
+    use std::sync::Arc;
+    struct CancelRead(Arc<AtomicBool>);
+    impl Read for CancelRead {
+        fn read(&mut self, bytes: &mut [u8]) -> std::io::Result<usize> {
+            self.0.store(true, Ordering::Relaxed);
+            bytes.fill(b'x');
+            Ok(bytes.len())
+        }
+    }
+    for before in [false, true] {
+        let cancel = Arc::new(AtomicBool::new(before));
+        let error = text::find(
+            Box::new(CancelRead(cancel.clone())),
+            "needle",
+            &text::Position { line: 1, column: 1 },
+            false,
+            &cancel,
+        )
+        .unwrap_err();
+        assert_eq!(error.to_string(), "Cancelled");
+    }
+}

@@ -116,6 +116,7 @@ pub struct RenameItem {
 #[derive(Clone, Debug, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Preview {
+    pub connection: Option<String>,
     pub kind: String,
     pub data: String,
     pub truncated: bool,

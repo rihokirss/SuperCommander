@@ -170,7 +170,9 @@ Shift+F4 starts an unsaved new text file in the active pane. Save As supports lo
 
 The editor supports local and SFTP text files up to 4 MiB. It preserves UTF-8/UTF-16 encoding, BOM and LF/CRLF line endings, stages replacements in a temporary file, and rejects saves if the original content changed externally. Binary files, unsupported encodings, mixed line endings and symbolic links are not editable.
 
-The text viewer reads bounded pages of about 256 KiB or 2,000 lines, preserving complete lines up to 8 MiB each. **Ctrl+Page Up/Down** loads the previous/next part and **F6** jumps to a file line. This also lets content-search results open beyond the editor's size limit. Viewer Find currently searches the loaded text page; source-wide viewer Find remains part of the ongoing audit.
+The text viewer reads bounded pages of about 256 KiB or 2,000 lines, preserving complete lines up to 8 MiB each. **Ctrl+Page Up/Down** loads the previous/next part and **F6** jumps to a file line. This also lets content-search results open beyond the editor's size limit.
+
+**F7 / Ctrl+F** finds literal, case-insensitive text throughout the file, including pages not yet loaded. Enter or **Ctrl+G** finds the next match; Shift+Enter, **Shift+F7** or **Ctrl+Shift+G** finds the previous one. Search wraps at the beginning/end and reports when no matches exist. The query and word-wrap choice survive page changes. Searches use bounded memory with UTF-8 or BOM-marked UTF-16 input; lines over 8 MiB and unsupported encodings produce an explicit error. Changing the query, closing the search bar or closing the viewer cancels its pending search. An open SSH viewer remains bound to its original connection, including when switching to the editor.
 
 Closing a modified editor or the application window offers Save, Discard and Cancel. Save completes before closing; a failed save leaves the edits available. Esc in Save As or an overwrite confirmation closes that inner dialog. No file is created for a new buffer until it is saved.
 

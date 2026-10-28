@@ -1,5 +1,6 @@
 //! Bounded, cooperative UTF-8/UTF-16 text reading shared by search and viewing.
 use anyhow::{bail, Result};
+use serde::{Deserialize, Serialize};
 use std::{
     collections::VecDeque,
     io::{BufRead, BufReader, Cursor, Read},
@@ -151,7 +152,99 @@ pub struct Window {
     pub last_line: u64,
     pub more: bool,
 }
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct Position {
+    pub line: u64,
+    /// One-based Unicode scalar column, independent of the input encoding.
+    pub column: usize,
+}
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct Match {
+    pub line: u64,
+    pub column: usize,
+    /// JavaScript selection length, in UTF-16 code units.
+    pub length: usize,
+    pub wrapped: bool,
+}
+
+/// Find literal text throughout a file with bounded memory. Next includes the
+/// cursor (the caller passes selection end), previous excludes selection start.
+/// Matches do not overlap, like the editor's JavaScript literal matcher.
+pub fn find(
+    input: Box<dyn Read + Send>,
+    query: &str,
+    from: &Position,
+    previous: bool,
+    cancel: &AtomicBool,
+) -> Result<Option<Match>> {
+    if query.is_empty() || query.len() > 4096 || query.contains(['\r', '\n']) {
+        bail!("Find requires 1–4096 bytes of single-line text");
+    }
+    if cancel.load(Ordering::Relaxed) {
+        bail!("Cancelled");
+    }
+    let expression = regex::RegexBuilder::new(&regex::escape(query))
+        .case_insensitive(true)
+        .size_limit(2 * 1024 * 1024)
+        .build()?;
+    let mut reader = Reader::new(input)?;
+    let mut line = 0;
+    let mut fallback = None;
+    let mut candidate = None;
+    loop {
+        let text = match reader.next(cancel)? {
+            Line::Text(text) => text,
+            Line::End => break,
+            Line::Cancelled => bail!("Cancelled"),
+            Line::Unsupported => bail!("This is not supported UTF-8 or BOM-marked UTF-16 text"),
+            Line::TooLong => bail!("Text lines over 8 MiB require an external viewer"),
+        };
+        line += 1;
+        let mut offset = 0;
+        let mut column = 1;
+        for hit in expression.find_iter(text.trim_end_matches('\n')) {
+            if cancel.load(Ordering::Relaxed) {
+                bail!("Cancelled");
+            }
+            column += text[offset..hit.start()].chars().count();
+            offset = hit.start();
+            let found = Match {
+                line,
+                column,
+                length: hit.as_str().encode_utf16().count(),
+                wrapped: false,
+            };
+            let before = (line, column) < (from.line, from.column);
+            if !previous && !before {
+                return Ok(Some(found));
+            }
+            if previous && before {
+                candidate = Some(found.clone());
+            }
+            if previous || fallback.is_none() {
+                fallback = Some(found);
+            }
+        }
+        // Once the prefix is searched, don't read a possibly binary or very
+        // long following line unless wrapping really requires the file tail.
+        if previous && line >= from.line && candidate.is_some() {
+            return Ok(candidate);
+        }
+    }
+    if candidate.is_some() {
+        return Ok(candidate);
+    }
+    Ok(fallback.map(|mut found| {
+        found.wrapped = true;
+        found
+    }))
+}
 pub fn window(input: Box<dyn Read + Send>, requested: u64, cancel: &AtomicBool) -> Result<Window> {
+    if cancel.load(Ordering::Relaxed) {
+        bail!("Cancelled");
+    }
     let mut reader = Reader::new(input)?;
     let first = requested.max(1);
     let mut index = 0_u64;

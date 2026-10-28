@@ -433,6 +433,7 @@ pub fn preview_at(
         }
     };
     let mut out = Preview {
+        connection: fs.connection_id().map(str::to_owned),
         kind: kind.into(),
         mime: mime.into(),
         data: String::new(),

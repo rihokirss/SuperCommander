@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronUp, LoaderCircle, Search, X } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { command, desktop } from "../api";
-import type { Location } from "../types";
+import type { Location, TextPosition } from "../types";
 import type { Text } from "../i18n";
 import { basename, parent, join } from "../utils";
 import { IconButton, Modal } from "./Primitives";
@@ -40,6 +40,14 @@ export function TextWorkbench({
   onPage,
   hasPrevious,
   hasNext,
+  initialSelectionLength = 0,
+  initialVersion = 0,
+  viewLoading = false,
+  viewError,
+  findStatus,
+  findLoading = false,
+  onFind,
+  onCancelFind,
 }: {
   location: Location;
   t: Text;
@@ -61,6 +69,14 @@ export function TextWorkbench({
   onPage?: (delta: number) => void;
   hasPrevious?: boolean;
   hasNext?: boolean;
+  initialSelectionLength?: number;
+  initialVersion?: number;
+  viewLoading?: boolean;
+  viewError?: string;
+  findStatus?: string;
+  findLoading?: boolean;
+  onFind?: (query: string, from: TextPosition, previous: boolean) => void;
+  onCancelFind?: () => void;
 }) {
   const [fileLocation, setFileLocation] = useState<Location | undefined>(
     newFile ? undefined : location,
@@ -152,6 +168,7 @@ export function TextWorkbench({
         if (alive) {
           setBusy(false);
           requestAnimationFrame(() => {
+            if (!alive) return;
             const element = area.current;
             if (!element) return;
             element.focus();
@@ -167,7 +184,7 @@ export function TextWorkbench({
               Array.from(rows[row])
                 .slice(0, Math.max(0, initialColumn - 1))
                 .join("").length;
-            element.setSelectionRange(index, index);
+            element.setSelectionRange(index, index + initialSelectionLength);
             element.scrollTop = Math.max(0, (row - 4) * 20);
             setPosition({ line: row + lineOffset + 1, col: initialColumn });
           });
@@ -176,7 +193,7 @@ export function TextWorkbench({
     return () => {
       alive = false;
     };
-  }, [location.source, location.path, newFile]);
+  }, [location.source, location.path, newFile, initial, initialVersion]);
   useEffect(() => {
     const unload = (event: BeforeUnloadEvent) => {
       if (lifecycle.current.dirty && !closing.current) {
@@ -343,7 +360,22 @@ export function TextWorkbench({
   }
   function find(previous = false) {
     const el = area.current;
-    if (!el || !matches.length) return;
+    if (!el || !query || viewLoading) return;
+    if (!editable && onFind) {
+      const before = text
+        .slice(0, previous ? el.selectionStart : el.selectionEnd)
+        .split("\n");
+      onFind(
+        query,
+        {
+          line: lineOffset + before.length,
+          column: Array.from(before.at(-1)!).length + 1,
+        },
+        previous,
+      );
+      return;
+    }
+    if (!matches.length) return;
     const match = previous
       ? ([...matches].reverse().find((n) => n.start < el.selectionStart) ??
         matches.at(-1)!)
@@ -420,8 +452,8 @@ export function TextWorkbench({
         onPage
       ) {
         e.preventDefault();
-        if (e.key === "PageUp" && hasPrevious) onPage(-1);
-        if (e.key === "PageDown" && hasNext) onPage(1);
+        if (!viewLoading && e.key === "PageUp" && hasPrevious) onPage(-1);
+        if (!viewLoading && e.key === "PageDown" && hasNext) onPage(1);
       }
     };
     document.addEventListener("keydown", key);
@@ -508,7 +540,7 @@ export function TextWorkbench({
           <span>
             {t.line} {position.line}, {t.column} {position.col}
           </span>
-          {busy ? (
+          {busy || viewLoading ? (
             <LoaderCircle size={13} className="spin" />
           ) : dirty ? (
             <span className="editor-dirty">{t.modifiedText}</span>
@@ -521,7 +553,7 @@ export function TextWorkbench({
               <IconButton
                 title={t.previousTextPage}
                 shortcut="Ctrl+PgUp"
-                disabled={!hasPrevious}
+                disabled={!hasPrevious || viewLoading}
                 onClick={() => onPage(-1)}
               >
                 <ChevronUp size={14} />
@@ -529,7 +561,7 @@ export function TextWorkbench({
               <IconButton
                 title={t.nextTextPage}
                 shortcut="Ctrl+PgDn"
-                disabled={!hasNext}
+                disabled={!hasNext || viewLoading}
                 onClick={() => onPage(1)}
               >
                 <ChevronDown size={14} />
@@ -545,7 +577,10 @@ export function TextWorkbench({
               aria-label={t.findText}
               placeholder={t.findText}
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => {
+                onCancelFind?.();
+                setQuery(e.target.value);
+              }}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   e.preventDefault();
@@ -553,21 +588,30 @@ export function TextWorkbench({
                 }
               }}
             />
-            <span>
-              {matches.length === 10000 ? "10000+" : matches.length} {t.matches}
+            <span role="status">
+              {!editable && onFind
+                ? findStatus || t.wholeFile
+                : `${matches.length === 10000 ? "10000+" : matches.length} ${t.matches}`}
             </span>
             <IconButton
               title={`${t.previousMatch} · Shift+F7`}
+              disabled={!query || viewLoading}
               onClick={() => find(true)}
             >
               <ChevronUp size={14} />
             </IconButton>
             <IconButton
               title={`${t.nextMatch} · Ctrl+G`}
+              disabled={!query || viewLoading}
               onClick={() => find()}
             >
               <ChevronDown size={14} />
             </IconButton>
+            {!editable && findLoading && (
+              <button onClick={onCancelFind} disabled={!onFind}>
+                {t.cancel}
+              </button>
+            )}
             {replaceOpen && (
               <>
                 <input
@@ -603,6 +647,7 @@ export function TextWorkbench({
             <IconButton
               title={t.close}
               onClick={() => {
+                onCancelFind?.();
                 setSearchOpen(false);
                 area.current?.focus();
               }}
@@ -651,9 +696,9 @@ export function TextWorkbench({
             <button>{t.goToLine}</button>
           </form>
         )}
-        {error && (
+        {(error || viewError) && (
           <p className="inline-error" role="alert">
-            {error}
+            {error || viewError}
           </p>
         )}
         <div className={`text-surface ${wrap ? "wrapped" : ""}`}>

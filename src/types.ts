@@ -165,6 +165,7 @@ export type RenameItem = {
   error?: string;
 };
 export type Preview = {
+  connection?: string | null;
   kind: "text" | "image" | "pdf" | "unsupported";
   data: string;
   truncated: boolean;
@@ -176,6 +177,8 @@ export type Preview = {
   encoding?: string;
   lineEnding?: string;
 };
+export type TextPosition = { line: number; column: number };
+export type TextHit = TextPosition & { length: number; wrapped: boolean };
 export type Bootstrap = {
   home: string;
   places: Place[];

@@ -21,7 +21,7 @@ struct AppState {
     connections: Mutex<HashMap<String, Arc<core::remote::RemoteFs>>>,
     engine: Engine,
     terminals: Terminals,
-    searches: Mutex<HashMap<String, Arc<AtomicBool>>>,
+    searches: core::tasks::Tasks,
     watchers: Mutex<HashMap<String, RecommendedWatcher>>,
 }
 type Reply<T> = Result<T, String>;
@@ -119,31 +119,23 @@ async fn search_files(
     filter: SearchFilter,
     channel: Channel<core::search::Batch>,
 ) -> Reply<()> {
+    let task = state.searches.start(id).map_err(error)?;
     let fs = state.sources.get(&location.source).map_err(error)?;
-    let cancel = Arc::new(AtomicBool::new(false));
-    state
-        .searches
-        .lock()
-        .unwrap()
-        .insert(id.clone(), cancel.clone());
-    let result = blocking(move || {
-        core::search::run(fs.as_ref(), &location.path, &filter, &cancel, &|batch| {
+    blocking(move || {
+        let cancel = &task.cancel;
+        core::search::run(fs.as_ref(), &location.path, &filter, cancel, &|batch| {
             if channel.send(batch).is_err() {
                 cancel.store(true, Ordering::Relaxed);
             }
         })?;
         Ok(())
     })
-    .await;
-    state.searches.lock().unwrap().remove(&id);
-    result
+    .await
 }
 
 #[tauri::command]
 fn cancel_search(state: State<AppState>, id: String) {
-    if let Some(c) = state.searches.lock().unwrap().get(&id) {
-        c.store(true, Ordering::Relaxed);
-    }
+    state.searches.cancel(id);
 }
 
 #[tauri::command]
@@ -173,21 +165,17 @@ async fn calculate_size(
     id: String,
     channel: Channel<core::properties::SizeSummary>,
 ) -> Reply<()> {
+    let task = state.searches.start(id).map_err(error)?;
     let fs = state.sources.get(&source).map_err(error)?;
-    let cancel = Arc::new(AtomicBool::new(false));
-    state
-        .searches
-        .lock()
-        .unwrap()
-        .insert(id.clone(), cancel.clone());
-    let result = blocking(move || {
-        core::properties::calculate(fs.as_ref(), &paths, &cancel, &|value| {
-            let _ = channel.send(value);
+    blocking(move || {
+        let cancel = &task.cancel;
+        core::properties::calculate(fs.as_ref(), &paths, cancel, &|value| {
+            if channel.send(value).is_err() {
+                cancel.store(true, Ordering::Relaxed);
+            }
         })
     })
-    .await;
-    state.searches.lock().unwrap().remove(&id);
-    result
+    .await
 }
 
 #[tauri::command]
@@ -249,26 +237,59 @@ async fn get_preview(
     connection: Option<String>,
     id: Option<String>,
 ) -> Reply<Preview> {
+    let task = id
+        .map(|id| state.searches.start(id))
+        .transpose()
+        .map_err(error)?;
     let fs = state.sources.get(&location.source).map_err(error)?;
     if connection.is_some() {
         editor_connection(fs.as_ref(), connection.as_deref()).map_err(error)?;
     }
-    let cancel = Arc::new(AtomicBool::new(false));
-    if let Some(id) = &id {
-        state
-            .searches
-            .lock()
-            .unwrap()
-            .insert(id.clone(), cancel.clone());
-    }
-    let result = blocking(move || {
+    blocking(move || {
+        let cancel = task.as_ref().map_or_else(
+            || Arc::new(AtomicBool::new(false)),
+            |task| task.cancel.clone(),
+        );
         filesystem::preview_at(fs.as_ref(), &location.path, line.unwrap_or(1), &cancel)
     })
-    .await;
-    if let Some(id) = id {
-        state.searches.lock().unwrap().remove(&id);
-    }
-    result
+    .await
+}
+#[derive(Serialize)]
+struct TextFind {
+    hit: Option<core::text::Match>,
+    preview: Option<Preview>,
+}
+#[tauri::command]
+async fn find_text(
+    state: State<'_, AppState>,
+    id: String,
+    location: Location,
+    query: String,
+    from: core::text::Position,
+    previous: bool,
+    connection: Option<String>,
+) -> Reply<TextFind> {
+    let task = state.searches.start(id).map_err(error)?;
+    let fs = state.sources.get(&location.source).map_err(error)?;
+    editor_connection(fs.as_ref(), connection.as_deref()).map_err(error)?;
+    blocking(move || {
+        if task.cancel.load(Ordering::Relaxed) {
+            anyhow::bail!("Cancelled");
+        }
+        let hit = core::text::find(
+            fs.reader(&location.path)?,
+            &query,
+            &from,
+            previous,
+            &task.cancel,
+        )?;
+        let preview = hit
+            .as_ref()
+            .map(|hit| filesystem::preview_at(fs.as_ref(), &location.path, hit.line, &task.cancel))
+            .transpose()?;
+        Ok(TextFind { hit, preview })
+    })
+    .await
 }
 fn clipboard_owner(window: &tauri::Window) -> Reply<usize> {
     #[cfg(windows)]
@@ -834,7 +855,7 @@ pub fn run() {
                 connections: Mutex::default(),
                 engine,
                 terminals: Terminals::default(),
-                searches: Mutex::default(),
+                searches: core::tasks::Tasks::default(),
                 watchers: Mutex::default(),
             });
             #[cfg(windows)]
@@ -868,6 +889,7 @@ pub fn run() {
             rename_preview,
             rename_apply,
             get_preview,
+            find_text,
             clipboard_revision,
             read_file_clipboard,
             write_file_clipboard,
