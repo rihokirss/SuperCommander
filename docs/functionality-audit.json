@@ -616,7 +616,9 @@
       "browserTests": "50 passed",
       "npmAudit": "0 known vulnerabilities",
       "rustAudit": "1 unpatched RSA advisory; cross-platform-only warnings documented in docs/dependencies.md",
-      "nativeWindows": "Pending matching release build tests"
+      "nativeWindows": "Final 474abb80 executable passed windows-archive-smoke.mjs and full windows-smoke.mjs, including real SSH/SFTP, remote editing/shells, remembered forwards and PowerShell/ConPTY. The ZIP 9 DOS creator default was caught by the Windows permissions regression and corrected to explicit Unix metadata. All 17 ordinary Windows archive tests and the >4 GiB ZIP64 acceptance passed (22.88 seconds). Legacy Windows credential compatibility passed. Properties/bookmarks passed with SSH, and the corrected UI-based UNC bookmark test passed again without an SSH fixture, matching the hosted runner.",
+      "lint": "cargo fmt and workspace/all-target clippy with warnings denied passed",
+      "ci": "Matching final public Windows CI pending after the properties test fix. Run 40637481339 exposed a test-only backend settings write racing the UI debounce; the test now adds both UNC bookmarks through the UI and waits for actual persistence before reloading."
     },
     "remaining": [
       "Release packaging and native checks remain pending; broader original objective is still in progress."

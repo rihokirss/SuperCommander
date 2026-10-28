@@ -481,25 +481,35 @@ try {
       "PASS real SSH permission changes and persistent alias bookmark requesting authentication after reload",
     );
   }
-  const saved = (await rpc("bootstrap")).settings;
-  await rpc("save_settings", {
-    value: {
-      ...saved,
-      bookmarks: [
-        ...saved.bookmarks,
-        {
-          name: "Case upper",
-          path: "\\\\wsl.localhost\\Ubuntu\\tmp\\Folder",
-          kind: "bookmark",
-        },
-        {
-          name: "Case lower",
-          path: "\\\\wsl.localhost\\Ubuntu\\tmp\\folder",
-          kind: "bookmark",
-        },
-      ],
-    },
-  });
+  // Add through the UI: writing settings behind the running app races its
+  // debounced save, especially on CI without the intervening SSH checks.
+  await page.keyboard.press("Control+Shift+d");
+  for (const [name, target] of [
+    ["Case upper", "\\\\wsl.localhost\\Ubuntu\\tmp\\Folder"],
+    ["Case lower", "\\\\wsl.localhost\\Ubuntu\\tmp\\folder"],
+  ]) {
+    await manager
+      .getByRole("textbox", { name: "Bookmark name", exact: true })
+      .fill(name);
+    await manager
+      .getByRole("textbox", { name: "Folder path or SSH address", exact: true })
+      .fill(target);
+    await manager
+      .getByRole("button", { name: "Add bookmark", exact: true })
+      .click();
+    await expect(
+      manager.locator(".bookmark-open").getByText(name, { exact: true }),
+    ).toBeVisible();
+  }
+  await close();
+  await expect
+    .poll(async () => {
+      const bookmarks = (await rpc("bootstrap")).settings.bookmarks;
+      return ["Case upper", "Case lower"].every((name) =>
+        bookmarks.some((b) => b.name === name),
+      );
+    })
+    .toBe(true);
   await page.reload();
   await expect(
     page.locator(".bookmark-item").getByText("Case upper", { exact: true }),
