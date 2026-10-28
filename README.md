@@ -6,13 +6,13 @@ Browse local drives, UNC paths, ZIP archives and SSH/SFTP servers. Work with fam
 
 ## Download
 
-The latest release is **[SuperCommander 0.4.0](https://github.com/rihokirss/SuperCommander/releases/tag/v0.4.0)**.
+The latest release is **[SuperCommander 0.4.1](https://github.com/rihokirss/SuperCommander/releases/tag/v0.4.1)**.
 
-Version 0.4.0 adds faster startup, selectable blue and dark red palettes, a category-based F1 reference, next-match quick finding and folder sizes in the file list. It includes keyboard-accessible menus, bookmarks, file properties, native file clipboard support, quick editing, content search, reviewed folder synchronization, recovery of saved copies and safe ZIP operations.
+Version 0.4.1 fixes clipped terminal rows and puts compact F-key buttons on the status bar. Version 0.4.0 adds faster startup, selectable blue and dark red palettes, a category-based F1 reference, next-match quick finding and folder sizes in the file list. It includes keyboard-accessible menus, bookmarks, file properties, native file clipboard support, quick editing, content search, reviewed folder synchronization, recovery of saved copies and safe ZIP operations.
 
-- [Windows x64 installer](https://github.com/rihokirss/SuperCommander/releases/download/v0.4.0/SuperCommander_0.4.0_x64-setup.exe) — recommended.
-- [Standalone Windows x64 executable](https://github.com/rihokirss/SuperCommander/releases/download/v0.4.0/SuperCommander_0.4.0_x64.exe) — requires WebView2.
-- [SHA-256 checksums](https://github.com/rihokirss/SuperCommander/releases/download/v0.4.0/SHA256SUMS.txt).
+- [Windows x64 installer](https://github.com/rihokirss/SuperCommander/releases/download/v0.4.1/SuperCommander_0.4.1_x64-setup.exe) — recommended.
+- [Standalone Windows x64 executable](https://github.com/rihokirss/SuperCommander/releases/download/v0.4.1/SuperCommander_0.4.1_x64.exe) — requires WebView2.
+- [SHA-256 checksums](https://github.com/rihokirss/SuperCommander/releases/download/v0.4.1/SHA256SUMS.txt).
 
 ## Screenshots
 
@@ -67,7 +67,7 @@ npm run build:windows
 `cargo-xwin` downloads the Windows SDK and CRT. Outputs:
 
 - `target/x86_64-pc-windows-msvc/release/supercommander.exe`
-- `target/x86_64-pc-windows-msvc/release/bundle/nsis/SuperCommander_0.4.0_x64-setup.exe`
+- `target/x86_64-pc-windows-msvc/release/bundle/nsis/SuperCommander_0.4.1_x64-setup.exe`
 
 A successful cross-build does not replace testing the application on Windows.
 

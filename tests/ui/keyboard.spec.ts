@@ -132,11 +132,20 @@ test("footer F1 and F9 buttons open help and actions above the bar", async ({
     await expect(buttons).toHaveCount(9);
     const left = (await bar.boundingBox())!.x;
     const right = left + (await bar.boundingBox())!.width;
+    const sidebar = (await page.locator(".sidebar").boundingBox())!;
+    expect(left).toBeCloseTo(sidebar.x + sidebar.width, 0);
+    let previousRight = left;
     for (const button of await buttons.all()) {
       const box = (await button.boundingBox())!;
       expect(box.x).toBeGreaterThanOrEqual(left);
       expect(box.x + box.width).toBeLessThanOrEqual(right + 1);
+      expect(box.x - previousRight).toBeLessThanOrEqual(3);
+      previousRight = box.x + box.width;
     }
+    for (const label of await bar.locator("button > span").all())
+      expect(
+        await label.evaluate((el) => el.scrollWidth <= el.clientWidth),
+      ).toBe(true);
     await bar.getByRole("button", { name: /Help/ }).click();
     await expect(
       page.getByRole("dialog", { name: "Keyboard shortcuts" }),
@@ -154,6 +163,18 @@ test("footer F1 and F9 buttons open help and actions above the bar", async ({
     await page.keyboard.press("Escape");
     await expect(actions).toBeFocused();
   }
+  await page.setViewportSize({ width: 960, height: 700 });
+  await page
+    .locator(".toolbar-right")
+    .getByRole("button", { name: "Settings" })
+    .click();
+  await page.getByRole("combobox", { name: "Language" }).click();
+  await page.getByRole("option", { name: "Eesti", exact: true }).click();
+  await page.keyboard.press("Escape");
+  for (const label of await page.locator(".shortcut-bar button > span").all())
+    expect(await label.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(
+      true,
+    );
 });
 
 test("F9 exposes comparison and recovery with their shortcuts", async ({

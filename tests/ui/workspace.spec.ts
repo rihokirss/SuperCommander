@@ -479,7 +479,22 @@ test("layout stays within the window at supported sizes", async ({ page }) => {
     const tools = await page.locator(".titlebar-tools").boundingBox();
     expect(search!.x + search!.width).toBeLessThanOrEqual(tools!.x);
     await expect(page.locator(".shortcut-bar")).toBeVisible();
+    const footer = (await page.locator(".statusbar").boundingBox())!;
+    const shortcuts = (await page
+      .locator(".statusbar .shortcut-bar")
+      .boundingBox())!;
+    const controls = (await page.locator(".status-controls").boundingBox())!;
+    expect(shortcuts.y).toBeGreaterThanOrEqual(footer.y);
+    expect(shortcuts.y + shortcuts.height).toBeLessThanOrEqual(
+      footer.y + footer.height,
+    );
+    expect(shortcuts.x + shortcuts.width).toBeLessThanOrEqual(controls.x);
+    expect(bounds!.y + bounds!.height).toBeGreaterThanOrEqual(footer.y - 1);
   }
+  await page.getByRole("button", { name: "Collapse workspace" }).click();
+  const rail = (await page.locator(".sidebar").boundingBox())!;
+  const shortcuts = (await page.locator(".shortcut-bar").boundingBox())!;
+  expect(shortcuts.x).toBeCloseTo(rail.x + rail.width, 0);
 });
 test("network locations can be added, renamed and removed, with a single rail tooltip", async ({
   page,

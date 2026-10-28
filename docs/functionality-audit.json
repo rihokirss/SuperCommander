@@ -793,8 +793,8 @@
     ]
   },
   "colourReview": {
-    "status": "release_requested_by_user",
-    "publication": "User requested release 0.4.0 after reviewing colours; publication depends on successful checks and Windows CI.",
+    "status": "released_in_0.4.0",
+    "publication": "Version 0.4.0 was published from Windows CI run 40750644511.",
     "variants": [
       "Midnight blue (default)",
       "Midnight classic blue (#173E76)",
@@ -825,5 +825,13 @@
       "artifacts/frame-terminal-blue.png",
       "artifacts/frame-settings-blue.png"
     ]
+  },
+  "release041": {
+    "status": "release_requested",
+    "changes": [
+      "Compact F1–F9 controls share the status bar, aligned with the workspace and with status and transfer controls retained",
+      "Terminal padding is included when sizing xterm, keeping the bottom row and right edge visible"
+    ],
+    "verification": "Windows regression reproduces the old clipping and checks terminal geometry while resizing and in fullscreen; browser tests cover compact bar and workspace alignment."
   }
 }

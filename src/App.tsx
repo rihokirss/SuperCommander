@@ -2588,34 +2588,15 @@ export function App() {
               onRecovery={(location, key) => openRecovery(location, key)}
             />
           )}
-          <div className="shortcut-bar" hidden={terminalView === "full"}>
-            {[
-              ["F1", t.help, () => setDialog({ kind: "shortcuts" })],
-              ["F2", t.rename, rename],
-              ["F3", t.preview, preview],
-              ["F4", t.edit, edit],
-              ["F5", t.copy, () => action("copy")],
-              ["F6", t.move, () => action("move")],
-              ["F7", t.mkdir, () => action("mkdir")],
-              ["F8", t.delete, () => action("trash")],
-            ].map(([key, label, run]) => (
-              <button
-                key={String(key)}
-                data-tooltip={label as string}
-                data-shortcut={key as string}
-                onClick={run as () => void}
-              >
-                <kbd>{key as string}</kbd>
-                <span>{label as string}</span>
-              </button>
-            ))}
-            <ActionsMenuButton t={t} actions={actions} footer />
-          </div>
         </main>
       </div>
       <footer className="statusbar">
         {clipboardProgress ? (
-          <div className="clipboard-check" role="status">
+          <div
+            className="status-message clipboard-check"
+            role="status"
+            data-tooltip={`${t.checkingClipboard} ${basename(clipboardProgress.current)}`}
+          >
             <LoaderCircle size={12} className="spin" />
             <span>
               {t.checkingClipboard} {basename(clipboardProgress.current)}
@@ -2631,12 +2612,38 @@ export function App() {
             </IconButton>
           </div>
         ) : (
-          <span>
+          <div
+            className="status-message"
+            data-tooltip={api.desktop ? t.ready : t.demoHint}
+          >
             <span className="status-led" />
-            {api.desktop ? t.ready : t.demoHint}
-          </span>
+            <span>{api.desktop ? t.ready : t.demoHint}</span>
+          </div>
         )}
-        <div>
+        <div className="shortcut-bar" hidden={terminalView === "full"}>
+          {[
+            ["F1", t.help, () => setDialog({ kind: "shortcuts" })],
+            ["F2", t.rename, rename],
+            ["F3", t.preview, preview],
+            ["F4", t.edit, edit],
+            ["F5", t.copy, () => action("copy")],
+            ["F6", t.move, () => action("move")],
+            ["F7", t.mkdir, () => action("mkdir")],
+            ["F8", t.delete, () => action("trash")],
+          ].map(([key, label, run]) => (
+            <button
+              key={String(key)}
+              data-tooltip={label as string}
+              data-shortcut={key as string}
+              onClick={run as () => void}
+            >
+              <kbd>{key as string}</kbd>
+              <span>{label as string}</span>
+            </button>
+          ))}
+          <ActionsMenuButton t={t} actions={actions} footer />
+        </div>
+        <div className="status-controls">
           <button onClick={() => setQueueOpen((v) => !v)}>
             <ArrowDownUp size={12} />
             {t.queue}

@@ -131,6 +131,7 @@ p {
   background: #a9b9dc45;
 }
 .app-shell {
+  --workspace-width: 192px;
   position: relative;
   isolation: isolate;
   height: 100%;
@@ -304,8 +305,8 @@ p {
   min-height: 0;
 }
 .sidebar {
-  width: 192px;
-  min-width: 192px;
+  width: var(--workspace-width);
+  min-width: var(--workspace-width);
   border-right: 1px solid var(--line);
   display: flex;
   flex-direction: column;
@@ -1436,55 +1437,78 @@ p {
   color: #91a5d2;
 }
 .shortcut-bar {
-  height: 48px;
-  min-height: 48px;
   display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
   align-items: center;
-  justify-content: space-between;
-  gap: 2px;
+  gap: 1px;
 }
 .shortcut-bar > button,
 .shortcut-bar .shortcut-action {
   font-size: 9px;
   color: #7688a7;
-  padding: 6px 7px;
-  gap: 7px;
+  min-width: 0;
+  padding: 3px 4px;
+  gap: 4px;
+}
+.shortcut-bar > button,
+.shortcut-bar > .menu-anchor {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.shortcut-bar .shortcut-action {
+  width: auto;
+}
+.shortcut-bar button > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .shortcut-bar kbd {
   font-size: 9px;
-  min-width: 25px;
+  min-width: 22px;
+  flex: none;
   text-align: center;
   background: #9aadde05;
   border-color: #9aadde16;
   color: #a1b1cd;
-  padding: 4px;
-}
-.shortcut-bar .icon-button {
-  margin-left: auto;
+  padding: 3px;
 }
 .statusbar {
   height: 29px;
   min-height: 29px;
-  display: flex;
+  display: grid;
+  grid-template-columns: var(--workspace-width) minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
   border-top: 1px solid var(--line);
-  padding: 0 16px;
+  padding: 0 8px 0 0;
   background: #0b111a45;
   font-size: 9px;
   color: #5c6d89;
 }
-.statusbar > span {
+.statusbar .status-message {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
+  grid-column: 1;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0 12px;
 }
-.statusbar > div {
+.statusbar .shortcut-bar { grid-column: 2; }
+.status-message > span:not(.status-led) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.statusbar .status-controls {
   display: flex;
   align-items: center;
-  gap: 12px;
+  grid-column: 3;
+  gap: 8px;
 }
-.statusbar button {
+.status-controls button {
   font-size: 9px;
   padding: 3px 5px;
   color: #7c8eae;
@@ -2252,6 +2276,8 @@ p {
 .terminal-mount {
   flex: 1;
   min-height: 0;
+}
+.terminal-mount > .xterm {
   padding: 10px 14px;
 }
 .terminal-notice {
@@ -2342,10 +2368,7 @@ p {
   }
 }
 @media (min-width: 1600px) {
-  .sidebar {
-    width: 208px;
-    min-width: 208px;
-  }
+  .app-shell { --workspace-width: 208px; }
   .file-row {
     font-size: 12px;
   }
@@ -2364,9 +2387,8 @@ p {
   }
 }
 @media (max-width: 1150px) {
+  .app-shell { --workspace-width: 170px; }
   .sidebar {
-    width: 170px;
-    min-width: 170px;
     padding-left: 8px;
     padding-right: 4px;
   }
@@ -2400,8 +2422,8 @@ p {
   }
   .shortcut-bar > button,
   .shortcut-bar .shortcut-action {
-    padding: 5px 4px;
-    gap: 4px;
+    padding: 3px 2px;
+    gap: 3px;
   }
   .shortcut-bar kbd {
     font-size: 8px;
@@ -2432,6 +2454,7 @@ p {
     font-size: 8px;
   }
 }
+.app-shell[data-workspace-collapsed="true"] { --workspace-width: 54px; }
 @media (prefers-reduced-motion: reduce) {
   *,
   *:before,
