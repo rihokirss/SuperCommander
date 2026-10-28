@@ -122,6 +122,22 @@ test("F9 menu supports real focus, arrows, type-ahead, Enter and focus restorati
   ).toBeVisible();
 });
 
+test("F9 exposes comparison and recovery with their shortcuts", async ({
+  page,
+}) => {
+  for (const [name, shortcut] of [
+    ["Compare folders", "Shift+F2"],
+    ["Recovery & previous versions", "Ctrl+Shift+R"],
+  ]) {
+    await page.keyboard.press("F9");
+    const item = page.getByRole("menuitem").filter({ hasText: name });
+    await expect(item).toContainText(shortcut);
+    await item.click();
+    await expect(page.getByRole("dialog", { name, exact: true })).toBeVisible();
+    await page.keyboard.press("Escape");
+  }
+});
+
 test("right-click and Shift+F10 actions use the pane and files under the cursor", async ({
   page,
 }) => {

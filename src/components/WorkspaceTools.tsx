@@ -92,6 +92,8 @@ export function WorkspaceTools({
             actions={actions.filter((a) =>
               [
                 "search",
+                "compare",
+                "recovery",
                 "zip",
                 "extract",
                 "connect",

@@ -6,13 +6,13 @@ Browse local drives, UNC paths, ZIP archives and SSH/SFTP servers. Work with fam
 
 ## Download
 
-The first public release is **[SuperCommander 0.2.0](https://github.com/rihokirss/SuperCommander/releases/tag/v0.2.0)**.
+The latest release is **[SuperCommander 0.3.0](https://github.com/rihokirss/SuperCommander/releases/tag/v0.3.0)**.
 
-The `main` branch contains ongoing improvements beyond that release, including keyboard-accessible menus, bookmark management, file properties, native file clipboard support, quick editing, content search, reviewed folder synchronization and recovery of saved copies. The shortcuts below describe the current source.
+This release adds keyboard-accessible menus, bookmark management, file properties, native file clipboard support, quick editing, content search, reviewed folder synchronization, recovery of saved copies and safer ZIP operations.
 
-- [Windows x64 installer](https://github.com/rihokirss/SuperCommander/releases/download/v0.2.0/SuperCommander_0.2.0_x64-setup.exe) — recommended.
-- [Standalone Windows x64 executable](https://github.com/rihokirss/SuperCommander/releases/download/v0.2.0/SuperCommander_0.2.0_x64.exe) — requires WebView2.
-- [SHA-256 checksums](https://github.com/rihokirss/SuperCommander/releases/download/v0.2.0/SHA256SUMS.txt).
+- [Windows x64 installer](https://github.com/rihokirss/SuperCommander/releases/download/v0.3.0/SuperCommander_0.3.0_x64-setup.exe) — recommended.
+- [Standalone Windows x64 executable](https://github.com/rihokirss/SuperCommander/releases/download/v0.3.0/SuperCommander_0.3.0_x64.exe) — requires WebView2.
+- [SHA-256 checksums](https://github.com/rihokirss/SuperCommander/releases/download/v0.3.0/SHA256SUMS.txt).
 
 ## Screenshots
 
@@ -67,7 +67,7 @@ npm run build:windows
 `cargo-xwin` downloads the Windows SDK and CRT. Outputs:
 
 - `target/x86_64-pc-windows-msvc/release/supercommander.exe`
-- `target/x86_64-pc-windows-msvc/release/bundle/nsis/SuperCommander_0.2.0_x64-setup.exe`
+- `target/x86_64-pc-windows-msvc/release/bundle/nsis/SuperCommander_0.3.0_x64-setup.exe`
 
 A successful cross-build does not replace testing the application on Windows.
 

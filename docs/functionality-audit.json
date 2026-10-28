@@ -559,7 +559,7 @@
       "nativeWindows": "Final f72327ae passed windows-archive-smoke.mjs, including actual Alt+F5/Alt+F6, F3/F5 and F4/F8 readonly guards, exact UTC times, empty directories, read-only flags, retained versions, hard links, early cancellation, junction rejection and dark/light 960x640 layout. Full windows-smoke.mjs passed on this executable with the new actual-SSH-other-pane ZIP case, plus copy/move/recycle, editor, image/PDF, SSH config/catalog, transfers, tunnels, remote shell, PowerShell/ConPTY and Ctrl+O.",
       "windowsCompilation": "fmt, workspace/all-target clippy and Windows checks passed; executable and NSIS installer built. Final executable SHA256 f72327ae68e62456943ba7fc650eb128d5fda4979ccf9b164e44b25723616edf.",
       "fixtureOwnership": "Full native smoke now creates and removes its own remote folder per run, so repeated runs do not edit the shared fixture's baseline file. A repeated-run failure correctly exposed that stale baseline rather than weakening the editor content assertion.",
-      "ci": "Pending matching public Windows CI after push. Clipboard UI tests remain dedicated-CI-only."
+      "ci": "Run 40636622188 on 57f3f25 passed compilation, core/unit/browser tests and native clipboard checks, then failed because the properties smoke test still expected the old Create ZIP menu label without its shortcut. The release preparation fixes this locator; matching release CI is pending. Clipboard UI tests remain dedicated-CI-only."
     },
     "visualEvidence": ["docs/screenshots/archives.png", "artifacts/native-archive-dark.png", "artifacts/native-archive-light.png"],
     "remaining": [

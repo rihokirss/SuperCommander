@@ -270,7 +270,7 @@ try {
   await openPath(left, root);
   await left.getByText("Assets", { exact: true }).click();
   await page.locator(".menu-anchor>button").click();
-  await page.getByRole("menuitem", { name: "Create ZIP", exact: true }).click();
+  await page.getByRole("menuitem", { name: /^Create ZIP\s*Alt\+F5$/ }).click();
   const zipDialog = page.getByRole("dialog");
   const archive = path.join(root, "Assets.zip");
   await zipDialog
