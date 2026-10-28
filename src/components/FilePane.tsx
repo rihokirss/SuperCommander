@@ -34,6 +34,7 @@ import {
   parent as parentPath,
   size,
   sortEntries,
+  uid,
 } from "../utils";
 import { FileIcon, IconButton } from "./Primitives";
 import type {
@@ -43,6 +44,8 @@ import type {
   Settings,
   SftpProfile,
   FileClipboard,
+  SizeSummary,
+  FolderSizeProgress,
 } from "../types";
 import type { Text } from "../i18n";
 import { formatRemoteAddress } from "../address";
@@ -58,6 +61,8 @@ export type PaneSnapshot = {
 export type PaneHandle = {
   path: () => void;
   filter: () => void;
+  search: () => void;
+  scanSizes: () => void;
   refresh: () => void;
   up: () => void;
   all: () => void;
@@ -114,6 +119,33 @@ export function FilePane(p: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [focused, setFocused] = useState<string>();
   const [filter, setFilter] = useState("");
+  const [folderSizes, setFolderSizes] = useState<Record<string, SizeSummary>>(
+    {},
+  );
+  const [sizeScan, setSizeScan] = useState<FolderSizeProgress>();
+  const sizeTask = useRef<string | undefined>(undefined);
+  function cancelSizeScan() {
+    const id = sizeTask.current;
+    sizeTask.current = undefined;
+    setSizeScan(undefined);
+    if (id) void api.command("cancel_search", { id }).catch(() => {});
+  }
+  useEffect(
+    () => () => {
+      if (sizeTask.current)
+        void api
+          .command("cancel_search", { id: sizeTask.current })
+          .catch(() => {});
+      sizeTask.current = undefined;
+    },
+    [],
+  );
+  const [quickSearch, setQuickSearch] = useState<string | null>(null);
+  const quickInput = useRef<HTMLInputElement>(null);
+  const quickAnchor = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (quickSearch !== null) quickInput.current?.focus();
+  }, [quickSearch !== null]);
   const [loading, setLoading] = useState(true);
   const [settled, setSettled] = useState("");
   const [error, setError] = useState("");
@@ -162,8 +194,14 @@ export function FilePane(p: Props) {
         ),
         sort,
         desc,
+        Object.fromEntries(
+          Object.entries(folderSizes).map(([path, summary]) => [
+            path,
+            summary.bytes,
+          ]),
+        ),
       ),
-    [entries, settings.showHidden, filter, sort, desc],
+    [entries, settings.showHidden, filter, sort, desc, folderSizes],
   );
   const visible = useMemo(() => {
     const hasParent =
@@ -216,9 +254,23 @@ export function FilePane(p: Props) {
     },
     path: editPath,
     filter: () => {
-      filterInput.current?.focus();
-      filterInput.current?.select();
+      setQuickSearch(null);
+      requestAnimationFrame(() => {
+        filterInput.current?.focus();
+        filterInput.current?.select();
+      });
     },
+    search: () => {
+      if (quickSearch === null) {
+        quickAnchor.current = focused;
+        setQuickSearch("");
+      } else {
+        findQuickMatch(quickSearch, 1);
+        quickAnchor.current = focused;
+        quickInput.current?.focus();
+      }
+    },
+    scanSizes: scanFolderSizes,
     refresh: () => setLocalRefresh((n) => n + 1),
     up: goUp,
     all: () => setSelected(new Set(dataEntries.map((e) => e.path))),
@@ -238,15 +290,117 @@ export function FilePane(p: Props) {
   useEffect(() => {
     virtual.measure();
   }, [rowHeight]);
+  function findQuickMatch(query: string, direction: 1 | -1, from = focused) {
+    if (!query || !visible.length) return;
+    const position = visible.findIndex((entry) => entry.path === from);
+    const start = position >= 0 ? position : direction === 1 ? -1 : 0;
+    for (let step = 1; step <= visible.length; step++) {
+      const index =
+        (((start + step * direction) % visible.length) + visible.length) %
+        visible.length;
+      const entry = visible[index];
+      if (
+        !entry.isParent &&
+        entry.name.toLocaleLowerCase().includes(query.toLocaleLowerCase())
+      ) {
+        setFocused(entry.path);
+        anchor.current = index;
+        virtual.scrollToIndex(index);
+        return;
+      }
+    }
+  }
+  async function scanFolderSizes() {
+    if (!api.desktop) {
+      p.onError(t.desktopOnly);
+      return;
+    }
+    cancelSizeScan();
+    const marked = selectedEntries.filter(
+      (entry) => entry.isDir && !entry.isSymlink,
+    );
+    const folders = marked.length
+      ? marked
+      : dataEntries.filter((entry) => entry.isDir && !entry.isSymlink);
+    if (!folders.length) return;
+    const id = uid();
+    sizeTask.current = id;
+    const requestedPaths = new Set(folders.map((folder) => folder.path));
+    setFolderSizes((old) =>
+      Object.fromEntries(
+        Object.entries(old).filter(([path]) => !requestedPaths.has(path)),
+      ),
+    );
+    setSizeScan({
+      path: folders[0].path,
+      index: 1,
+      total: folders.length,
+      summary: {
+        bytes: 0,
+        files: 0,
+        folders: 0,
+        links: 0,
+        errors: [],
+        errorCount: 0,
+        done: false,
+        cancelled: false,
+      },
+    });
+    let pending: Record<string, SizeSummary> = {};
+    let latest: FolderSizeProgress | undefined;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const flush = () => {
+      timer = undefined;
+      if (sizeTask.current !== id) return;
+      const batch = pending;
+      pending = {};
+      setFolderSizes((old) => ({ ...old, ...batch }));
+      if (latest) setSizeScan(latest);
+    };
+    try {
+      await api.calculateFolderSizes(
+        location.source,
+        folders.map((folder) => folder.path),
+        id,
+        (progress) => {
+          if (sizeTask.current !== id) return;
+          pending[progress.path] = progress.summary;
+          latest = progress;
+          if (!timer) timer = setTimeout(flush, 100);
+        },
+      );
+    } catch (error) {
+      if (sizeTask.current === id) p.onError(String(error));
+    } finally {
+      clearTimeout(timer);
+      if (sizeTask.current === id) {
+        flush();
+        sizeTask.current = undefined;
+        setSizeScan(undefined);
+      }
+    }
+  }
   useEffect(() => {
     const id = ++generation.current;
     const key = `${state.activeTab}\0${location.source}\0${location.path}`;
     const changed = loadedLocation.current !== key;
     loadedLocation.current = key;
+    cancelSizeScan();
+    setFolderSizes({});
     if (changed) {
       setEntries([]);
       setSelected(new Set());
-      setFocused(undefined);
+      const hasParent =
+        parentPath(location.path) !== location.path ||
+        (location.source.startsWith("zip:") && location.path === "/");
+      setFocused(
+        hasParent
+          ? `__parent__:${location.source}:${location.path}`
+          : undefined,
+      );
+      anchor.current = 0;
+      virtual.scrollToOffset(0);
+      setQuickSearch(null);
       setFilter("");
       setPathValue(location.path);
       setEditingPath(false);
@@ -262,6 +416,14 @@ export function FilePane(p: Props) {
         if (batch.done) {
           clearTimeout(flush);
           setEntries([...pending]);
+          if (changed) {
+            const first = sortEntries(
+              pending.filter((entry) => settings.showHidden || !entry.hidden),
+              sort,
+              desc,
+            )[0];
+            setFocused((old) => old ?? first?.path);
+          }
           if (!changed) {
             const paths = new Set(pending.map((e) => e.path));
             setSelected(
@@ -759,40 +921,103 @@ export function FilePane(p: Props) {
           )}{" "}
           {sourceLabel}
         </span>
-        <label className="folder-filter">
-          <Search size={12} />
-          <input
-            ref={filterInput}
-            data-shortcut="Alt+S / Ctrl+Shift+F"
-            aria-label={t.filter}
-            placeholder={t.filter}
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Escape") {
-                e.preventDefault();
-                e.stopPropagation();
-                setFilter("");
-                root.current?.querySelector<HTMLElement>(".file-grid")?.focus();
-              } else if (e.key === "Enter" || e.key === "ArrowDown") {
-                e.preventDefault();
-                e.stopPropagation();
-                const first = visible.findIndex((entry) => !entry.isParent);
-                if (first >= 0) {
-                  setFocused(visible[first].path);
-                  anchor.current = first;
-                  virtual.scrollToIndex(first);
-                }
-                root.current?.querySelector<HTMLElement>(".file-grid")?.focus();
+        {quickSearch !== null ? (
+          <label className="folder-filter quick-find">
+            <Search size={12} />
+            <input
+              ref={quickInput}
+              aria-label={t.quickFind}
+              placeholder={t.quickFind}
+              data-shortcut="Alt+S"
+              value={quickSearch}
+              aria-invalid={
+                !!quickSearch &&
+                !dataEntries.some((entry) =>
+                  entry.name
+                    .toLocaleLowerCase()
+                    .includes(quickSearch.toLocaleLowerCase()),
+                )
               }
-            }}
-          />
-          {filter && (
-            <button aria-label={t.close} onClick={() => setFilter("")}>
+              onChange={(event) => {
+                setQuickSearch(event.target.value);
+                findQuickMatch(event.target.value, 1, quickAnchor.current);
+              }}
+              onKeyDown={(event) => {
+                if (
+                  ["Escape", "Enter", "ArrowDown", "ArrowUp"].includes(
+                    event.key,
+                  )
+                ) {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  if (
+                    event.key === "Escape" ||
+                    (!quickSearch && event.key === "Enter")
+                  ) {
+                    setQuickSearch(null);
+                    root.current
+                      ?.querySelector<HTMLElement>(".file-grid")
+                      ?.focus();
+                  } else {
+                    quickAnchor.current = focused;
+                    findQuickMatch(
+                      quickSearch,
+                      event.key === "ArrowUp" || event.shiftKey ? -1 : 1,
+                    );
+                  }
+                }
+              }}
+            />
+            <button
+              aria-label={t.close}
+              onClick={() => {
+                setQuickSearch(null);
+                root.current?.querySelector<HTMLElement>(".file-grid")?.focus();
+              }}
+            >
               <X size={11} />
             </button>
-          )}
-        </label>
+          </label>
+        ) : (
+          <label className="folder-filter">
+            <Search size={12} />
+            <input
+              ref={filterInput}
+              data-shortcut="Ctrl+Shift+F"
+              aria-label={t.filter}
+              placeholder={t.filter}
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setFilter("");
+                  root.current
+                    ?.querySelector<HTMLElement>(".file-grid")
+                    ?.focus();
+                } else if (e.key === "Enter" || e.key === "ArrowDown") {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const first = visible.findIndex((entry) => !entry.isParent);
+                  if (first >= 0) {
+                    setFocused(visible[first].path);
+                    anchor.current = first;
+                    virtual.scrollToIndex(first);
+                  }
+                  root.current
+                    ?.querySelector<HTMLElement>(".file-grid")
+                    ?.focus();
+                }
+              }}
+            />
+            {filter && (
+              <button aria-label={t.close} onClick={() => setFilter("")}>
+                <X size={11} />
+              </button>
+            )}
+          </label>
+        )}
       </div>
       <div
         className="file-grid"
@@ -935,7 +1160,32 @@ export function FilePane(p: Props) {
                     <span>{entry.name}</span>
                   </span>
                   <span className="file-size" role="gridcell">
-                    {entry.isDir ? "—" : size(entry.size)}
+                    {entry.isDir ? (
+                      folderSizes[entry.path] ? (
+                        <span
+                          data-tooltip={[
+                            t.folderSizeSnapshot,
+                            ...(!folderSizes[entry.path].done ||
+                            folderSizes[entry.path].cancelled ||
+                            folderSizes[entry.path].errorCount
+                              ? [t.partialResult]
+                              : []),
+                            ...folderSizes[entry.path].errors,
+                          ].join("\n")}
+                        >
+                          {!folderSizes[entry.path].done ||
+                          folderSizes[entry.path].cancelled ||
+                          folderSizes[entry.path].errorCount
+                            ? "≥ "
+                            : ""}
+                          {size(folderSizes[entry.path].bytes)}
+                        </span>
+                      ) : (
+                        "—"
+                      )
+                    ) : (
+                      size(entry.size)
+                    )}
                   </span>
                   <span className="file-type type-column" role="gridcell">
                     {entry.isDir
@@ -980,6 +1230,21 @@ export function FilePane(p: Props) {
             </>
           )}
         </span>
+        {sizeScan && (
+          <span className="size-scan" role="status">
+            <LoaderCircle className="spin" size={11} />
+            <span data-tooltip={sizeScan.path}>
+              {t.scanningSizes} {sizeScan.index}/{sizeScan.total}
+            </span>
+            <button
+              aria-label={t.cancel}
+              data-tooltip={t.cancel}
+              onClick={cancelSizeScan}
+            >
+              <X size={12} />
+            </button>
+          </span>
+        )}
         <span>
           {size(
             selectedEntries.length

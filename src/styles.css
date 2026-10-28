@@ -4,6 +4,7 @@
 @import url("./workbench.css");
 @import url("./menu.css");
 @import url("./comparison.css");
+@import url("./palettes.css");
 * {
   box-sizing: border-box;
 }
@@ -67,7 +68,7 @@ button svg {
 }
 input,
 select {
-  background: #0b101d80;
+  background: #102d4680;
   color: var(--bright);
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -137,9 +138,9 @@ p {
   flex-direction: column;
   background: linear-gradient(
     118deg,
-    rgb(17 23 34 / var(--surface-opacity, 0.85)),
-    rgb(19 23 36 / var(--surface-opacity, 0.85)) 48%,
-    rgb(21 26 39 / var(--surface-opacity, 0.85))
+    rgb(var(--canvas-start) / var(--surface-opacity, 0.85)),
+    rgb(var(--canvas-mid) / var(--surface-opacity, 0.85)) 48%,
+    rgb(var(--canvas-end) / var(--surface-opacity, 0.85))
   );
   overflow: hidden;
 }
@@ -189,27 +190,27 @@ p {
   width: 650px;
   top: -450px;
   left: -220px;
-  background: #6877cc;
+  background: #80caff;
 }
 .ambient-two {
   height: 700px;
   width: 650px;
   bottom: -560px;
   right: 10%;
-  background: #557899;
+  background: #5ab7eb;
 }
 .glass {
   background: var(--glass);
 }
 .frosted .glass {
-  background-color: rgb(25 34 53 / var(--surface-opacity, 0.85));
+  background-color: rgb(var(--glass-rgb) / var(--surface-opacity, 0.85));
   backdrop-filter: blur(24px) saturate(115%);
   -webkit-backdrop-filter: blur(24px) saturate(115%);
 }
 .opaque {
-  --glass: #171d2a;
-  --panel: #141a26;
-  background: #111722;
+  --glass: var(--opaque-glass);
+  --panel: var(--opaque-panel);
+  background: var(--solid-canvas);
 }
 .opaque .ambient {
   display: none;
@@ -284,7 +285,7 @@ p {
   display: flex;
   flex-direction: column;
   padding: 20px 12px 0;
-  background: linear-gradient(150deg, #1c23323d, #12192544);
+  background: linear-gradient(150deg, #2457803d, #16354f44);
 }
 .workspace-label {
   display: flex;
@@ -430,7 +431,7 @@ p {
     Consolas,
     monospace;
   tab-size: 4;
-  background: #0b101d50;
+  background: #102d4650;
   color: var(--text);
 }
 .config-warnings {
@@ -564,7 +565,7 @@ p {
   max-width: 300px;
   border: 1px solid #93a8d330;
   border-radius: 6px;
-  background: #202c42f5;
+  background: var(--menu-surface);
   color: #d0dcf3;
   box-shadow: 0 5px 20px #0003;
   pointer-events: none;
@@ -576,7 +577,7 @@ p {
   transform: translate(-50%, -100%);
 }
 .app-tooltip kbd {
-  color: #9fb2d3;
+  color: #adc9df;
 }
 .app-tooltip[data-theme="light"] {
   background: #f8fafff5;
@@ -592,7 +593,7 @@ p {
   min-width: 140px;
   justify-content: space-between;
   padding: 9px 10px;
-  background: #0b101d60;
+  background: #102d4660;
   border: 1px solid var(--line);
   color: var(--text);
   border-radius: 6px;
@@ -605,7 +606,7 @@ p {
 }
 .select-control.open {
   border-color: #879fdd66;
-  background: #26334b66;
+  background: #28557366;
 }
 .select-options {
   position: fixed;
@@ -613,7 +614,7 @@ p {
   padding: 5px;
   border: 1px solid #9baedc30;
   border-radius: 8px;
-  background: #202d43f5;
+  background: var(--menu-surface);
   backdrop-filter: blur(24px);
   box-shadow: 0 10px 30px #0003;
   color: #c3d0e8;
@@ -639,7 +640,7 @@ p {
   color: #a9c1ff;
 }
 .select-options[data-theme="light"] {
-  background: #f7fafff5;
+  background: var(--menu-surface);
   color: #405773;
   border-color: #6e88ae35;
   box-shadow: 0 10px 30px #33456520;
@@ -693,7 +694,7 @@ p {
   bottom: 10px;
   width: 2px;
   border-radius: 4px;
-  background: #a0b5fc;
+  background: #80caff;
 }
 .sidebar-item.active > svg {
   color: #afc1ff;
@@ -702,7 +703,7 @@ p {
   width: 4px;
   height: 4px;
   border-radius: 50%;
-  background: #8ba6f5;
+  background: #80caff;
   flex: none;
 }
 .sidebar-item.muted {
@@ -1103,7 +1104,7 @@ p {
   background: transparent;
   border: 0;
   font-size: 11px;
-  padding: 3px 0;
+  padding: 3px 6px;
   width: 110px;
   color: var(--text);
   box-shadow: none;
@@ -1190,7 +1191,7 @@ p {
   background: #7a98e315;
 }
 .active .file-row.selected {
-  background: #809ce921;
+  background: #80caff21;
 }
 .file-row.selected:before {
   content: "";
@@ -1199,11 +1200,11 @@ p {
   top: 7px;
   bottom: 7px;
   width: 2px;
-  background: #9aaff2;
+  background: #80caff;
   border-radius: 3px;
 }
 .active .file-row.focused {
-  background: #809ce930;
+  background: var(--focused-bg);
   box-shadow:
     inset 0 1px #b3c5f012,
     inset 0 -1px #b3c5f00c;
@@ -1216,31 +1217,31 @@ p {
   bottom: 5px;
   width: 3px;
   border-radius: 0 3px 3px 0;
-  background: #b0c4f4;
+  background: #a6dcff;
 }
 .active .file-row.focused .file-name {
   color: #e1e9fb;
 }
 .active .file-row.focused.selected {
-  background: #809ce943;
+  background: var(--focused-marked-bg);
 }
 .file-pane:not(.active) .file-row.focused {
   background: #8294b50c;
 }
 .app-shell[data-theme="light"] .active .file-row.focused {
-  background: #7398d331;
+  background: var(--focused-bg);
   box-shadow:
     inset 0 1px #6489c315,
     inset 0 -1px #6489c30c;
 }
 .app-shell[data-theme="light"] .active .file-row.focused.selected {
-  background: #7398d346;
+  background: var(--focused-marked-bg);
 }
 .app-shell[data-theme="light"] .active .file-row.focused::after {
-  background: #6789c2;
+  background: #287db8;
 }
 .app-shell[data-theme="light"] .active .file-row.focused .file-name {
-  color: #234b83;
+  color: #18354d;
 }
 .app-shell[data-theme="light"] .file-pane:not(.active) .file-row.focused {
   background: #7398d312;
@@ -1267,10 +1268,10 @@ p {
   flex-shrink: 0;
 }
 .file-icon.folder {
-  color: #a1b4df;
+  color: #99cef3;
 }
 .file-icon.folder svg {
-  fill: #849dc11b;
+  fill: #80caff20;
   stroke-width: 1.35;
 }
 .file-icon.text {
@@ -1509,7 +1510,7 @@ p {
   border: 1px solid #a5b6e52b;
   border-radius: 13px;
   padding: 24px;
-  background: linear-gradient(145deg, #222d42ed, #151e30f5);
+  background: linear-gradient(145deg, var(--modal-start), var(--modal-end));
   box-shadow:
     0 25px 100px #0005,
     0 1px 0 #ffffff07 inset;
@@ -2415,4 +2416,30 @@ p {
 .app-shell .pane-context > span,
 .app-shell .folder-filter {
   color: var(--muted);
+}
+
+.quick-find input[aria-invalid="true"] {
+  color: #f1a8b4;
+  outline-color: #d5778b;
+}
+.app-shell[data-theme="light"] .quick-find input[aria-invalid="true"] {
+  color: #9d3650;
+}
+.size-scan {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  min-width: 0;
+}
+.size-scan > span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
+}
+.size-scan button {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  flex-shrink: 0;
 }

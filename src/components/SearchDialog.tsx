@@ -619,7 +619,13 @@ export function SearchDialog({
           onClose={() => setDocument(undefined)}
         />
       )}
-      {help && <ShortcutsDialog t={t} onClose={() => setHelp(false)} />}
+      {help && (
+        <ShortcutsDialog
+          t={t}
+          initialCategory={t.search}
+          onClose={() => setHelp(false)}
+        />
+      )}
     </>
   );
 }

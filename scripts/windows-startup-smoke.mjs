@@ -81,8 +81,8 @@ try {
   ).toBeVisible();
   await left.getByRole("grid").focus();
   await page.keyboard.press("Alt+s");
-  await expect(left.locator(".folder-filter input")).toBeFocused();
-  await left.locator(".folder-filter input").fill("startup-check");
+  await expect(left.locator(".quick-find input")).toBeFocused();
+  await left.locator(".quick-find input").fill("startup-check");
   await page.keyboard.press("Enter");
   await expect(left.locator(".file-row.focused")).toContainText(
     "startup-check.txt",

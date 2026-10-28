@@ -24,6 +24,7 @@ import type {
   SshCatalog,
   FileProperties,
   SizeSummary,
+  FolderSizeProgress,
 } from "./types";
 export const desktop = isTauri();
 export async function compareFolders(
@@ -298,6 +299,17 @@ export function calculateSize(
   channel.onmessage = onUpdate;
   return command("calculate_size", { source, paths, id, channel });
 }
+export function calculateFolderSizes(
+  source: string,
+  paths: string[],
+  id: string,
+  receive: (value: FolderSizeProgress) => void,
+) {
+  if (!desktop) return command("calculate_folder_sizes", { source, paths, id });
+  const channel = new Channel<FolderSizeProgress>();
+  channel.onmessage = receive;
+  return invoke<void>("calculate_folder_sizes", { source, paths, id, channel });
+}
 
 const home = "C:\\Users\\Alex";
 const demoFolders = [
@@ -387,6 +399,7 @@ export async function bootstrap(includeNetwork = false): Promise<Bootstrap> {
       { name: "Windows (C:)", path: "C:\\", kind: "drive" },
       { name: "Workspace (D:)", path: "D:\\", kind: "drive" },
     ],
+    network: [],
     settings,
     locale: navigator.language,
   };

@@ -206,6 +206,14 @@ export function App() {
         ? "dark"
         : "light"
       : settings?.theme || "dark";
+  const resolvedPalette =
+    resolvedTheme === "light"
+      ? settings?.lightPalette || "sky"
+      : settings?.darkPalette || "blue";
+  useEffect(() => {
+    document.documentElement.dataset.theme = resolvedTheme;
+    document.documentElement.dataset.palette = resolvedPalette;
+  }, [resolvedTheme, resolvedPalette]);
   useEffect(() => {
     if (settings?.language) document.documentElement.lang = settings.language;
   }, [settings?.language]);
@@ -217,11 +225,12 @@ export function App() {
           glass: settings.glass,
           transparency: settings.transparency ?? 15,
           light: resolvedTheme === "light",
+          palette: resolvedPalette,
         })
         .catch((e) => notify(String(e)));
     }, 120);
     return () => clearTimeout(timer);
-  }, [settings?.glass, settings?.transparency, resolvedTheme]);
+  }, [settings?.glass, settings?.transparency, resolvedTheme, resolvedPalette]);
   useEffect(() => {
     const media = matchMedia("(prefers-color-scheme: dark)");
     const changed = () => setSystemDark(media.matches);
@@ -1349,6 +1358,13 @@ export function App() {
   }
   const actions: PaletteAction[] = [
     {
+      id: "folderSizes",
+      label: t.scanFolderSizes,
+      icon: <HardDrive size={16} />,
+      key: "Alt+Shift+Enter",
+      run: () => paneControls.current[active]?.scanSizes(),
+    },
+    {
       id: "compare",
       label: t.compareDirectories,
       icon: <ArrowDownUp size={16} />,
@@ -1624,10 +1640,17 @@ export function App() {
         paneControls.current[active]?.refresh();
         return;
       }
-      if (
-        (ctrl && name === "f" && e.shiftKey) ||
-        (e.altKey && !ctrl && !e.shiftKey && name === "s")
-      ) {
+      if (e.altKey && !ctrl && !e.shiftKey && name === "s") {
+        e.preventDefault();
+        paneControls.current[active]?.search();
+        return;
+      }
+      if (e.altKey && !ctrl && e.shiftKey && e.key === "Enter") {
+        e.preventDefault();
+        paneControls.current[active]?.scanSizes();
+        return;
+      }
+      if (ctrl && name === "f" && e.shiftKey) {
         e.preventDefault();
         paneControls.current[active]?.filter();
         return;
@@ -1930,6 +1953,7 @@ export function App() {
     <div
       className={`app-shell ${settings.glass ? "frosted" : "opaque"}`}
       data-theme={resolvedTheme}
+      data-palette={resolvedPalette}
       data-density={settings.density}
       data-workspace-collapsed={!!settings.workspaceCollapsed}
       style={
@@ -2654,7 +2678,6 @@ export function App() {
           t={t}
           update={update}
           onClose={closeDialog}
-          onShortcuts={() => setDialog({ kind: "shortcuts" })}
         />
       )}
       {dialog?.kind === "recovery" && (

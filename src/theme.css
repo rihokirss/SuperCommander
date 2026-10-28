@@ -1,12 +1,24 @@
 :root {
+  --canvas-start: 18 43 80;
+  --canvas-mid: 20 51 96;
+  --canvas-end: 23 62 118;
+  --glass-rgb: 23 62 118;
+  --solid-canvas: #122b50;
+  --opaque-glass: #173e76;
+  --opaque-panel: #143768;
+  --modal-start: #214d87ed;
+  --modal-end: #173b6cf5;
+  --menu-surface: #1b437bf5;
+  --focused-bg: #80caff30;
+  --focused-marked-bg: #80caff43;
   color-scheme: dark;
-  --text: #d4ddeb;
-  --bright: #f1f5ff;
-  --muted: #a1afc5;
-  --accent: #9aaff1;
-  --accent-soft: #9aaff126;
-  --line: #a8b9e211;
-  --hover: #a4b6e30c;
-  --panel: #0f162377;
-  --glass: #1922359c;
+  --text: #d8ebfa;
+  --bright: #f2f9ff;
+  --muted: #adc9df;
+  --accent: #80caff;
+  --accent-soft: #80caff26;
+  --line: #a2d5fa24;
+  --hover: #80caff12;
+  --panel: #173e7677;
+  --glass: #173e769c;
 }

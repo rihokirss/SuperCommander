@@ -759,5 +759,37 @@
       "backup": "supercommander.before-startup-fix-f47415a83f05.exe.bak",
       "settings": "Hash unchanged during replacement; normal installed app launched afterward with existing settings and two ready panes; read-only fast bootstrap check took 6 ms."
     }
+  },
+  "uiNavigationThemeBatch": {
+    "status": "verified_locally_awaiting_release_ci",
+    "version": "0.4.0",
+    "features": [
+      "Separate persisted dark palettes: Classic blue (#173E76), Sky blue, Denim, Midnight blue; light palettes: Sky blue, Ice blue, Azure",
+      "Consistent canvas, glass, opaque surfaces, dialogs and body-portaled menus; native acrylic follows the palette",
+      "High-contrast focused and unfocused terminal selection with dark selected glyphs",
+      "Alt+S next-match search without filtering; Enter/Alt+S advances and wraps, Shift+Enter reverses; Ctrl+Shift+F retains filtering; filter text padding fixes first-letter clipping",
+      "Opening folders focuses the parent row; drive roots focus the first actual entry",
+      "Actions/F9 and Alt+Shift+Enter calculate marked or visible folder sizes with cancellation, partial/error indicators, refresh invalidation and sorting without modifying source entry metadata",
+      "Size scan retains one filesystem/session for its entire backend worker; progress updates are batched on the UI",
+      "F1 category sidebar with keyboard navigation, global search and relevant initial category in viewer/editor/search/rename/recovery/comparison; Settings no longer duplicates shortcuts"
+    ],
+    "checks": {
+      "javascriptUnitTests": "27 passed",
+      "browserTests": "55 passed",
+      "nativeTheme": "windows-theme-smoke.mjs passed: all seven palettes, persistence/reload, next-match search without filtering/lost marks, parent/root focus, filter visibility, real PowerShell drag selection with dark selected glyphs and distinct inactive selection",
+      "nativeFolderSizes": "windows-folder-size-smoke.mjs passed: F9 scan, known recursive byte totals, empty directories, no junction traversal, sorting, marked-only shortcut, cache refresh and acknowledged cancellation before worker registration",
+      "windowsBuild": "0.4.0 executable and NSIS installer built",
+      "lint": "fmt and workspace/all-target clippy passed"
+    },
+    "delivery": {
+      "method": "In-place installed Windows executable replacement, no backup requested",
+      "installedSha256": "79d4d758663937e238c2e736a4ab8cba62bb92294e09a167fed3070697bbf51f",
+      "settings": "Hash unchanged during replacement",
+      "previousOwnedBackup": "Removed at user request",
+      "runningProcess": 39724
+    },
+    "remaining": [
+      "Matching public release CI and release publication pending; broader original objective remains in progress."
+    ]
   }
 }

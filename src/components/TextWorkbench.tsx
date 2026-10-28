@@ -7,7 +7,7 @@ import type { Text } from "../i18n";
 import { basename, parent, join } from "../utils";
 import { IconButton, Modal } from "./Primitives";
 import { Select } from "./Select";
-import { shortcutGroups } from "../shortcuts";
+import { ShortcutsDialog } from "./Dialogs";
 import { textMatches } from "../textMatches";
 import { indentEdit } from "../editor";
 
@@ -983,22 +983,12 @@ export function TextWorkbench({
         </Modal>
       )}
       {help && (
-        <Modal
-          closeLabel={t.close}
+        <ShortcutsDialog
+          t={t}
           title={t.textTools}
+          initialCategory={t.textTools}
           onClose={() => setHelp(false)}
-        >
-          <div className="shortcut-grid editor-shortcuts">
-            {shortcutGroups(t)
-              .find((group) => group.title === t.textTools)!
-              .items.map(([key, label]) => (
-                <div key={key}>
-                  <span>{label}</span>
-                  <kbd>{key}</kbd>
-                </div>
-              ))}
-          </div>
-        </Modal>
+        />
       )}
     </>
   );

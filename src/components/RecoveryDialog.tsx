@@ -716,7 +716,13 @@ export function RecoveryDialog({
           onClose={() => setPreview(undefined)}
         />
       )}
-      {help && <ShortcutsDialog t={t} onClose={() => setHelp(false)} />}
+      {help && (
+        <ShortcutsDialog
+          t={t}
+          initialCategory={t.recoveryKeys}
+          onClose={() => setHelp(false)}
+        />
+      )}
       {review && (
         <Modal
           title={t.recoveryReview}

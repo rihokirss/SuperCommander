@@ -92,6 +92,7 @@ export function WorkspaceTools({
             actions={actions.filter((a) =>
               [
                 "search",
+                "folderSizes",
                 "compare",
                 "recovery",
                 "zip",

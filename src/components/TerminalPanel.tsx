@@ -33,9 +33,11 @@ export function TerminalPanel({
   const instance = useRef<Terminal | null>(null);
   const terminalTheme = (light: boolean) => ({
     background: "#00000000",
-    foreground: light ? "#30435e" : "#bdc7df",
-    cursor: light ? "#405eaa" : "#b5c3ff",
-    selectionBackground: light ? "#5e76be30" : "#5e76be50",
+    foreground: light ? "#18354d" : "#d8ebfa",
+    cursor: light ? "#287db8" : "#a6dcff",
+    selectionBackground: light ? "#acd9f7" : "#80caff",
+    selectionForeground: "#102b42",
+    selectionInactiveBackground: light ? "#c5e5fc" : "#6398bd",
   });
   useEffect(() => {
     if (instance.current)

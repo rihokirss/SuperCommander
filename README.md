@@ -6,13 +6,13 @@ Browse local drives, UNC paths, ZIP archives and SSH/SFTP servers. Work with fam
 
 ## Download
 
-The latest release is **[SuperCommander 0.3.1](https://github.com/rihokirss/SuperCommander/releases/tag/v0.3.1)**.
+The latest release is **[SuperCommander 0.4.0](https://github.com/rihokirss/SuperCommander/releases/tag/v0.4.0)**.
 
-Version 0.3.1 adds Alt+S quick filtering, denser file and Workspace rows, reduced padding and clearer text contrast in both themes. It includes keyboard-accessible menus, bookmarks, file properties, native file clipboard support, quick editing, content search, reviewed folder synchronization, recovery of saved copies and safe ZIP operations.
+Version 0.4.0 adds faster startup, selectable blue palettes for both themes, a category-based F1 reference, next-match quick finding and folder sizes in the file list. It includes keyboard-accessible menus, bookmarks, file properties, native file clipboard support, quick editing, content search, reviewed folder synchronization, recovery of saved copies and safe ZIP operations.
 
-- [Windows x64 installer](https://github.com/rihokirss/SuperCommander/releases/download/v0.3.1/SuperCommander_0.3.1_x64-setup.exe) — recommended.
-- [Standalone Windows x64 executable](https://github.com/rihokirss/SuperCommander/releases/download/v0.3.1/SuperCommander_0.3.1_x64.exe) — requires WebView2.
-- [SHA-256 checksums](https://github.com/rihokirss/SuperCommander/releases/download/v0.3.1/SHA256SUMS.txt).
+- [Windows x64 installer](https://github.com/rihokirss/SuperCommander/releases/download/v0.4.0/SuperCommander_0.4.0_x64-setup.exe) — recommended.
+- [Standalone Windows x64 executable](https://github.com/rihokirss/SuperCommander/releases/download/v0.4.0/SuperCommander_0.4.0_x64.exe) — requires WebView2.
+- [SHA-256 checksums](https://github.com/rihokirss/SuperCommander/releases/download/v0.4.0/SHA256SUMS.txt).
 
 ## Screenshots
 
@@ -67,13 +67,17 @@ npm run build:windows
 `cargo-xwin` downloads the Windows SDK and CRT. Outputs:
 
 - `target/x86_64-pc-windows-msvc/release/supercommander.exe`
-- `target/x86_64-pc-windows-msvc/release/bundle/nsis/SuperCommander_0.3.1_x64-setup.exe`
+- `target/x86_64-pc-windows-msvc/release/bundle/nsis/SuperCommander_0.4.0_x64-setup.exe`
 
 A successful cross-build does not replace testing the application on Windows.
 
 See the [dependency review](docs/dependencies.md) for the 0.3.0 updates and remaining upstream security advisories.
 
 ## Keyboard and navigation
+
+F1 opens a category sidebar with global search and keyboard navigation.
+
+![Categorized keyboard reference](docs/screenshots/shortcuts.png)
 
 Each pane has independent tabs, history, sorting and filtering. Click its location bar to enter a local path, UNC path, SSH URL or SSH config alias. Click selects a file; Ctrl-click toggles a mark and Shift-click selects a range. Drag between panes to copy, or hold Shift to move. Dragging from Explorer copies into the destination pane.
 
@@ -96,7 +100,8 @@ Each pane has independent tabs, history, sorting and filtering. Click its locati
 | Ctrl+L / Alt+D | Edit the active pane's location |
 | Ctrl+R | Refresh the active pane |
 | Ctrl+Shift+R | Recovery and previous versions |
-| Alt+S / Ctrl+Shift+F | Focus the pane's filename filter |
+| Alt+S | Find the next matching filename without filtering the list; Enter / Alt+S advances, Esc closes |
+| Ctrl+Shift+F | Focus the pane's filename filter |
 | Alt+Up / Backspace | Parent folder |
 | Alt+Home | Home directory of the current source |
 | F2 | Rename, including bulk rename |
@@ -114,6 +119,7 @@ Each pane has independent tabs, history, sorting and filtering. Click its locati
 | Ctrl+Shift+T | Restore the last closed pane tab |
 | Ctrl+D | Toggle the current local, SSH or ZIP folder's bookmark |
 | Ctrl+Shift+D | Manage bookmarks: add, rename, reorder, filter or remove |
+| Alt+Shift+Enter | Calculate marked folders, or all visible folders, in the Size column |
 | Alt+Enter | Properties for marked items, the focused item or the current folder |
 | Ctrl+U | Swap panes |
 | Ctrl+H | Toggle hidden files |
@@ -255,7 +261,7 @@ Folder sizes are calculated on request, with progress, cancellation and partial-
 
 Workspace collapses into an icon rail. Each section can also be collapsed independently; these choices persist. **Network** includes network folders and servers from Explorer Quick Access, mapped drives and saved Windows network shortcuts. Its refresh button reloads them. Use **+** to add a UNC location, rename a listed entry, remove it from SuperCommander or restore a removed Explorer entry. These customizations are saved in SuperCommander and leave Explorer's pins unchanged. Opening a server such as `\\server` lists its shared folders through the Windows shell; the `..` row at a share root returns to the server. UNC paths can also be entered directly; the app does not scan the network for devices.
 
-Settings offer dark, light or Windows-following themes, a glass toggle and a transparency slider. Compact mode uses 26 px rows for both files and Workspace; Comfortable uses 34 px. Transfers use dense rows, expanding details only when needed. Select menus, checkboxes and switches follow the app's theme.
+Settings offer dark, light or Windows-following modes and separate blue palette choices: Classic blue (#173E76), Sky blue, Denim and Midnight blue for dark mode, and Sky blue, Ice blue and Azure for light mode. Choices preview immediately, persist independently and apply to menus, dialogs and native glass. Settings offer a glass toggle and a transparency slider. Compact mode uses 26 px rows for both files and Workspace; Comfortable uses 34 px. Transfers use dense rows, expanding details only when needed. Select menus, checkboxes and switches follow the app's theme.
 
 ## SSH connections and port forwarding
 
@@ -364,3 +370,7 @@ Source: [rihokirss/SuperCommander](https://github.com/rihokirss/SuperCommander).
 `node scripts/windows-archive-smoke.mjs [path-to-supercommander.exe]` checks the native ZIP shortcuts, browsing/F3, exact modification times, empty directories, Windows read-only state, retained previous versions, hard-link source aliases, early cancellation and junction protection. It owns its app and temporary files and does not use the desktop clipboard. The larger `cargo test -p commander-core --test archives zip64_round_trip_extracts_an_entry_larger_than_four_gibibytes -- --ignored --nocapture` acceptance test creates a sparse input above 4 GiB and extracts its full contents; run it separately with enough disk space.
 
 `node scripts/windows-startup-smoke.mjs [path-to-supercommander.exe]` verifies that both file panes remain usable while the real Explorer discovery request is held, then lets discovery complete and reports startup IPC timings. It uses an isolated Windows app and settings.
+
+Choose **Calculate folder sizes** from F9 / Actions or press **Alt+Shift+Enter**. Marked folders are calculated when present; otherwise all visible folders are scanned. Results appear in the Size column and can be sorted. Scans do not follow symbolic links or junctions. Partial results have a ≥ prefix and error details in their tooltip; cancel from the pane footer. Refreshing or changing location clears calculated values and cancels the scan.
+
+**F1** opens a category sidebar with global shortcut search and keyboard navigation. Contextual help opens the relevant category. Opening a folder focuses its first row, normally `..`; at a drive root the first entry is focused.

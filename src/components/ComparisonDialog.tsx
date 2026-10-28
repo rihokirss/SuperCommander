@@ -1158,7 +1158,13 @@ export function ComparisonDialog({
             />
           );
         })()}
-      {help && <ShortcutsDialog t={t} onClose={() => setHelp(false)} />}
+      {help && (
+        <ShortcutsDialog
+          t={t}
+          initialCategory={t.comparisonKeys}
+          onClose={() => setHelp(false)}
+        />
+      )}
     </>
   );
 }

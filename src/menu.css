@@ -8,8 +8,8 @@
   padding: 5px;
   border: 1px solid #a5b6e52b;
   border-radius: 8px;
-  background: #1c2538f5;
-  color: #b8c7df;
+  background: var(--menu-surface);
+  color: #d8ebfa;
   box-shadow: 0 14px 40px #0005;
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
@@ -57,13 +57,13 @@
   border-top: 1px solid #a8b9e218;
 }
 .command-menu[data-theme="light"] {
-  --bright: #1a2942;
-  --accent: #5672bc;
+  --bright: #15314a;
+  --accent: #287db8;
   --hover: #4d6b9c0b;
-  background: #f5f8fff5;
+  background: var(--menu-surface);
   border-color: #687fa33b;
   box-shadow: 0 14px 40px #31456522;
-  color: #43516a;
+  color: #18354d;
 }
 .command-menu[data-theme="light"] button.highlighted {
   background: #6987c419;
@@ -112,4 +112,76 @@
   .shortcut-reference {
     max-height: 52vh;
   }
+}
+
+.shortcut-browser {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 18px;
+  height: min(58vh, 480px);
+  margin-top: 16px;
+  min-height: 0;
+}
+.shortcut-categories {
+  overflow: auto;
+  padding-right: 12px;
+  border-right: 1px solid var(--line);
+}
+.shortcut-categories button {
+  width: 100%;
+  min-height: 34px;
+  padding: 7px 8px;
+  margin-bottom: 3px;
+  gap: 8px;
+  text-align: left;
+  color: var(--muted);
+  font-size: 11px;
+  border: 1px solid transparent;
+}
+.shortcut-categories button span {
+  flex: 1;
+}
+.shortcut-categories button small {
+  font-size: 9px;
+  opacity: 0.8;
+}
+.shortcut-categories button[aria-selected="true"] {
+  background: var(--accent-soft);
+  border-color: var(--line);
+  color: var(--bright);
+  box-shadow: inset 2px 0 var(--accent);
+}
+.shortcut-browser .shortcut-reference {
+  max-height: none;
+  min-height: 0;
+  padding-right: 5px;
+}
+.shortcut-browser .settings-section {
+  padding-top: 0;
+  margin-top: 0;
+}
+.shortcut-browser .shortcut-grid {
+  gap: 0;
+}
+.shortcut-browser .shortcut-grid > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  min-height: 36px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--line);
+}
+.shortcut-browser h3 {
+  color: var(--bright);
+  font-size: 13px;
+  margin-bottom: 10px;
+}
+.shortcut-browser .shortcut-grid > div {
+  color: var(--text);
+}
+.shortcut-browser .settings-section > h3 {
+  color: var(--bright);
+  font-size: 14px;
+  text-transform: none;
+  letter-spacing: 0.02em;
 }

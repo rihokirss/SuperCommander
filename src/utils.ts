@@ -46,6 +46,7 @@ export function sortEntries(
   entries: Entry[],
   key: "name" | "size" | "modified" | "type",
   desc: boolean,
+  sizes?: Readonly<Record<string, number>>,
 ) {
   return [...entries].sort((a, b) => {
     if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
@@ -57,7 +58,9 @@ export function sortEntries(
           })
         : key === "type"
           ? extension(a).localeCompare(extension(b))
-          : a[key] - b[key];
+          : key === "size"
+            ? (sizes?.[a.path] ?? a.size) - (sizes?.[b.path] ?? b.size)
+            : a[key] - b[key];
     return (desc ? -1 : 1) * n;
   });
 }

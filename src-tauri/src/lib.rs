@@ -207,6 +207,7 @@ fn set_window_appearance(
     glass: bool,
     transparency: u8,
     light: bool,
+    palette: Option<String>,
 ) -> Reply<()> {
     #[cfg(windows)]
     {
@@ -215,15 +216,19 @@ fn set_window_appearance(
         } else {
             255
         };
-        let color = if light {
-            (239, 244, 252, alpha)
-        } else {
-            (16, 20, 31, alpha)
+        let color = match (light, palette.as_deref()) {
+            (true, Some("ice")) => (241, 248, 255, alpha),
+            (true, Some("azure")) => (216, 237, 252, alpha),
+            (true, _) => (231, 243, 252, alpha),
+            (false, Some("denim")) => (27, 45, 74, alpha),
+            (false, Some("midnight")) => (17, 23, 34, alpha),
+            (false, Some("sky")) => (20, 44, 70, alpha),
+            (false, _) => (18, 43, 80, alpha),
         };
         window_vibrancy::apply_acrylic(&window, Some(color)).map_err(error)?;
     }
     #[cfg(not(windows))]
-    let _ = (window, glass, transparency, light);
+    let _ = (window, glass, transparency, light, palette);
     Ok(())
 }
 
@@ -401,6 +406,52 @@ async fn calculate_size(
     .await
 }
 
+#[tauri::command]
+async fn calculate_folder_sizes(
+    state: State<'_, AppState>,
+    source: String,
+    paths: Vec<String>,
+    id: String,
+    channel: Channel<FolderSizeProgress>,
+) -> Reply<()> {
+    let task = state.searches.start(id).map_err(error)?;
+    // One filesystem/session is retained for the entire scan, including reconnects.
+    let fs = state.sources.get(&source).map_err(error)?;
+    blocking(move || {
+        for (index, path) in paths.iter().enumerate() {
+            if task.cancel.load(Ordering::Relaxed) {
+                break;
+            }
+            core::properties::calculate(
+                fs.as_ref(),
+                std::slice::from_ref(path),
+                &task.cancel,
+                &|summary| {
+                    if channel
+                        .send(FolderSizeProgress {
+                            path: path.clone(),
+                            index: index + 1,
+                            total: paths.len(),
+                            summary,
+                        })
+                        .is_err()
+                    {
+                        task.cancel.store(true, Ordering::Relaxed);
+                    }
+                },
+            )?;
+        }
+        Ok(())
+    })
+    .await
+}
+#[derive(Clone, Serialize)]
+struct FolderSizeProgress {
+    path: String,
+    index: usize,
+    total: usize,
+    summary: core::properties::SizeSummary,
+}
 #[tauri::command]
 async fn enqueue_job(state: State<'_, AppState>, request: JobRequest) -> Reply<()> {
     let engine = state.engine.clone();
@@ -1141,7 +1192,7 @@ pub fn run() {
             });
             #[cfg(windows)]
             if let Some(window) = app.get_webview_window("main") {
-                let _ = window_vibrancy::apply_acrylic(&window, Some((16, 20, 31, 210)));
+                let _ = window_vibrancy::apply_acrylic(&window, Some((18, 43, 80, 210)));
             }
             Ok(())
         })
@@ -1171,6 +1222,7 @@ pub fn run() {
             get_properties,
             apply_properties,
             calculate_size,
+            calculate_folder_sizes,
             enqueue_job,
             cancel_job,
             resolve_conflict,

@@ -42,6 +42,43 @@ describe("file presentation", () => {
     expect(size(1536)).toBe("2 KB");
     expect(size(1024 * 1024)).toBe("1.0 MB");
   });
+  it("sorts calculated folder sizes without changing filesystem metadata", () => {
+    const entries: Entry[] = [
+      {
+        name: "large",
+        path: "large",
+        isDir: true,
+        isSymlink: false,
+        size: 0,
+        modified: 0,
+        hidden: false,
+      },
+      {
+        name: "small",
+        path: "small",
+        isDir: true,
+        isSymlink: false,
+        size: 0,
+        modified: 0,
+        hidden: false,
+      },
+      {
+        name: "file",
+        path: "file",
+        isDir: false,
+        isSymlink: false,
+        size: 9999,
+        modified: 0,
+        hidden: false,
+      },
+    ];
+    expect(
+      sortEntries(entries, "size", false, { large: 2048, small: 10 }).map(
+        (entry) => entry.name,
+      ),
+    ).toEqual(["small", "large", "file"]);
+    expect(entries.map((entry) => entry.size)).toEqual([0, 0, 9999]);
+  });
   it("has a complete Estonian dictionary", () => {
     const en = dictionary("en"),
       et = dictionary("et");

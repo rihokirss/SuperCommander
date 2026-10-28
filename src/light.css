@@ -1,36 +1,48 @@
 /* Light surfaces share the same geometry and restrained glass as the dark theme. */
 .app-shell[data-theme="light"] {
   color-scheme: light;
-  --text: #293950;
-  --bright: #1a2942;
-  --muted: #52627a;
-  --accent: #5672bc;
-  --accent-soft: #5672bc20;
-  --line: #52688720;
-  --hover: #4d6b9c0b;
-  --panel: #ffffff85;
-  --glass: #f4f7fcbd;
+  --canvas-start: 231 243 252;
+  --canvas-mid: 238 248 255;
+  --canvas-end: 224 240 252;
+  --glass-rgb: 242 249 255;
+  --solid-canvas: #e7f3fc;
+  --opaque-glass: #e7f3fc;
+  --opaque-panel: #f2f9ff;
+  --modal-start: #f2f9fff5;
+  --modal-end: #e7f3fcf5;
+  --menu-surface: #eff8fff5;
+  --focused-bg: #c5e5fc;
+  --focused-marked-bg: #acd9f7;
+  --text: #18354d;
+  --bright: #15314a;
+  --muted: #45637b;
+  --accent: #287db8;
+  --accent-soft: #287db820;
+  --line: #287db828;
+  --hover: #287db810;
+  --panel: #f2f9ffb3;
+  --glass: #e7f3fcbd;
   color: var(--text);
   background: linear-gradient(
     118deg,
-    rgb(236 241 249 / var(--surface-opacity, 0.85)),
-    rgb(245 247 251 / var(--surface-opacity, 0.85)) 48%,
-    rgb(234 240 248 / var(--surface-opacity, 0.85))
+    rgb(var(--canvas-start) / var(--surface-opacity, 0.85)),
+    rgb(var(--canvas-mid) / var(--surface-opacity, 0.85)) 48%,
+    rgb(var(--canvas-end) / var(--surface-opacity, 0.85))
   );
 }
 .app-shell[data-theme="light"].frosted .glass {
-  background-color: rgb(244 247 252 / var(--surface-opacity, 0.85));
+  background-color: rgb(var(--glass-rgb) / var(--surface-opacity, 0.85));
 }
 .app-shell[data-theme="light"].opaque {
-  --glass: #f3f6fb;
-  --panel: #fff;
-  background: #edf2f8;
+  --glass: var(--opaque-glass);
+  --panel: var(--opaque-panel);
+  background: var(--solid-canvas);
 }
 .app-shell[data-theme="light"] .ambient {
   opacity: 0.1;
 }
 .app-shell[data-theme="light"] .sidebar {
-  background: linear-gradient(150deg, #e1e9f580, #edf2f850);
+  background: linear-gradient(150deg, #cce7fb80, #e7f3fc50);
 }
 .app-shell[data-theme="light"] input:not([type="checkbox"]),
 .app-shell[data-theme="light"] select {
@@ -47,7 +59,7 @@
 .app-shell[data-theme="light"] .queue-empty strong,
 .app-shell[data-theme="light"] .host-trust h3,
 .app-shell[data-theme="light"] .search-result strong {
-  color: #344663;
+  color: #18354d;
 }
 .app-shell[data-theme="light"] .sidebar-item,
 .app-shell[data-theme="light"] .icon-button,
@@ -99,12 +111,12 @@
   color: var(--muted);
 }
 .app-shell[data-theme="light"] .sidebar-item.active {
-  color: #3f5e9e;
-  background: linear-gradient(90deg, #6b89c51b, #6b89c508);
+  color: #226c9f;
+  background: linear-gradient(90deg, #5bafe426, #5bafe40c);
 }
 .app-shell[data-theme="light"] .sidebar-item.active > svg,
 .app-shell[data-theme="light"] .pressed {
-  color: #4164a6 !important;
+  color: #287db8 !important;
 }
 .app-shell[data-theme="light"] .workspace-mark {
   color: #5d77af;
@@ -123,16 +135,16 @@
   border-color: #6d89b84c;
 }
 .app-shell[data-theme="light"] .file-row.selected {
-  background: #6d8cc31b;
+  background: #61b6ee2e;
 }
 .app-shell[data-theme="light"] .file-row.selected .file-name {
-  color: #284d89;
+  color: #185884;
 }
 .app-shell[data-theme="light"] .file-row:hover {
   background: #6784b009;
 }
 .app-shell[data-theme="light"] .file-icon.folder {
-  color: #6b89bb;
+  color: #418dc1;
 }
 .app-shell[data-theme="light"] .file-icon.text {
   color: #758aa6;
@@ -177,18 +189,18 @@
   border-color: var(--line);
 }
 .app-shell[data-theme="light"] .statusbar {
-  background: #e5edf85c;
+  background: #c5e5fc5c;
 }
 .app-shell[data-theme="light"] .modal-overlay {
   background: #31456535;
 }
 .app-shell[data-theme="light"] .modal {
-  background: linear-gradient(145deg, #fbfcfff5, #eef3fbf5);
+  background: linear-gradient(145deg, var(--modal-start), var(--modal-end));
   border-color: #687fa33b;
   box-shadow: 0 25px 100px #31456522;
 }
 .app-shell[data-theme="light"] .dropdown-menu {
-  background: #f5f8ffed;
+  background: var(--menu-surface);
   border-color: var(--line);
   box-shadow: 0 12px 36px #3145651a;
   color: #506b92;

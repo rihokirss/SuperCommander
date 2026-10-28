@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   ArrowRight,
@@ -11,6 +11,14 @@ import {
   SlidersHorizontal,
   Keyboard,
   RefreshCw,
+  FolderOpen,
+  Compass,
+  CheckSquare,
+  PanelsTopLeft,
+  FilePenLine,
+  History,
+  FileText,
+  ArrowDownUp,
 } from "lucide-react";
 import { shortcutGroups } from "../shortcuts";
 import * as api from "../api";
@@ -618,7 +626,13 @@ export function RenameDialog({
           </button>
         </footer>
       </form>
-      {help && <ShortcutsDialog t={t} onClose={() => setHelp(false)} />}
+      {help && (
+        <ShortcutsDialog
+          t={t}
+          initialCategory={t.rename}
+          onClose={() => setHelp(false)}
+        />
+      )}
     </Modal>
   );
 }
@@ -628,13 +642,11 @@ export function SettingsDialog({
   t,
   update,
   onClose,
-  onShortcuts,
 }: {
   settings: Settings;
   t: Text;
   update: (patch: Partial<Settings>) => void;
   onClose: () => void;
-  onShortcuts: () => void;
 }) {
   return (
     <Modal closeLabel={t.close} title={t.settings} onClose={onClose}>
@@ -650,6 +662,36 @@ export function SettingsDialog({
             value={settings.theme}
             onChange={(value) => update({ theme: value as Settings["theme"] })}
             options={(["dark", "light", "system"] as const).map((value) => ({
+              value,
+              label: t[value],
+            }))}
+          />
+        </label>
+        <label className="setting-row">
+          <span>{t.darkPalette}</span>
+          <Select
+            label={t.darkPalette}
+            value={settings.darkPalette || "blue"}
+            onChange={(value) =>
+              update({ darkPalette: value as Settings["darkPalette"] })
+            }
+            options={(["blue", "sky", "denim", "midnight"] as const).map(
+              (value) => ({
+                value,
+                label: t[value],
+              }),
+            )}
+          />
+        </label>
+        <label className="setting-row">
+          <span>{t.lightPalette}</span>
+          <Select
+            label={t.lightPalette}
+            value={settings.lightPalette || "sky"}
+            onChange={(value) =>
+              update({ lightPalette: value as Settings["lightPalette"] })
+            }
+            options={(["sky", "ice", "azure"] as const).map((value) => ({
               value,
               label: t[value],
             }))}
@@ -726,27 +768,6 @@ export function SettingsDialog({
           />
         </label>
       </div>
-      <div className="settings-section">
-        <h3>
-          <Keyboard size={15} />
-          {t.keyboard}
-        </h3>
-        <div className="shortcut-grid">
-          {shortcutGroups(t)[0]
-            .items.slice(0, 7)
-            .map(([key, label]) => (
-              <div key={key}>
-                <span>{label}</span>
-                <kbd>{key}</kbd>
-              </div>
-            ))}
-        </div>
-        <button className="shortcut-help" onClick={onShortcuts}>
-          <Keyboard size={14} />
-          {t.keyboard}
-          <kbd>F1</kbd>
-        </button>
-      </div>
     </Modal>
   );
 }
@@ -754,44 +775,147 @@ export function SettingsDialog({
 export function ShortcutsDialog({
   t,
   onClose,
+  initialCategory,
+  title,
 }: {
   t: Text;
   onClose: () => void;
+  initialCategory?: string;
+  title?: string;
 }) {
   const [query, setQuery] = useState("");
+  const [category, setCategory] = useState(() =>
+    Math.max(
+      0,
+      shortcutGroups(t).findIndex((group) => group.title === initialCategory),
+    ),
+  );
+  const helpId = useId();
+  const groups = shortcutGroups(t);
+  const filtered = groups.map((group) => ({
+    ...group,
+    items: group.items.filter((entry) =>
+      entry.join(" ").toLocaleLowerCase().includes(query.toLocaleLowerCase()),
+    ),
+  }));
+  const categories = [
+    { title: t.allShortcuts, items: groups.flatMap((group) => group.items) },
+    ...groups,
+  ];
   return (
-    <Modal closeLabel={t.close} title={t.keyboard} onClose={onClose} wide>
+    <Modal
+      closeLabel={t.close}
+      title={title || t.keyboard}
+      onClose={onClose}
+      wide
+    >
       <label className="field">
         <input
           autoFocus
           aria-label={t.searchShortcuts}
           placeholder={t.searchShortcuts}
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(event) => {
+            setQuery(event.target.value);
+            setCategory(-1);
+          }}
         />
       </label>
-      <div className="shortcut-reference">
-        {shortcutGroups(t).map((group) => {
-          const items = group.items.filter((entry) =>
-            entry
-              .join(" ")
-              .toLocaleLowerCase()
-              .includes(query.toLocaleLowerCase()),
-          );
-          return items.length ? (
-            <section className="settings-section" key={group.title}>
-              <h3>{group.title}</h3>
-              <div className="shortcut-grid">
-                {items.map(([key, label]) => (
-                  <div key={key}>
-                    <span>{label}</span>
-                    <kbd>{key}</kbd>
-                  </div>
-                ))}
-              </div>
-            </section>
-          ) : null;
-        })}
+      <div className="shortcut-browser">
+        <nav
+          className="shortcut-categories"
+          role="tablist"
+          aria-label={t.shortcutCategories}
+          aria-orientation="vertical"
+          onKeyDown={(event) => {
+            const tabs = Array.from(
+              event.currentTarget.querySelectorAll<HTMLButtonElement>(
+                '[role="tab"]',
+              ),
+            );
+            const index = tabs.indexOf(
+              document.activeElement as HTMLButtonElement,
+            );
+            const next =
+              event.key === "Home"
+                ? 0
+                : event.key === "End"
+                  ? tabs.length - 1
+                  : event.key === "ArrowDown"
+                    ? (index + 1) % tabs.length
+                    : event.key === "ArrowUp"
+                      ? (index + tabs.length - 1) % tabs.length
+                      : -1;
+            if (next >= 0) {
+              event.preventDefault();
+              tabs[next].focus();
+              tabs[next].click();
+            }
+          }}
+        >
+          {categories.map((group, index) => {
+            const CategoryIcon =
+              [
+                Keyboard,
+                FolderOpen,
+                Compass,
+                CheckSquare,
+                PanelsTopLeft,
+                FilePenLine,
+                History,
+                FileText,
+                Search,
+                SlidersHorizontal,
+                ArrowDownUp,
+              ][index] || Keyboard;
+            return (
+              <button
+                key={group.title}
+                role="tab"
+                id={`${helpId}-${index}`}
+                aria-selected={category === index - 1}
+                aria-controls={`${helpId}-panel`}
+                tabIndex={category === index - 1 ? 0 : -1}
+                onClick={() => {
+                  setCategory(index - 1);
+                  setQuery("");
+                }}
+              >
+                <CategoryIcon size={14} />
+                <span>{group.title}</span>
+                <small>{group.items.length}</small>
+              </button>
+            );
+          })}
+        </nav>
+        <div
+          className="shortcut-reference"
+          role="tabpanel"
+          id={`${helpId}-panel`}
+          aria-labelledby={`${helpId}-${category + 1}`}
+          tabIndex={0}
+        >
+          {filtered.map((group, index) =>
+            (category === -1 || category === index) && group.items.length ? (
+              <section className="settings-section" key={group.title}>
+                <h3>{group.title}</h3>
+                <div className="shortcut-grid">
+                  {group.items.map(([key, label]) => (
+                    <div key={key}>
+                      <span>{label}</span>
+                      <kbd>{key}</kbd>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ) : null,
+          )}
+          {filtered.every((group) => !group.items.length) && (
+            <p className="helper" role="status">
+              {t.noResults}
+            </p>
+          )}
+        </div>
       </div>
     </Modal>
   );

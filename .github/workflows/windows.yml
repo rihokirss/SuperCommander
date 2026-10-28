@@ -33,6 +33,8 @@ jobs:
         id: windows_build
       - run: node scripts/windows-clipboard-smoke.mjs
       - run: node scripts/windows-startup-smoke.mjs
+      - run: node scripts/windows-theme-smoke.mjs
+      - run: node scripts/windows-folder-size-smoke.mjs
       - run: node scripts/windows-properties-smoke.mjs
       - run: node scripts/windows-search-smoke.mjs
       - run: node scripts/windows-transfer-smoke.mjs
@@ -58,6 +60,9 @@ jobs:
             artifacts/native-recovery*.png
             artifacts/native-rename*.png
             artifacts/native-archive*.png
+            artifacts/sky-terminal-*.png
+            artifacts/sky-palettes-*.png
+            artifacts/native-folder-sizes.png
           if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         if: always()

@@ -47,6 +47,12 @@ export type SizeSummary = {
   done: boolean;
   cancelled: boolean;
 };
+export type FolderSizeProgress = {
+  path: string;
+  index: number;
+  total: number;
+  summary: SizeSummary;
+};
 export type Tab = {
   id: string;
   location: Location;
@@ -57,6 +63,8 @@ export type PaneState = { tabs: Tab[]; activeTab: string };
 export type Settings = {
   language: Language;
   theme: "dark" | "light" | "system";
+  darkPalette?: "blue" | "sky" | "denim" | "midnight";
+  lightPalette?: "sky" | "ice" | "azure";
   panes: PaneState[];
   bookmarks: Bookmark[];
   showHidden: boolean;

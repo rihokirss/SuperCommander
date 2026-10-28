@@ -1,0 +1,99 @@
+/* Palette choices share layout, text contrast and interaction states. */
+:root[data-theme="light"] {
+  --canvas-start: 231 243 252;
+  --canvas-mid: 238 248 255;
+  --canvas-end: 224 240 252;
+  --glass-rgb: 242 249 255;
+  --solid-canvas: #e7f3fc;
+  --opaque-glass: #e7f3fc;
+  --opaque-panel: #f2f9ff;
+  --modal-start: #f2f9fff5;
+  --modal-end: #e7f3fcf5;
+  --menu-surface: #eff8fff5;
+  --focused-bg: #c5e5fc;
+  --focused-marked-bg: #acd9f7;
+}
+:root[data-theme="dark"][data-palette="denim"],
+.app-shell[data-theme="dark"][data-palette="denim"] {
+  --canvas-start: 27 45 74;
+  --canvas-mid: 30 50 80;
+  --canvas-end: 35 56 87;
+  --glass-rgb: 38 63 96;
+  --solid-canvas: #1b2d4a;
+  --opaque-glass: #263f60;
+  --opaque-panel: #223957;
+  --panel: #263f6077;
+  --glass: #263f609c;
+  --modal-start: #2d4c71f5;
+  --modal-end: #203a5af5;
+  --menu-surface: #294a6bf5;
+  --accent: #99c4ff;
+  --accent-soft: #99c4ff26;
+}
+:root[data-theme="dark"][data-palette="midnight"],
+.app-shell[data-theme="dark"][data-palette="midnight"] {
+  --canvas-start: 17 23 34;
+  --canvas-mid: 19 23 36;
+  --canvas-end: 21 26 39;
+  --glass-rgb: 25 34 53;
+  --solid-canvas: #111722;
+  --opaque-glass: #171d2a;
+  --opaque-panel: #141a26;
+  --panel: #0f162377;
+  --glass: #1922359c;
+  --modal-start: #222d42ed;
+  --modal-end: #151e30f5;
+  --menu-surface: #202d43f5;
+  --accent: #9aaff1;
+  --accent-soft: #9aaff126;
+}
+:root[data-theme="light"][data-palette="ice"],
+.app-shell[data-theme="light"][data-palette="ice"] {
+  --canvas-start: 241 248 255;
+  --canvas-mid: 248 252 255;
+  --canvas-end: 233 245 255;
+  --glass-rgb: 248 252 255;
+  --solid-canvas: #f1f8ff;
+  --opaque-glass: #f1f8ff;
+  --opaque-panel: #f8fcff;
+  --panel: #f8fcffb3;
+  --glass: #f1f8ffbd;
+  --modal-start: #f8fcfff5;
+  --modal-end: #edf7fff5;
+  --menu-surface: #f4fafff5;
+  --focused-bg: #d5eafb;
+  --focused-marked-bg: #bddff8;
+}
+:root[data-theme="light"][data-palette="azure"],
+.app-shell[data-theme="light"][data-palette="azure"] {
+  --canvas-start: 216 237 252;
+  --canvas-mid: 227 244 255;
+  --canvas-end: 205 231 250;
+  --glass-rgb: 234 246 255;
+  --solid-canvas: #d8edfc;
+  --opaque-glass: #d8edfc;
+  --opaque-panel: #eaf6ff;
+  --panel: #eaf6ffb3;
+  --glass: #d8edfcbd;
+  --modal-start: #eaf6fff5;
+  --modal-end: #d8edfcf5;
+  --menu-surface: #e4f4fff5;
+  --focused-bg: #add8f7;
+  --focused-marked-bg: #96ccf1;
+}
+
+:root[data-theme="dark"][data-palette="sky"],
+.app-shell[data-theme="dark"][data-palette="sky"] {
+  --canvas-start: 20 44 70;
+  --canvas-mid: 23 50 77;
+  --canvas-end: 26 55 82;
+  --glass-rgb: 28 61 92;
+  --solid-canvas: #142c46;
+  --opaque-glass: #1c3d5c;
+  --opaque-panel: #193650;
+  --panel: #1c3d5c77;
+  --glass: #1c3d5c9c;
+  --modal-start: #254b6bed;
+  --modal-end: #183752f5;
+  --menu-surface: #214761f5;
+}
