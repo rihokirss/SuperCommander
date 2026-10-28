@@ -198,7 +198,7 @@
       "id": "archives",
       "status": "in_progress",
       "scope": "Practical common archive workflows, safe browsing/creation/extraction, path and symlink protection, and explicit format limitations",
-      "evidence": ["crates/core/tests/files.rs"]
+      "evidence": ["crates/core/tests/files.rs", "crates/core/tests/archives.rs", "tests/ui/archives.spec.ts", "scripts/windows-archive-smoke.mjs", "scripts/windows-smoke.mjs"]
     },
     {
       "id": "properties-and-attributes",
@@ -381,7 +381,7 @@
     "behavior": "Synchronization copies explicitly reviewed differences without automatic deletion. Replaced versions remain on disk until removed by the user. Known overlapping roots are rejected; unresolved cross-namespace overlap can fail after completed copies, with overwritten originals retained and reported.",
     "remaining": [
       "The broader navigation, clipboard, transfer, recovery, archive, viewer, lifecycle, UI and distribution audits retain their original scope; overall completion is unproven.",
-      "ZIP view currently reports zero modified times; verify and improve archive timestamp handling during the archive audit."
+      "The formerly zero ZIP modification times are addressed by archiveBatch, including UTC extra fields, local DOS timestamps and preserved extraction metadata."
     ],
     "ci": "Public Windows CI run 40615552916 passed on dba3695acdd55e564ab59cb9fd2e4c6b64e9a9b7, including native clipboard and comparison checks."
   },
@@ -516,7 +516,8 @@
     ]
   },
   "archiveAuditPending": {
-    "status": "in_progress",
+    "status": "addressed_by_archive_batch_awaiting_ci",
+    "addressedByBatch": "archiveBatch",
     "confirmedOnSource": "77273ebf9b1f4afdb11ba37668f0bb6d28b8ed1b",
     "runtimeEvidence": "artifacts/archive-timestamp-audit.json; standalone Rust probe linked the built core, used only an owned temporary directory and removed its probe files afterward",
     "confirmedFindings": [
@@ -524,11 +525,47 @@
       "Creating a ZIP from a file with modified=1704164646 produces the default DOS timestamp 1980-01-01 00:00:00 instead of preserving that source time.",
       "A real Engine ZIP job was queued with source contents 'before'. Its job-progress sink replaced that source at the first running event, retaining the same size and modification time. The job completed and the resulting archive contained 'edited', so archive creation is not bound to the queued source manifest during reading."
     ],
-    "nextWork": [
+    "originalFollowUpScope": [
       "Drive ZIP creation from the frozen manifest, verify copied bytes against its checksums and revalidate before publishing the archive.",
       "Keep extraction validation and reads on the same frozen ZIP container; the current extraction code opens the path separately for enumeration and by-index reads.",
       "Preserve and display archive timestamps and supported attributes, accounting for UTC extra fields and local DOS timestamps.",
       "Cover mutation, cancellation, partial failures, path/symlink protection, archive limits and common-format behavior in the original archive audit. Do not treat ordinary round-trip tests as proof of those boundaries."
+    ]
+  },
+  "archiveBatch": {
+    "features": [
+      "ZIP creation consumes the queued disk manifest, checks compressed input bytes against its digests and revalidates all sources and the destination before publication",
+      "Extraction freezes and validates all selected ZIP containers before output, using the same immutable handles for entry enumeration and by-index reads",
+      "ZIP view, F5 copy and extraction preserve modification times through UTC Extended Timestamp/NTFS metadata, with DOS-only timestamps interpreted as local time",
+      "File permissions, Windows read-only state and empty/new-folder metadata are retained; preexisting directory permissions are unchanged",
+      "Archive replacements retain previous versions with recovery records and links in Transfers",
+      "Source paths and physical aliases cannot be replaced by archive output; destination parents are pinned and checked before publication",
+      "Unsafe paths, links/special files, duplicate names, file-as-parent collisions, ambiguous case spelling, excess nesting and excess logical paths fail before extraction output",
+      "Growing inputs have bounded reads during hashing, manifest capture, archive creation/freezing and ordinary copy/move; they cannot silently extend the frozen selection",
+      "Long source checksum verification emits cancellable progress; hash and archive progress are throttled across files to avoid flooding the UI",
+      "Owned POSIX .part files start at mode 0600; cleanup errors identify remaining output, including when a parent was moved",
+      "Alt+F5/Alt+F6 appear in F9 and searchable F1 help, yield to path editing and operate on the active pane",
+      "A local ZIP can be created while the other pane retains its authenticated SSH session; local/UNC extraction still requires a local destination",
+      "Read-only ZIP F3/F5 work for files and folders; F4/F8 remain blocked, and implicit directories do not inherit a child's symlink flag",
+      "English README documents workflow, metadata, temporary disk use, limits and unsupported formats, with a native sample screenshot"
+    ],
+    "checks": {
+      "coreTests": "142 passed in the final Linux regression, including 19 archive cases plus the separately ignored ZIP64 acceptance. Cases cover queued/in-read replacements, live growth, malformed/CRC inputs, cancellation, source aliases, previous versions, exact timestamps, modes, existing directory attributes, private output, moved parents and readonly-folder copying.",
+      "realOpenSshIntegration": "7 passed on the final source, retaining actual source/destination alias, queue/session, metadata, editor, clipboard, comparison and rename coverage.",
+      "javascriptUnitTests": "26 passed",
+      "browserTests": "49 passed in the regression. The final two archive cases passed again with explicit path-editing checks. A proposed stored-SSH-tab browser fixture was rejected as insufficient: initialization resets remote tabs to Home. The authenticated-other-pane requirement is now tested in the real Windows SSH smoke suite.",
+      "nativeWindowsCore": "Final optimized Windows x64 archive executable passed all 17 applicable ordinary cases; the two Unix-only cases cover mode-0600 staging and a moved-parent symlink race.",
+      "zip64": "A real entry of u32::MAX+4096 bytes was created, listed, rejected by the bounded viewer as expected, and fully extracted. Final Windows optimized acceptance passed in 25.91 seconds. An earlier Linux debug run passed in 493.70 seconds before the final size-bound refinements. The first Linux attempt timed out in the test's 30-second silent-receive guard; long source verification now emits progress, and the successful repeat was observed to process exit.",
+      "nativeWindows": "Final f72327ae passed windows-archive-smoke.mjs, including actual Alt+F5/Alt+F6, F3/F5 and F4/F8 readonly guards, exact UTC times, empty directories, read-only flags, retained versions, hard links, early cancellation, junction rejection and dark/light 960x640 layout. Full windows-smoke.mjs passed on this executable with the new actual-SSH-other-pane ZIP case, plus copy/move/recycle, editor, image/PDF, SSH config/catalog, transfers, tunnels, remote shell, PowerShell/ConPTY and Ctrl+O.",
+      "windowsCompilation": "fmt, workspace/all-target clippy and Windows checks passed; executable and NSIS installer built. Final executable SHA256 f72327ae68e62456943ba7fc650eb128d5fda4979ccf9b164e44b25723616edf.",
+      "fixtureOwnership": "Full native smoke now creates and removes its own remote folder per run, so repeated runs do not edit the shared fixture's baseline file. A repeated-run failure correctly exposed that stale baseline rather than weakening the editor content assertion.",
+      "ci": "Pending matching public Windows CI after push. Clipboard UI tests remain dedicated-CI-only."
+    },
+    "visualEvidence": ["docs/screenshots/archives.png", "artifacts/native-archive-dark.png", "artifacts/native-archive-light.png"],
+    "remaining": [
+      "Verify matching public Windows CI and preserve the current working profile when updating its executable. The normal profile changed pane locations during this turn and contained no owned smoke paths; its new checksum is user state and must not be reset to the previous one.",
+      "Stored/Deflate ZIP is the implemented archive format; encrypted ZIP and 7z/RAR remain explicitly unsupported. ZIP view/copy has a 128 MiB per-entry limit; Extract streams larger entries. Archive operations cap 200,000 file/folder paths and 256 path components.",
+      "Continue original-scope navigation/selection/context, network/SSH/session/tunnel/terminal lifecycle, viewer/search/editor, UI/shortcut consistency, persistence/recovery and distribution audits. No overall completion is claimed."
     ]
   }
 }

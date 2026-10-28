@@ -15,6 +15,8 @@ export function shortcutGroups(t: Text) {
         ["Shift+F8 / Shift+Delete", t.delete],
         ["Shift+F10 / Menu", t.fileActions],
         ["Alt+Enter", t.properties],
+        ["Alt+F5", t.zip],
+        ["Alt+F6", t.extract],
         ["Ctrl+C / Ctrl+Insert", t.copyClipboard],
         ["Ctrl+X", t.cutClipboard],
         ["Ctrl+V / Shift+Insert", t.paste],

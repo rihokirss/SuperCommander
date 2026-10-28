@@ -4,13 +4,12 @@ mod synchronize;
 mod transfer;
 
 use crate::{
-    filesystem::{guard_destructive, FileSystem, LocalFs, Sources},
+    filesystem::{guard_destructive, FileSystem, Sources},
     Conflict, JobEvent, JobRequest, Operation,
 };
 use anyhow::{bail, Context, Result};
 use std::{
     collections::HashMap,
-    io::{Read, Write},
     path::Path,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -92,6 +91,9 @@ impl Engine {
                     preserved: std::cell::RefCell::new(Vec::new()),
                     preserved_count: std::cell::Cell::new(0),
                     expected_copy: None,
+                    checking_at: std::cell::Cell::new(
+                        std::time::Instant::now() - Duration::from_millis(100),
+                    ),
                 };
                 let preparation = preparation
                     .recv()
@@ -293,6 +295,9 @@ impl Engine {
             preserved: std::cell::RefCell::new(Vec::new()),
             preserved_count: std::cell::Cell::new(0),
             expected_copy: None,
+            checking_at: std::cell::Cell::new(
+                std::time::Instant::now() - Duration::from_millis(100),
+            ),
         };
         let normal = synchronization.is_none();
         let (prepared, preparation) = mpsc::channel();
@@ -352,7 +357,10 @@ impl Engine {
                     request.source_bindings.as_deref(),
                 )?;
                 snapshot.destination = binding;
-                if matches!(request.operation, Operation::Copy | Operation::Move) {
+                if matches!(
+                    request.operation,
+                    Operation::Copy | Operation::Move | Operation::Zip | Operation::Extract
+                ) {
                     snapshot.ensure_transferable()?;
                 }
                 Ok(Some(snapshot))
@@ -388,6 +396,7 @@ impl Engine {
 }
 
 struct ContextJob {
+    checking_at: std::cell::Cell<std::time::Instant>,
     event: JobEvent,
     control: Arc<Control>,
     sink: Sink,
@@ -425,6 +434,20 @@ impl ContextJob {
         self.event.bytes += n;
         self.event.current = path.into();
         self.emit();
+    }
+    fn checking(&self, path: &str, bytes: u64, total: u64) {
+        if self.checking_at.get().elapsed() < Duration::from_millis(100) {
+            return;
+        }
+        self.checking_at.set(std::time::Instant::now());
+        let mut event = self.event.clone();
+        event.state = "preparing".into();
+        event.current = path.into();
+        event.bytes = bytes;
+        event.total = total;
+        event.preserved_count = self.preserved_count.get();
+        event.preserved = self.preserved.borrow().clone();
+        (self.sink)(event);
     }
     fn conflict(&mut self, path: &str) -> Result<Conflict> {
         if self.policy != Conflict::Ask {
@@ -484,12 +507,11 @@ fn run(
     ctx.event.total = snapshot.total;
     ctx.emit();
     if req.operation == Operation::Zip {
-        ctx.event.total = 0;
-        return zip_job(req, ctx);
+        return archives::create(req, &mut snapshot, ctx);
     }
     if req.operation == Operation::Extract {
         ctx.event.total = 0;
-        return extract_job(req, ctx);
+        return archives::extract(req, &mut snapshot, ctx);
     }
     let dest = sources.get(&req.destination.source)?;
     if matches!(req.operation, Operation::Copy | Operation::Move) && !dest.writable() {
@@ -606,22 +628,6 @@ fn run(
     Ok(())
 }
 
-fn measure(fs: &dyn FileSystem, path: &str, ctx: &ContextJob) -> Result<u64> {
-    ctx.check()?;
-    let entry = fs.stat(path)?;
-    if entry.is_symlink {
-        bail!("Symbolic links are not followed: {path}");
-    }
-    if !entry.is_dir {
-        return Ok(entry.size);
-    }
-    let mut total = 0;
-    for e in fs.list(path)? {
-        total += measure(fs, &e.path, ctx)?;
-    }
-    Ok(total)
-}
-
 fn choose_target(fs: &dyn FileSystem, path: &str, ctx: &mut ContextJob) -> Result<Option<String>> {
     if !fs.exists(path)? {
         return Ok(Some(path.into()));
@@ -651,132 +657,4 @@ fn choose_target(fs: &dyn FileSystem, path: &str, ctx: &mut ContextJob) -> Resul
     }
 }
 
-fn zip_job(req: &JobRequest, ctx: &mut ContextJob) -> Result<()> {
-    if req.source != "local" || req.destination.source != "local" {
-        bail!("ZIP creation currently requires local files");
-    }
-    let parent = Path::new(&req.destination.path)
-        .parent()
-        .context("Invalid archive destination")?;
-    for path in &req.paths {
-        guard_destructive(path)?;
-        validate_destination(path, &parent.to_string_lossy())?;
-        ctx.event.total += measure(&LocalFs, path, ctx)?;
-    }
-    let Some(target) = choose_target(&LocalFs, &req.destination.path, ctx)? else {
-        return Ok(());
-    };
-    let expected = transfer::target_stamp(&LocalFs, &target, ctx)?;
-    let temp = parent.join(format!(".supercommander-{}.part", uuid::Uuid::new_v4()));
-    let control = ctx.control.clone();
-    let result = crate::archive::create_zip(
-        &req.paths,
-        &temp,
-        &|| control.cancel.load(Ordering::Relaxed),
-        &mut |n, p| ctx.progress(n, p),
-    );
-    if result.is_err() {
-        let _ = std::fs::remove_file(&temp);
-    }
-    result?;
-    if let Err(e) = ctx.check() {
-        let _ = std::fs::remove_file(&temp);
-        return Err(e);
-    }
-    if let Err(error) = transfer::commit(
-        &LocalFs,
-        &temp.to_string_lossy(),
-        &target,
-        expected.as_ref(),
-        ctx,
-        || ctx.check(),
-    ) {
-        let _ = std::fs::remove_file(&temp);
-        return Err(error);
-    }
-    ctx.event.completed = req.paths.len() as u64;
-    Ok(())
-}
-
-fn extract_job(req: &JobRequest, ctx: &mut ContextJob) -> Result<()> {
-    if req.source != "local" || req.destination.source != "local" {
-        bail!("Extract requires local ZIP files");
-    }
-    let root = std::fs::canonicalize(&req.destination.path)?;
-    for path in &req.paths {
-        let entries = crate::archive::extracted_entries(path)?;
-        ctx.event.total += entries.iter().map(|e| e.3).sum::<u64>();
-        let mut archive = zip::ZipArchive::new(std::fs::File::open(path)?)?;
-        for (index, relative, is_dir, _) in entries {
-            ctx.check()?;
-            let full = root.join(&relative);
-            let mut current = root.clone();
-            for component in relative.parent().unwrap_or(Path::new("")).components() {
-                current.push(component);
-                if current.exists() {
-                    if std::fs::symlink_metadata(&current)?
-                        .file_type()
-                        .is_symlink()
-                        || !std::fs::canonicalize(&current)?.starts_with(&root)
-                    {
-                        bail!("Unsafe extraction path: {}", current.display());
-                    }
-                } else {
-                    std::fs::create_dir(&current)?;
-                }
-            }
-            if is_dir {
-                if !full.exists() {
-                    std::fs::create_dir(&full)?;
-                } else if !full.is_dir()
-                    || std::fs::symlink_metadata(&full)?.file_type().is_symlink()
-                {
-                    bail!("Invalid destination directory");
-                }
-                continue;
-            }
-            let Some(target) = choose_target(&LocalFs, &full.to_string_lossy(), ctx)? else {
-                continue;
-            };
-            let expected = transfer::target_stamp(&LocalFs, &target, ctx)?;
-            let temp = full
-                .parent()
-                .unwrap()
-                .join(format!(".supercommander-{}.part", uuid::Uuid::new_v4()));
-            let result = (|| -> Result<()> {
-                let mut input = archive.by_index(index)?;
-                let mut out = std::fs::OpenOptions::new()
-                    .write(true)
-                    .create_new(true)
-                    .open(&temp)?;
-                let mut buffer = vec![0; 256 * 1024];
-                loop {
-                    ctx.check()?;
-                    let n = input.read(&mut buffer)?;
-                    if n == 0 {
-                        break;
-                    }
-                    out.write_all(&buffer[..n])?;
-                    ctx.progress(n as u64, &relative.to_string_lossy());
-                }
-                out.sync_all()?;
-                drop(out);
-                ctx.check()?;
-                transfer::commit(
-                    &LocalFs,
-                    &temp.to_string_lossy(),
-                    &target,
-                    expected.as_ref(),
-                    ctx,
-                    || ctx.check(),
-                )
-            })();
-            if result.is_err() {
-                let _ = std::fs::remove_file(&temp);
-            }
-            result?;
-        }
-        ctx.event.completed += 1;
-    }
-    Ok(())
-}
+mod archives;

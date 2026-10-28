@@ -226,6 +226,8 @@ const en = {
   edit: "Edit",
   search: "Search",
   zip: "Create ZIP",
+  localArchivesOnly:
+    "Create and extract ZIP archives using local drives or UNC paths. Choose a local destination for extraction.",
   extract: "Extract ZIP",
   terminal: "Terminal",
   queue: "Transfers",
@@ -696,6 +698,8 @@ const et: Dictionary = {
   edit: "Muuda",
   search: "Otsi",
   zip: "Loo ZIP",
+  localArchivesOnly:
+    "ZIP-i loomine ja lahtipakkimine töötab kohalikel ketastel ja UNC-võrguteedel. Vali lahtipakkimiseks kohalik sihtkoht.",
   extract: "Paki ZIP lahti",
   terminal: "Terminal",
   queue: "Failitoimingud",

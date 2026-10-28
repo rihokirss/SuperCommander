@@ -903,9 +903,10 @@ export function App() {
     }
     if (
       (operation === "zip" || operation === "extract") &&
-      (current.source !== "local" || other.source !== "local")
+      (current.source !== "local" ||
+        (operation === "extract" && other.source !== "local"))
     ) {
-      notify(t.desktopOnly + " ZIP: local files only.");
+      notify(t.localArchivesOnly);
       return;
     }
     const resolved =
@@ -1517,12 +1518,14 @@ export function App() {
     {
       id: "zip",
       label: t.zip,
+      key: "Alt+F5",
       icon: <Archive size={16} />,
       run: () => action("zip"),
     },
     {
       id: "extract",
       label: t.extract,
+      key: "Alt+F6",
       icon: <ArrowDownToLine size={16} />,
       run: () => action("extract"),
     },
@@ -1691,6 +1694,11 @@ export function App() {
       if (e.altKey && !ctrl && !e.shiftKey && e.key === "Enter") {
         e.preventDefault();
         properties();
+        return;
+      }
+      if (e.altKey && !ctrl && !e.shiftKey && ["F5", "F6"].includes(e.key)) {
+        e.preventDefault();
+        action(e.key === "F5" ? "zip" : "extract");
         return;
       }
       if (ctrl && !e.altKey && name === "c" && e.shiftKey) {

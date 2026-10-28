@@ -188,7 +188,9 @@ fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 fn digest(fs: &dyn FileSystem, path: &str, ctx: &ContextJob) -> Result<String> {
-    let mut input = fs.reader(path)?;
+    let expected = fs.stat(path)?.size;
+    let mut input = fs.reader(path)?.take(expected.saturating_add(1));
+    let mut read = 0u64;
     let mut hash = Sha256::new();
     let mut bytes = vec![0; 256 * 1024];
     loop {
@@ -197,8 +199,11 @@ fn digest(fs: &dyn FileSystem, path: &str, ctx: &ContextJob) -> Result<String> {
         if n == 0 {
             break;
         }
+        read += n as u64;
+        anyhow::ensure!(read <= expected, "File size changed while checking: {path}");
         hash.update(&bytes[..n]);
     }
+    anyhow::ensure!(read == expected, "File size changed while checking: {path}");
     Ok(hex(&hash.finalize()))
 }
 fn transfer_file(
@@ -243,7 +248,7 @@ fn transfer_file(
     let _active_temp = crate::recovery::Active::new(&temp);
     let mut owned_temp = false;
     let result = (|| -> Result<()> {
-        let mut reader = src.reader(&entry.path)?;
+        let mut reader = src.reader(&entry.path)?.take(entry.size.saturating_add(1));
         let mut writer = dst.private_writer(&temp)?;
         owned_temp = true;
         let mut bytes = vec![0; 256 * 1024];
@@ -255,6 +260,11 @@ fn transfer_file(
             if n == 0 {
                 break;
             }
+            anyhow::ensure!(
+                written + n as u64 <= entry.size,
+                "Source size changed during transfer: {}",
+                entry.path
+            );
             writer.write_all(&bytes[..n])?;
             hash.update(&bytes[..n]);
             written += n as u64;

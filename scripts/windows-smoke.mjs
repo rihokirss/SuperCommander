@@ -4,11 +4,13 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { randomUUID } from "node:crypto";
 import { startNativeTest } from "./native-test-instance.mjs";
 
 const instance = await startNativeTest("smoke", process.argv[2]);
 const { page, root: temp } = instance;
 const ownedSources = new Set();
+let ownedRemoteFolder;
 const rpc = (command, args = {}) =>
   page.evaluate(
     ({ command, args }) => window.__TAURI_INTERNALS__.invoke(command, args),
@@ -325,7 +327,7 @@ try {
 
   await left.getByText("renamed.txt", { exact: true }).click();
   await page.locator(".menu-anchor>button").click();
-  await page.getByRole("menuitem", { name: "Create ZIP", exact: true }).click();
+  await page.getByRole("menuitem", { name: /^Create ZIP/ }).click();
   await page
     .getByRole("dialog")
     .getByRole("button", { name: "Create ZIP", exact: true })
@@ -334,9 +336,7 @@ try {
   await expect(left.getByText("renamed.zip", { exact: true })).toBeVisible();
   await left.getByText("renamed.zip", { exact: true }).click();
   await page.locator(".menu-anchor>button").click();
-  await page
-    .getByRole("menuitem", { name: "Extract ZIP", exact: true })
-    .click();
+  await page.getByRole("menuitem", { name: /^Extract ZIP/ }).click();
   await page
     .getByRole("dialog")
     .getByRole("button", { name: "Extract ZIP", exact: true })
@@ -374,6 +374,17 @@ try {
     if (e.code !== "ENOENT") throw e;
   }
   if (fixture) {
+    const name = `smoke-${randomUUID()}`;
+    ownedRemoteFolder = path.join(path.dirname(fixture.keyPath), name);
+    await fs.mkdir(ownedRemoteFolder);
+    await fs.writeFile(
+      path.join(ownedRemoteFolder, "remote-only.txt"),
+      "A file from the SSH server",
+    );
+    fixture = {
+      ...fixture,
+      path: fixture.path.slice(0, fixture.path.lastIndexOf("/")) + "/" + name,
+    };
     const sshConfig = path.join(temp, "config");
     await fs.writeFile(
       sshConfig,
@@ -666,6 +677,29 @@ try {
     console.log(
       "PASS connection form uses SSH config as its only profile store; alias reuses the live SSH connection; localhost tunnel carries HTTP",
     );
+    await expect(right.locator(".pane-context")).toContainText(
+      fixture.username + "@",
+    );
+    await left.getByText("renamed.txt", { exact: true }).click();
+    await page.keyboard.press("Alt+F5");
+    const localArchive = page.getByRole("dialog", {
+      name: "Create ZIP",
+      exact: true,
+    });
+    await localArchive
+      .getByRole("textbox", { name: "Archive filename", exact: true })
+      .fill("with-ssh-pane.zip");
+    await localArchive
+      .getByRole("button", { name: "Create ZIP", exact: true })
+      .click();
+    await finished(++completed);
+    await fs.access(path.join(src, "with-ssh-pane.zip"));
+    await expect(right.locator(".pane-context")).toContainText(
+      fixture.username + "@",
+    );
+    console.log(
+      "PASS local Alt+F5 archive creation while the other pane retains its actual authenticated SSH session",
+    );
     await left.getByText("drag-me.txt", { exact: true }).click();
     await page.keyboard.press("F5");
     await page
@@ -830,6 +864,11 @@ try {
         .catch(() => {});
     }
   } finally {
-    await instance.close();
+    try {
+      if (ownedRemoteFolder)
+        await fs.rm(ownedRemoteFolder, { recursive: true, force: true });
+    } finally {
+      await instance.close();
+    }
   }
 }

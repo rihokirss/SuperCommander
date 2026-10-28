@@ -76,7 +76,13 @@ impl Node {
         }
         if contents {
             if let Some(expected) = &self.digest {
-                if &crate::comparison::hash(fs, path, &ctx.control.cancel, |_| {})? != expected {
+                let mut bytes = 0;
+                ctx.checking(path, 0, self.entry.size);
+                if &crate::comparison::hash(fs, path, &ctx.control.cancel, |n| {
+                    bytes += n;
+                    ctx.checking(path, bytes, self.entry.size);
+                })? != expected
+                {
                     bail!("Source contents changed after queuing: {path}");
                 }
             }
@@ -312,7 +318,8 @@ fn capture(
             .checked_add(node.entry.size)
             .context("Transfer size overflow")?;
         {
-            let mut reader = fs.reader(path)?;
+            let mut reader = fs.reader(path)?.take(node.entry.size.saturating_add(1));
+            let mut read = 0u64;
             let mut hash = Sha256::new();
             let mut bytes = vec![0; 256 * 1024];
             loop {
@@ -321,6 +328,11 @@ fn capture(
                 if n == 0 {
                     break;
                 }
+                read += n as u64;
+                anyhow::ensure!(
+                    read <= node.entry.size,
+                    "Source size changed while checking: {path}"
+                );
                 hash.update(&bytes[..n]);
                 ctx.event.bytes += n as u64;
                 if last.elapsed().as_millis() >= 100 {
@@ -328,6 +340,10 @@ fn capture(
                     *last = Instant::now();
                 }
             }
+            anyhow::ensure!(
+                read == node.entry.size,
+                "Source size changed while checking: {path}"
+            );
             node.digest = Some(hex(&hash.finalize()));
         }
     }

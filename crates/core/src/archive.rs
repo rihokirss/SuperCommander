@@ -6,10 +6,10 @@ use anyhow::{bail, Context, Result};
 use std::{
     collections::BTreeMap,
     fs::File,
-    io::{Cursor, Read, Write},
+    io::{Cursor, Read, Seek, Write},
     path::Path,
 };
-use zip::{write::SimpleFileOptions, ZipArchive, ZipWriter};
+use zip::ZipArchive;
 
 pub struct ZipFs {
     path: String,
@@ -28,10 +28,10 @@ impl FileSystem for ZipFs {
             format!("{}/", path.trim_matches('/'))
         };
         let mut archive = ZipArchive::new(File::open(&self.path)?)?;
-        let mut entries = BTreeMap::new();
+        let mut entries: BTreeMap<String, (Entry, bool)> = BTreeMap::new();
         for i in 0..archive.len() {
             let f = archive.by_index(i)?;
-            if f.enclosed_name().is_none() {
+            if safe_zip_path(f.name()).is_err() {
                 continue;
             }
             if let Some(rest) = f.name().strip_prefix(&prefix) {
@@ -40,18 +40,32 @@ impl FileSystem for ZipFs {
                     continue;
                 }
                 let is_dir = rest.contains('/');
-                entries.entry(name.to_string()).or_insert_with(|| Entry {
-                    name: name.into(),
-                    path: format!("/{prefix}{name}"),
-                    is_dir,
-                    is_symlink: f.unix_mode().is_some_and(|m| m & 0o170000 == 0o120000),
-                    size: if is_dir { 0 } else { f.size() },
-                    modified: 0,
-                    hidden: name.starts_with('.'),
+                let direct = !rest.trim_end_matches('/').contains('/');
+                let modified = metadata::Metadata::from_zip(&f).seconds();
+                let (entry, explicit) = entries.entry(name.to_string()).or_insert_with(|| {
+                    (
+                        Entry {
+                            name: name.into(),
+                            path: format!("/{prefix}{name}"),
+                            is_dir,
+                            is_symlink: direct
+                                && f.unix_mode().is_some_and(|m| m & 0o170000 == 0o120000),
+                            size: if is_dir { 0 } else { f.size() },
+                            modified,
+                            hidden: name.starts_with('.'),
+                        },
+                        false,
+                    )
                 });
+                if direct {
+                    entry.modified = modified;
+                    *explicit = true;
+                } else if !*explicit {
+                    entry.modified = entry.modified.max(modified);
+                }
             }
         }
-        Ok(entries.into_values().collect())
+        Ok(entries.into_values().map(|(entry, _)| entry).collect())
     }
     fn stat(&self, path: &str) -> Result<Entry> {
         if path == "/" {
@@ -77,8 +91,26 @@ impl FileSystem for ZipFs {
             bail!("Use Extract for archive entries over 128 MiB");
         }
         let mut bytes = Vec::new();
-        f.read_to_end(&mut bytes)?;
+        f.by_ref()
+            .take(128 * 1024 * 1024 + 1)
+            .read_to_end(&mut bytes)?;
+        anyhow::ensure!(
+            bytes.len() <= 128 * 1024 * 1024,
+            "Archive entry exceeds the 128 MiB viewing limit; use Extract"
+        );
         Ok(Box::new(Cursor::new(bytes)))
+    }
+    fn properties(&self, path: &str) -> Result<crate::properties::Properties> {
+        let entry = self.stat(path)?;
+        let mut archive = ZipArchive::new(File::open(&self.path)?)?;
+        let name = path.trim_start_matches('/');
+        let found = archive
+            .index_for_name(name)
+            .or_else(|| archive.index_for_name(&format!("{name}/")));
+        if let Some(index) = found {
+            return Ok(metadata::Metadata::from_zip(&archive.by_index(index)?).properties(entry));
+        }
+        Ok(crate::properties::Properties::basic(entry))
     }
     fn writer(&self, _: &str) -> Result<Box<dyn Write + Send>> {
         bail!("ZIP view is read-only")
@@ -99,7 +131,13 @@ impl FileSystem for ZipFs {
         false
     }
     fn exists(&self, path: &str) -> Result<bool> {
-        Ok(self.stat(path).is_ok())
+        if path == "/" {
+            return Ok(true);
+        }
+        Ok(self
+            .list(&crate::rename::parent(path))?
+            .iter()
+            .any(|entry| entry.path == path))
     }
 }
 
@@ -124,76 +162,90 @@ pub fn safe_zip_path(name: &str) -> Result<std::path::PathBuf> {
     Ok(out)
 }
 
-pub fn create_zip(
-    paths: &[String],
-    target: &Path,
-    cancelled: &dyn Fn() -> bool,
-    progress: &mut dyn FnMut(u64, &str),
-) -> Result<()> {
-    let file = std::fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(target)?;
-    let mut writer = ZipWriter::new(file);
-    let options = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
-    for root in paths {
-        let root = Path::new(root);
-        let parent = root.parent().context("Cannot archive a root directory")?;
-        for entry in walkdir::WalkDir::new(root).follow_links(false) {
-            if cancelled() {
-                bail!("Cancelled");
-            }
-            let entry = entry?;
-            if entry.file_type().is_symlink() {
-                bail!(
-                    "Symbolic links are not archived: {}",
-                    entry.path().display()
-                );
-            }
-            let relative = entry
-                .path()
-                .strip_prefix(parent)?
-                .to_string_lossy()
-                .replace('\\', "/");
-            safe_zip_path(&relative)?;
-            if entry.file_type().is_dir() {
-                writer.add_directory(format!("{relative}/"), options)?;
-            } else {
-                writer.start_file(&relative, options)?;
-                let mut file = File::open(entry.path())?;
-                let mut buf = vec![0; 256 * 1024];
-                loop {
-                    if cancelled() {
-                        bail!("Cancelled");
-                    }
-                    let n = file.read(&mut buf)?;
-                    if n == 0 {
-                        break;
-                    }
-                    writer.write_all(&buf[..n])?;
-                    progress(n as u64, &relative);
-                }
-            }
-        }
-    }
-    writer.finish()?.sync_all()?;
-    Ok(())
-}
-
 pub fn extracted_entries(path: &str) -> Result<Vec<(usize, std::path::PathBuf, bool, u64)>> {
     let mut archive = ZipArchive::new(File::open(path)?)?;
+    Ok(inspect_entries(&mut archive, &|| Ok(()))?
+        .into_iter()
+        .map(|entry| (entry.index, entry.path, entry.directory, entry.size))
+        .collect())
+}
+
+pub(crate) struct ArchiveEntry {
+    pub index: usize,
+    pub path: std::path::PathBuf,
+    pub directory: bool,
+    pub size: u64,
+    pub metadata: metadata::Metadata,
+}
+pub(crate) fn inspect_entries<R: Read + Seek>(
+    archive: &mut ZipArchive<R>,
+    check: &dyn Fn() -> Result<()>,
+) -> Result<Vec<ArchiveEntry>> {
+    anyhow::ensure!(
+        archive.len() <= 200_000,
+        "Archive has more than 200,000 entries; extract smaller archives separately"
+    );
     let mut out = Vec::new();
-    let mut names = std::collections::HashSet::new();
+    let mut names = std::collections::HashMap::new();
     for i in 0..archive.len() {
+        check()?;
         let f = archive.by_index(i)?;
         let p = safe_zip_path(f.name())?;
-        if f.unix_mode().is_some_and(|m| m & 0o170000 == 0o120000) {
-            bail!("Archive contains a symbolic link");
+        anyhow::ensure!(
+            p.components().count() <= 256,
+            "Archive directory nesting exceeds 256 levels"
+        );
+        if f.unix_mode()
+            .is_some_and(|m| ![0, 0o100000, 0o040000].contains(&(m & 0o170000)))
+        {
+            bail!("Archive contains a symbolic link or special file");
         }
-        if !names.insert(p.to_string_lossy().to_lowercase()) {
+        if names
+            .insert(p.to_string_lossy().to_lowercase(), f.is_dir())
+            .is_some()
+        {
             bail!("Archive contains duplicate target names");
         }
-        out.push((i, p, f.is_dir(), f.size()));
+        out.push(ArchiveEntry {
+            index: i,
+            path: p,
+            directory: f.is_dir(),
+            size: f.size(),
+            metadata: metadata::Metadata::from_zip(&f),
+        });
+    }
+    let mut spellings = std::collections::HashMap::new();
+    for entry in &out {
+        check()?;
+        let mut current = Some(entry.path.as_path());
+        while let Some(path) = current.filter(|p| !p.as_os_str().is_empty()) {
+            check()?;
+            let name = path.to_string_lossy();
+            let key = name.to_lowercase();
+            if let Some(previous) = spellings.get(&key) {
+                anyhow::ensure!(
+                    *previous == name,
+                    "Archive contains ambiguous folder or file spelling: {name}"
+                );
+            } else {
+                anyhow::ensure!(
+                    spellings.len() < 200_000,
+                    "Archive has more than 200,000 file and folder paths"
+                );
+                spellings.insert(key, name.into_owned());
+            }
+            current = path.parent();
+        }
+        let mut parent = entry.path.parent();
+        while let Some(path) = parent {
+            check()?;
+            anyhow::ensure!(
+                names.get(&path.to_string_lossy().to_lowercase()) != Some(&false),
+                "Archive contains a file used as a parent folder"
+            );
+            parent = path.parent();
+        }
     }
     Ok(out)
 }
+pub(crate) mod metadata;

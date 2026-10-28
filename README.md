@@ -102,6 +102,7 @@ Each pane has independent tabs, history, sorting and filtering. Click its locati
 | F4 | Quick edit, locally or over SFTP |
 | Shift+F4 | New unsaved text file |
 | F5 / F6 | Copy / move to the other pane |
+| Alt+F5 / Alt+F6 | Create / extract ZIP |
 | F7 | Create folder |
 | F8 / Delete | Recycle; remote deletion is permanent and requires confirmation |
 | Shift+F8 / Shift+Delete | Confirm permanent deletion |
@@ -140,6 +141,22 @@ Long clipboard checks show progress in the status bar and can be cancelled with 
 SSH selections and queued operations stay bound to the authenticated connection they were created for. After disconnecting or reconnecting, copy the remote files again; an earlier job cannot silently use the replacement connection. Transfer checks resolve server paths before comparing aliases and reject copying a directory into itself through a symbolic link or `..`.
 
 Transfers show **Checking source files** while recording the selected file versions and folder contents. This runs outside the UI thread and can be cancelled from Transfers. The queue keeps its original order during inspection. Before starting, it rechecks the selection's content, metadata and available filesystem identities; changed sources or replaced local destination folders require starting the operation again. Copy/move use the recorded file list, and copied bytes must match the recorded checksums. Large or remote selections require additional read time for these checks. Cancelling during inspection leaves destination files untouched.
+
+### ZIP archives
+
+**Alt+F5** creates a ZIP from the marked files or folder; **Alt+F6** extracts selected ZIPs to the other pane's local folder. Both actions are also in F9 and the command palette. Creation uses the active pane's local folder, including when the other pane is connected to SSH. Local drives and UNC paths are supported.
+
+Double-click a ZIP to browse its read-only contents. The file list shows modification times, **F3** opens a file and **F5** copies selected entries out. The `..` row at the ZIP root returns to its local parent. Entries larger than 128 MiB require **Extract** rather than the ZIP browser; extraction streams their contents and supports ZIP64 files larger than 4 GiB.
+
+Creation uses the queued file manifest, checksums the bytes being compressed and checks the sources again before publishing. A source replacement, changed contents or new folder children prevents the archive from replacing an existing destination. Extraction first makes and validates private copies of all selected ZIP containers, so replacing an input during extraction cannot change its entry names or contents. The private copies require temporary disk space for the compressed inputs.
+
+ZIP metadata preserves modification times to the format's available precision, including UTC extra fields and NTFS timestamps at 100 ns resolution. DOS-only timestamps are interpreted as local time. Unix permission bits and Windows file read-only state are preserved; newly created folders receive their metadata after their contents. Existing folder permissions remain unchanged. Ownership, ACLs, alternate streams and Windows hidden flags are not stored in ZIP metadata.
+
+Existing files require a conflict decision. Replaced versions remain available with recovery records in Transfers. Selected source files and their physical aliases cannot be overwritten by the archive's output. Invalid paths, links, special files, duplicate targets, ambiguous case spelling and file/folder collisions are rejected before extraction creates output. Parent directories are checked again before publication. Cancellation cleans the current temporary file; earlier extracted files remain available, and cleanup errors identify temporary output that may need recovery.
+
+Creation and extraction support up to 200,000 file/folder paths and 256 path components. Stored and Deflate ZIPs are supported. Password-protected ZIPs and 7z/RAR archives are not supported.
+
+![ZIP extraction in the Windows app](docs/screenshots/archives.png)
 
 ### Rename
 
@@ -339,3 +356,5 @@ Source: [rihokirss/SuperCommander](https://github.com/rihokirss/SuperCommander).
 `node scripts/windows-recovery-smoke.mjs [path-to-supercommander.exe]` owns an isolated Windows app and verifies discovery, read-only viewing, previous-version links in Transfers, file/folder restoration, complete virtualized review, empty folders, orphan copies, record cleanup and stale reviews. With the WSL SFTP fixture it also verifies remote records written through UNC, SSH-to-local recovery, cross-protocol directory aliases and replaced sessions. `windows-tooltip-smoke.mjs` checks collapsed workspace hints in WebView2, including native HTML/SVG hints appearing after hover.
 
 `node scripts/windows-rename-smoke.mjs [path-to-supercommander.exe]` owns an isolated Windows app and checks reviewed source replacement, refreshing after failure, case-only changes, cancellation before worker registration, a complete virtualized bulk review, keyboard help and compact dark/light layouts. It observes actual delayed IPC requests when checking pending-preview and pending-apply behavior. With the WSL SFTP fixture it also verifies remote renaming and rejection after reconnecting. It does not use the desktop clipboard.
+
+`node scripts/windows-archive-smoke.mjs [path-to-supercommander.exe]` checks the native ZIP shortcuts, browsing/F3, exact modification times, empty directories, Windows read-only state, retained previous versions, hard-link source aliases, early cancellation and junction protection. It owns its app and temporary files and does not use the desktop clipboard. The larger `cargo test -p commander-core --test archives zip64_round_trip_extracts_an_entry_larger_than_four_gibibytes -- --ignored --nocapture` acceptance test creates a sparse input above 4 GiB and extracts its full contents; run it separately with enough disk space.

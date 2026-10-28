@@ -165,7 +165,9 @@ pub fn hash(
     mut progress: impl FnMut(u64),
 ) -> Result<String> {
     check(cancel)?;
-    let mut input = fs.reader(path)?;
+    let expected = fs.stat(path)?.size;
+    let mut input = fs.reader(path)?.take(expected.saturating_add(1));
+    let mut bytes = 0u64;
     let mut hash = Sha256::new();
     let mut buffer = vec![0; 256 * 1024];
     loop {
@@ -174,9 +176,12 @@ pub fn hash(
         if n == 0 {
             break;
         }
+        bytes += n as u64;
+        anyhow::ensure!(bytes <= expected, "File size changed while reading: {path}");
         hash.update(&buffer[..n]);
         progress(n as u64);
     }
+    anyhow::ensure!(bytes == expected, "File size changed while reading: {path}");
     Ok(hex(&hash.finalize()))
 }
 fn root(fs: &dyn FileSystem, location: Location) -> Result<Root> {
