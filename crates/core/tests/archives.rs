@@ -188,6 +188,10 @@ fn zip_creation_and_extraction_keep_precise_times_empty_folders_and_permissions(
         view.properties("/source/file.txt").unwrap().stamp,
         time.to_string()
     );
+    assert_eq!(
+        view.properties("/source/file.txt").unwrap().readonly,
+        Some(true)
+    );
     let event = run(request(Operation::Extract, &[&output], &dest), |_| false);
     assert_eq!(event.state, "completed", "{:?}", event.errors);
     assert_eq!(

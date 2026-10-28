@@ -78,6 +78,9 @@ pub(crate) fn options(
     info: &crate::properties::Properties,
 ) -> Result<FullFileOptions<'static, 'static>> {
     let mut options = FullFileOptions::default()
+        // ZIP 9 defaults to a DOS creator on Windows, which makes readers
+        // interpret the stored Unix permission bits as unrelated DOS flags.
+        .system(zip::System::Unix)
         .compression_method(zip::CompressionMethod::Deflated)
         .large_file(info.file.size >= u32::MAX as u64)
         .unix_permissions(info.mode.unwrap_or(if info.file.is_dir {
