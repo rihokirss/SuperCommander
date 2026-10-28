@@ -2517,6 +2517,7 @@ export function App() {
       )}
       {dialog?.kind === "rename" && (
         <RenameDialog
+          density={settings.density}
           entries={dialog.entries}
           source={dialog.source}
           t={t}

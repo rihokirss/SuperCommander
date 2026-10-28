@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   ArrowRight,
   Search,
@@ -9,6 +10,7 @@ import {
   Check,
   SlidersHorizontal,
   Keyboard,
+  RefreshCw,
 } from "lucide-react";
 import { shortcutGroups } from "../shortcuts";
 import * as api from "../api";
@@ -207,18 +209,128 @@ const defaultRules: RenameRules = {
   start: 1,
   prefix: "",
 };
+function RenamePreview({
+  items,
+  density,
+  t,
+}: {
+  items: RenameItem[];
+  density: Settings["density"];
+  t: Text;
+}) {
+  const list = useRef<HTMLDivElement>(null);
+  const [focused, setFocused] = useState(0);
+  const height = density === "compact" ? 32 : 40;
+  const rows = useVirtualizer({
+    count: items.length,
+    getScrollElement: () => list.current,
+    estimateSize: () => height,
+    overscan: 5,
+  });
+  const active = Math.min(focused, Math.max(0, items.length - 1));
+  return (
+    <div
+      className="rename-preview"
+      role="grid"
+      aria-label={t.rename}
+      aria-rowcount={items.length + 1}
+      aria-colcount={2}
+      tabIndex={0}
+      aria-activedescendant={items.length ? `rename-row-${active}` : undefined}
+      onKeyDown={(e) => {
+        const step = Math.max(
+          1,
+          Math.floor((list.current?.clientHeight || 240) / height),
+        );
+        const next =
+          e.key === "Home"
+            ? 0
+            : e.key === "End"
+              ? items.length - 1
+              : e.key === "ArrowUp"
+                ? active - 1
+                : e.key === "ArrowDown"
+                  ? active + 1
+                  : e.key === "PageUp"
+                    ? active - step
+                    : e.key === "PageDown"
+                      ? active + step
+                      : undefined;
+        if (next === undefined) return;
+        e.preventDefault();
+        const index = Math.max(0, Math.min(items.length - 1, next));
+        setFocused(index);
+        rows.scrollToIndex(index);
+      }}
+    >
+      <div className="rename-heading" role="row" aria-rowindex={1}>
+        <span role="columnheader">{t.before}</span>
+        <span role="columnheader">{t.after}</span>
+      </div>
+      <div
+        className="rename-list"
+        ref={list}
+        style={{
+          height: Math.min(240, Math.max(height, items.length * height)),
+        }}
+      >
+        <div style={{ height: rows.getTotalSize(), position: "relative" }}>
+          {rows.getVirtualItems().map((row) => {
+            const item = items[row.index];
+            return (
+              <div
+                key={item.path}
+                id={`rename-row-${row.index}`}
+                role="row"
+                aria-rowindex={row.index + 2}
+                className={`rename-row ${item.error ? "invalid" : ""} ${row.index === active ? "focused" : ""}`}
+                style={{
+                  height,
+                  position: "absolute",
+                  width: "100%",
+                  transform: `translateY(${row.start}px)`,
+                }}
+                onClick={(e) => {
+                  setFocused(row.index);
+                  e.currentTarget
+                    .closest<HTMLElement>('[role="grid"]')
+                    ?.focus();
+                }}
+              >
+                <span role="gridcell" data-tooltip={item.path}>
+                  {item.before}
+                </span>
+                <span
+                  role="gridcell"
+                  data-tooltip={[item.after, item.error]
+                    .filter(Boolean)
+                    .join(" · ")}
+                >
+                  {item.after}
+                  {item.error && <small> · {item.error}</small>}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
 export function RenameDialog({
   entries,
   source,
   t,
   onClose,
   onDone,
+  density,
 }: {
   entries: Entry[];
   source: string;
   t: Text;
   onClose: () => void;
   onDone: () => void;
+  density: Settings["density"];
 }) {
   const single = entries.length === 1;
   const [rules, setRules] = useState<RenameRules>(
@@ -230,21 +342,42 @@ export function RenameDialog({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [validating, setValidating] = useState(true);
+  const [generation, setGeneration] = useState(0);
+  const [help, setHelp] = useState(false);
   const paths = useRef(entries.map((e) => e.path));
+  const review = useRef<string | undefined>(undefined);
+  const applying = useRef<string | undefined>(undefined);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      if (applying.current)
+        void api
+          .command("cancel_search", { id: applying.current })
+          .catch(() => {});
+    };
+  }, []);
   useEffect(() => {
     let alive = true;
+    const id = uid();
+    review.current = undefined;
     setValidating(true);
     setError("");
     const timer = setTimeout(
       () =>
         api
-          .command<RenameItem[]>("rename_preview", {
+          .command<{ id: string; items: RenameItem[] }>("rename_preview", {
+            id,
             source,
             paths: paths.current,
             rules,
           })
-          .then((items) => {
-            if (alive) setPreview(items);
+          .then((result) => {
+            if (alive) {
+              review.current = result.id;
+              setPreview(result.items);
+            } else void api.command("release_rename", { id }).catch(() => {});
           })
           .catch((e) => {
             if (alive) {
@@ -260,10 +393,53 @@ export function RenameDialog({
     return () => {
       alive = false;
       clearTimeout(timer);
+      void api.command("cancel_search", { id }).catch(() => {});
+      void api.command("release_rename", { id }).catch(() => {});
     };
-  }, [rules, source]);
-  const update = (patch: Partial<RenameRules>) =>
+  }, [rules, source, generation]);
+  function refreshPreview() {
+    if (busy) return;
+    review.current = undefined;
+    setValidating(true);
+    setGeneration((n) => n + 1);
+  }
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => {
+      const dialogs = document.querySelectorAll(
+        '[role="dialog"][aria-modal="true"]',
+      );
+      const form = dialogs[dialogs.length - 1]?.querySelector<HTMLFormElement>(
+        ":scope > .rename-form",
+      );
+      if (!form) return;
+      if (e.key === "F5" || (e.ctrlKey && e.key.toLowerCase() === "r")) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!busy) {
+          review.current = undefined;
+          setValidating(true);
+          setGeneration((n) => n + 1);
+        }
+      } else if (e.key === "F1") {
+        e.preventDefault();
+        e.stopPropagation();
+        setHelp(true);
+      } else if (e.key === "Enter" && e.ctrlKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        form.requestSubmit();
+      }
+    };
+    // A failed operation disables its submit button and can leave focus on body.
+    // Dialog shortcuts must still work there, while yielding to nested help.
+    document.addEventListener("keydown", key, true);
+    return () => document.removeEventListener("keydown", key, true);
+  }, [busy]);
+  const update = (patch: Partial<RenameRules>) => {
+    review.current = undefined;
+    setValidating(true);
     setRules((r) => ({ ...r, ...patch }));
+  };
   return (
     <Modal
       closeLabel={t.close}
@@ -273,21 +449,36 @@ export function RenameDialog({
       wide={!single}
     >
       <form
+        className="rename-form"
         onSubmit={async (e) => {
           e.preventDefault();
+          // Enter submits forms even when a pending preview disables Apply.
+          if (
+            busy ||
+            validating ||
+            !review.current ||
+            !preview.length ||
+            error ||
+            preview.some((i) => i.error)
+          )
+            return;
+          const id = uid();
+          applying.current = id;
           setBusy(true);
           try {
             await api.command("rename_apply", {
-              source,
-              paths: paths.current,
-              rules,
+              id,
+              plan: review.current,
             });
             onDone();
-            onClose();
+            if (mounted.current) onClose();
           } catch (e) {
-            setError(String(e));
+            onDone(); // A failed batch can have names which could not roll back.
+            if (mounted.current) setError(String(e));
           } finally {
-            setBusy(false);
+            applying.current = undefined;
+            review.current = undefined;
+            if (mounted.current) setBusy(false);
           }
         }}
       >
@@ -296,6 +487,7 @@ export function RenameDialog({
             {t.newName}
             <input
               autoFocus
+              disabled={busy}
               value={rules.replace}
               onChange={(e) => update({ replace: e.target.value })}
             />
@@ -307,6 +499,7 @@ export function RenameDialog({
                 {t.find}
                 <input
                   autoFocus
+                  disabled={busy}
                   value={rules.find}
                   onChange={(e) => update({ find: e.target.value })}
                 />
@@ -315,6 +508,7 @@ export function RenameDialog({
                 {t.replaceWith}
                 <input
                   value={rules.replace}
+                  disabled={busy}
                   onChange={(e) => update({ replace: e.target.value })}
                 />
               </label>
@@ -322,6 +516,7 @@ export function RenameDialog({
                 {t.prefix}
                 <input
                   value={rules.prefix}
+                  disabled={busy}
                   onChange={(e) => update({ prefix: e.target.value })}
                 />
               </label>
@@ -330,6 +525,7 @@ export function RenameDialog({
                 <Select
                   label={t.caseMode}
                   value={rules.caseMode}
+                  disabled={busy}
                   onChange={(value) =>
                     update({ caseMode: value as RenameRules["caseMode"] })
                   }
@@ -343,6 +539,7 @@ export function RenameDialog({
               <label>
                 <input
                   type="checkbox"
+                  disabled={busy}
                   checked={rules.regex}
                   onChange={(e) => update({ regex: e.target.checked })}
                 />
@@ -351,6 +548,7 @@ export function RenameDialog({
               <label>
                 <input
                   type="checkbox"
+                  disabled={busy}
                   checked={rules.numbering}
                   onChange={(e) => update({ numbering: e.target.checked })}
                 />
@@ -361,6 +559,7 @@ export function RenameDialog({
                   {t.start}
                   <input
                     className="number-input"
+                    disabled={busy}
                     type="number"
                     min={0}
                     max={1000000000}
@@ -372,27 +571,29 @@ export function RenameDialog({
             </div>
           </>
         )}
-        <div className="rename-preview">
-          <div className="rename-heading">
-            <span>{t.before}</span>
-            <span>{t.after}</span>
-          </div>
-          {preview.map((item) => (
-            <div key={item.path} className={item.error ? "invalid" : ""}>
-              <span>{item.before}</span>
-              <span>
-                {item.after}
-                {item.error && <small>{item.error}</small>}
-              </span>
-            </div>
-          ))}
-        </div>
+        <RenamePreview items={preview} density={density} t={t} />
+        {validating && (
+          <p className="helper" role="status">
+            <LoaderCircle className="spin" size={14} /> {t.checkingRename}
+          </p>
+        )}
         {error && (
           <p className="inline-error" role="alert">
             {error}
           </p>
         )}
         <footer className="modal-actions">
+          <button
+            type="button"
+            className="rename-refresh"
+            onClick={refreshPreview}
+            disabled={busy}
+            data-tooltip={t.refresh}
+            data-shortcut="F5 / Ctrl+R"
+          >
+            <RefreshCw size={14} />
+            {t.refresh}
+          </button>
           <button type="button" onClick={onClose}>
             {t.cancel}
           </button>
@@ -401,6 +602,7 @@ export function RenameDialog({
             type="submit"
             disabled={
               busy ||
+              !review.current ||
               validating ||
               !preview.length ||
               !!error ||
@@ -416,6 +618,7 @@ export function RenameDialog({
           </button>
         </footer>
       </form>
+      {help && <ShortcutsDialog t={t} onClose={() => setHelp(false)} />}
     </Modal>
   );
 }

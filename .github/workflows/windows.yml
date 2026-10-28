@@ -39,6 +39,7 @@ jobs:
       - run: node scripts/windows-comparison-smoke.mjs
       - run: node scripts/windows-tooltip-smoke.mjs
       - run: node scripts/windows-recovery-smoke.mjs
+      - run: node scripts/windows-rename-smoke.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -53,6 +54,7 @@ jobs:
             artifacts/native-queue*.png
             artifacts/native-comparison*.png
             artifacts/native-recovery*.png
+            artifacts/native-rename*.png
           if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         if: always()

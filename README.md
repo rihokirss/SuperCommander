@@ -141,6 +141,16 @@ SSH selections and queued operations stay bound to the authenticated connection 
 
 Transfers show **Checking source files** while recording the selected file versions and folder contents. This runs outside the UI thread and can be cancelled from Transfers. The queue keeps its original order during inspection. Before starting, it rechecks the selection's content, metadata and available filesystem identities; changed sources or replaced local destination folders require starting the operation again. Copy/move use the recorded file list, and copied bytes must match the recorded checksums. Large or remote selections require additional read time for these checks. Cancelling during inspection leaves destination files untouched.
 
+### Rename
+
+**F2** renames one file or opens a bulk preview with find/replace, regular expressions, case conversion, prefixes and numbering. Review the before/after names, then press **Enter / Ctrl+Enter** to apply. The compact preview supports arrows, Home/End and Page Up/Down without mounting every row. **F1** opens shortcut help; **F5 / Ctrl+R** refreshes a stale review. **Esc** closes the dialog and cancels pending checking or renaming.
+
+Confirmation uses the reviewed server-side plan and its original SSH session. Native file IDs reject replacement objects while allowing edits to the same file and changes within a selected folder. Backends without IDs use stricter metadata, file checksum and folder membership checks. Renaming an explicitly selected folder together with its children is rejected. Case-only changes work on Windows, and an existing distinct destination is never replaced.
+
+Each changed name uses a private claim and a recovery record. If a batch fails, SuperCommander attempts to restore completed names without overwriting files that appeared in the meantime or moving replacement objects. If a name cannot be restored, the error identifies the remaining paths. Interrupted private claims can be found in **Recovery & previous versions**. Rename checking accepts up to 100,000 selected roots; fallback membership and case-spelling checks have bounded directory listings.
+
+![Bulk rename preview in the Windows app](docs/screenshots/rename.png)
+
 ### Search
 
 **Ctrl+F** searches the active location, including subfolders by default. Match part of a name, use semicolon-separated wildcard masks such as `*.rs;*.toml`, or choose a filename regular expression. Optional content search reads UTF-8 and BOM-marked UTF-16 text, with case and whole-word options and per-line regular expressions. Each matching file appears once, with its first matching line, column and highlighted excerpt.
@@ -327,3 +337,5 @@ Source: [rihokirss/SuperCommander](https://github.com/rihokirss/SuperCommander).
 `node scripts/windows-editor-smoke.mjs [path-to-supercommander.exe]`, run with Windows Node, launches its own isolated test app and tests new files, Save As, encoding conversions, overwrite conflicts, and native window close protection. The Save & Close assertion closes only that test window. Run native test scripts sequentially; they reserve port 9224.
 
 `node scripts/windows-recovery-smoke.mjs [path-to-supercommander.exe]` owns an isolated Windows app and verifies discovery, read-only viewing, previous-version links in Transfers, file/folder restoration, complete virtualized review, empty folders, orphan copies, record cleanup and stale reviews. With the WSL SFTP fixture it also verifies remote records written through UNC, SSH-to-local recovery, cross-protocol directory aliases and replaced sessions. `windows-tooltip-smoke.mjs` checks collapsed workspace hints in WebView2, including native HTML/SVG hints appearing after hover.
+
+`node scripts/windows-rename-smoke.mjs [path-to-supercommander.exe]` owns an isolated Windows app and checks reviewed source replacement, refreshing after failure, case-only changes, cancellation before worker registration, a complete virtualized bulk review, keyboard help and compact dark/light layouts. It observes actual delayed IPC requests when checking pending-preview and pending-apply behavior. With the WSL SFTP fixture it also verifies remote renaming and rejection after reconnecting. It does not use the desktop clipboard.

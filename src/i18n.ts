@@ -304,6 +304,7 @@ const en = {
   after: "After",
   renameHint:
     "Review every new name before applying. Existing files are never silently replaced.",
+  checkingRename: "Checking selected files and new names…",
   invalidRename: "Resolve the highlighted names first.",
   searchIn: "Search location",
   query: "Filename contains",
@@ -774,6 +775,7 @@ const et: Dictionary = {
   after: "Pärast",
   renameHint:
     "Kontrolli uusi nimesid enne rakendamist. Olemasolevaid faile automaatselt ei asendata.",
+  checkingRename: "Kontrollin valitud faile ja uusi nimesid…",
   invalidRename: "Paranda esmalt esile tõstetud nimed.",
   searchIn: "Otsingu asukoht",
   query: "Failinimi sisaldab",

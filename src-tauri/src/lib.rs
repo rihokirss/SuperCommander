@@ -24,6 +24,7 @@ struct AppState {
     searches: core::tasks::Tasks,
     comparisons: Mutex<HashMap<String, ComparisonRecord>>,
     recovery_plans: Mutex<HashMap<String, (std::time::Instant, core::recovery::Prepared)>>,
+    rename_plans: Mutex<HashMap<String, (std::time::Instant, String, core::rename::Prepared)>>,
     watchers: Mutex<HashMap<String, RecommendedWatcher>>,
 }
 struct ComparisonRecord {
@@ -45,6 +46,11 @@ struct RecoveryProgress {
 struct RecoveryReview {
     id: String,
     summary: core::recovery::RestoreSummary,
+}
+#[derive(Serialize)]
+struct RenameReview {
+    id: String,
+    items: Vec<RenameItem>,
 }
 
 #[tauri::command]
@@ -423,26 +429,51 @@ async fn create_directory(
 #[tauri::command]
 async fn rename_preview(
     state: State<'_, AppState>,
+    id: String,
     source: String,
     paths: Vec<String>,
     rules: RenameRules,
-) -> Reply<Vec<RenameItem>> {
+) -> Reply<RenameReview> {
+    let task = state.searches.start(id.clone()).map_err(error)?;
+    let cancel = task.cancel.clone();
     let fs = state.sources.get(&source).map_err(error)?;
-    blocking(move || core::rename::plan(fs.as_ref(), &paths, &rules)).await
+    let prepared =
+        blocking(move || core::rename::prepare(fs.as_ref(), &paths, &rules, &task.cancel)).await?;
+    if cancel.load(Ordering::Relaxed) {
+        return Err("Cancelled".into());
+    }
+    let items = prepared.items().to_vec();
+    let mut cache = state.rename_plans.lock().unwrap();
+    cache.retain(|_, (created, _, _)| created.elapsed().as_secs() < 1800);
+    while cache.len() >= 4 {
+        let oldest = cache
+            .iter()
+            .min_by_key(|(_, (created, _, _))| *created)
+            .map(|(id, _)| id.clone())
+            .unwrap();
+        cache.remove(&oldest);
+    }
+    cache.insert(id.clone(), (std::time::Instant::now(), source, prepared));
+    Ok(RenameReview { id, items })
 }
 #[tauri::command]
-async fn rename_apply(
-    state: State<'_, AppState>,
-    source: String,
-    paths: Vec<String>,
-    rules: RenameRules,
-) -> Reply<()> {
+fn release_rename(state: State<AppState>, id: String) {
+    state.rename_plans.lock().unwrap().remove(&id);
+}
+#[tauri::command]
+async fn rename_apply(state: State<'_, AppState>, id: String, plan: String) -> Reply<()> {
+    let task = state.searches.start(id).map_err(error)?;
+    let (created, source, prepared) = state
+        .rename_plans
+        .lock()
+        .unwrap()
+        .remove(&plan)
+        .ok_or("Rename preview expired; prepare it again")?;
+    if created.elapsed().as_secs() >= 1800 {
+        return Err("Rename preview expired; prepare it again".into());
+    }
     let fs = state.sources.get(&source).map_err(error)?;
-    blocking(move || {
-        core::rename::apply(fs.as_ref(), &paths, &rules)?;
-        Ok(())
-    })
-    .await
+    blocking(move || core::rename::apply_prepared(fs.as_ref(), &prepared, &task.cancel)).await
 }
 #[tauri::command]
 async fn get_preview(
@@ -1101,6 +1132,7 @@ pub fn run() {
                 searches: core::tasks::Tasks::default(),
                 comparisons: Mutex::default(),
                 recovery_plans: Mutex::default(),
+                rename_plans: Mutex::default(),
                 watchers: Mutex::default(),
             });
             #[cfg(windows)]
@@ -1140,6 +1172,7 @@ pub fn run() {
             resolve_conflict,
             create_directory,
             rename_preview,
+            release_rename,
             rename_apply,
             get_preview,
             find_text,

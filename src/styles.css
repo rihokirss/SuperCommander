@@ -1692,19 +1692,53 @@ p {
 .rename-preview {
   border: 1px solid var(--line);
   border-radius: 7px;
-  max-height: 280px;
-  overflow: auto;
+  overflow: hidden;
 }
-.rename-preview > div {
+.modal:has(> .rename-form) {
+  padding: 20px;
+}
+.modal:has(> .rename-form) > .modal-heading {
+  margin-bottom: 12px;
+}
+.rename-form .field {
+  margin: 6px 0;
+  gap: 4px;
+}
+.rename-form .checkbox-row {
+  margin: 8px 0 12px;
+}
+.rename-form .rename-refresh {
+  margin-right: auto;
+}
+.rename-form .rename-list {
+  max-height: max(96px, calc(100vh - 470px));
+}
+.rename-preview .rename-heading,
+.rename-preview .rename-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 20px;
-  padding: 10px 12px;
+  padding: 0 12px;
+  align-items: center;
   border-bottom: 1px solid var(--line);
   font-size: 11px;
 }
-.rename-preview > div:last-child {
-  border: 0;
+.rename-preview .rename-heading {
+  height: 30px;
+}
+.rename-list {
+  height: 240px;
+  overflow: auto;
+}
+.rename-preview:focus .rename-row.focused {
+  background: var(--accent-soft);
+  box-shadow: inset 2px 0 var(--accent);
+}
+.rename-preview .rename-row > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .rename-preview span {
   overflow-wrap: anywhere;
@@ -1723,7 +1757,7 @@ p {
   color: #d69aa7;
 }
 .rename-preview small {
-  display: block;
+  display: inline;
   font-size: 9px;
   margin-top: 5px;
 }

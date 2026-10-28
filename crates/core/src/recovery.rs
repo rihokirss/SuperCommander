@@ -118,6 +118,7 @@ fn payload_kind(name: &str) -> Option<&str> {
         "check-directory",
         "delete-source",
         "delete-directory",
+        "rename-source",
     ]
     .contains(&suffix)
     .then_some(suffix)

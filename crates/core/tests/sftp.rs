@@ -70,6 +70,79 @@ fn start() -> Server {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[ignore = "Requires local OpenSSH server and ssh-keygen"]
+async fn reviewed_remote_rename_checks_contents_and_connection_before_claiming() {
+    use commander_core::{rename, RenameRules};
+    use std::sync::atomic::AtomicBool;
+    let server = start();
+    let (probe, _) = remote::connect(&server.profile, "", None).await.unwrap();
+    let (_, first) = remote::connect(&server.profile, "", Some(probe.fingerprint.clone()))
+        .await
+        .unwrap();
+    let (_, second) = remote::connect(&server.profile, "", Some(probe.fingerprint))
+        .await
+        .unwrap();
+    let (first, second) = (first.unwrap(), second.unwrap());
+    let folder = server._directory.path().join("rename");
+    fs::create_dir(&folder).unwrap();
+    tokio::task::spawn_blocking(move || {
+        let file = folder.join("source.txt");
+        fs::write(&file, "before").unwrap();
+        let paths = vec![file.to_string_lossy().into_owned()];
+        let rules = RenameRules {
+            find: String::new(),
+            replace: String::new(),
+            regex: false,
+            case_mode: "keep".into(),
+            numbering: false,
+            start: 1,
+            prefix: "new-".into(),
+        };
+        let cancel = AtomicBool::new(false);
+        let plan = rename::prepare(first.as_ref(), &paths, &rules, &cancel).unwrap();
+        let modified = fs::metadata(&file).unwrap().modified().unwrap();
+        fs::write(&file, "edited").unwrap();
+        fs::OpenOptions::new()
+            .write(true)
+            .open(&file)
+            .unwrap()
+            .set_modified(modified)
+            .unwrap();
+        assert!(rename::apply_prepared(first.as_ref(), &plan, &cancel).is_err());
+        assert!(!folder.join("new-source.txt").exists());
+        let plan = rename::prepare(first.as_ref(), &paths, &rules, &cancel).unwrap();
+        assert!(rename::apply_prepared(second.as_ref(), &plan, &cancel).is_err());
+        rename::apply_prepared(first.as_ref(), &plan, &cancel).unwrap();
+        assert_eq!(
+            fs::read_to_string(folder.join("new-source.txt")).unwrap(),
+            "edited"
+        );
+        let dir = folder.join("directory");
+        fs::create_dir(&dir).unwrap();
+        fs::write(dir.join("child.txt"), "child").unwrap();
+        let plan = rename::prepare(
+            first.as_ref(),
+            &[dir.to_string_lossy().into_owned()],
+            &rules,
+            &cancel,
+        )
+        .unwrap();
+        rename::apply_prepared(first.as_ref(), &plan, &cancel).unwrap();
+        assert_eq!(
+            fs::read_to_string(folder.join("new-directory/child.txt")).unwrap(),
+            "child"
+        );
+        assert!(fs::read_dir(folder).unwrap().all(|e| !e
+            .unwrap()
+            .file_name()
+            .to_string_lossy()
+            .starts_with(".supercommander-")));
+    })
+    .await
+    .unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "Requires local OpenSSH server and ssh-keygen"]
 async fn directory_comparison_synchronizes_reviewed_local_and_ssh_snapshots() {
     use commander_core::{
         comparison::{self, Choice, Direction, Options},

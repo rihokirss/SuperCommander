@@ -71,6 +71,15 @@ export function shortcutGroups(t: Text) {
       ],
     },
     {
+      title: t.rename,
+      items: [
+        ["F5 / Ctrl+R", t.refresh],
+        ["Enter / Ctrl+Enter", t.apply],
+        ["↑ / ↓ / Home / End / PgUp / PgDn", t.rowNavigation],
+        ["F1 / Esc", `${t.keyboard} / ${t.cancel}`],
+      ],
+    },
+    {
       title: t.recoveryKeys,
       items: [
         ["F5 / Ctrl+R", t.scanRecovery],
