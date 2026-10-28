@@ -16,6 +16,9 @@ use std::{
 };
 use tauri::{ipc::Channel, Emitter, Manager, State};
 
+#[cfg(windows)]
+mod window_state;
+
 struct AppState {
     sources: Arc<Sources>,
     connections: Mutex<HashMap<String, Arc<core::remote::RemoteFs>>>,
@@ -1198,6 +1201,7 @@ pub fn run() {
             });
             #[cfg(windows)]
             if let Some(window) = app.get_webview_window("main") {
+                window_state::install(&window);
                 let _ = window_vibrancy::apply_acrylic(&window, Some((17, 23, 34, 210)));
             }
             Ok(())

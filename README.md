@@ -8,7 +8,7 @@ Browse local drives, UNC paths, ZIP archives and SSH/SFTP servers. Work with fam
 
 The latest release is **[SuperCommander 0.4.1](https://github.com/rihokirss/SuperCommander/releases/tag/v0.4.1)**.
 
-Version 0.4.1 fixes clipped terminal rows and puts compact F-key buttons on the status bar. Version 0.4.0 adds faster startup, selectable blue and dark red palettes, a category-based F1 reference, next-match quick finding and folder sizes in the file list. It includes keyboard-accessible menus, bookmarks, file properties, native file clipboard support, quick editing, content search, reviewed folder synchronization, recovery of saved copies and safe ZIP operations.
+Version 0.4.1 remembers window position, size and maximized state, uses a slimmer titlebar, fixes clipped terminal rows and puts compact F-key buttons on the status bar. Version 0.4.0 adds faster startup, selectable blue and dark red palettes, a category-based F1 reference, next-match quick finding and folder sizes in the file list. It includes keyboard-accessible menus, bookmarks, file properties, native file clipboard support, quick editing, content search, reviewed folder synchronization, recovery of saved copies and safe ZIP operations.
 
 - [Windows x64 installer](https://github.com/rihokirss/SuperCommander/releases/download/v0.4.1/SuperCommander_0.4.1_x64-setup.exe) — recommended.
 - [Standalone Windows x64 executable](https://github.com/rihokirss/SuperCommander/releases/download/v0.4.1/SuperCommander_0.4.1_x64.exe) — requires WebView2.
@@ -302,7 +302,7 @@ Inherited or shared forwarding directives can be changed in the config text edit
 
 Local panes and settings load first at startup. Explorer network locations load in the background; their loading or failure does not block the file panes. Drive letters are enumerated without probing mapped shares.
 
-Settings, pane tabs, bookmarks and trusted fingerprints are stored in `%APPDATA%/SuperCommander/settings.json`, with a backup of the previous settings. Secrets are stored separately in Windows Credential Manager.
+Settings, pane tabs, bookmarks and trusted fingerprints are stored in `%APPDATA%/SuperCommander/settings.json`, with a backup of the previous settings. Window placement is stored separately in `window-state.json`; Windows keeps the window visible if the monitor configuration changes. Secrets are stored separately in Windows Credential Manager.
 
 File operations run in a queue. Copy/move directory listings are captured in a private disk-backed manifest before output starts, so an alias cannot cause recursive copying of newly created output. Copies are staged in temporary `.part` files. Replacements check the destination's metadata and contents, preserve its original in a backup, and publish without overwriting a concurrently created file.
 

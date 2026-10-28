@@ -242,8 +242,8 @@ p {
   display: none;
 }
 .titlebar {
-  height: 49px;
-  min-height: 49px;
+  height: 42px;
+  min-height: 42px;
   display: flex;
   align-items: center;
   border-bottom: 1px solid var(--line);

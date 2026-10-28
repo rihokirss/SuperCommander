@@ -477,6 +477,12 @@ test("layout stays within the window at supported sizes", async ({ page }) => {
     expect(bounds!.y).toBeLessThan(70);
     const search = await page.locator(".global-search").boundingBox();
     const tools = await page.locator(".titlebar-tools").boundingBox();
+    const titlebar = (await page.locator(".titlebar").boundingBox())!;
+    expect(titlebar.height).toBe(42);
+    expect(search!.y).toBeGreaterThanOrEqual(titlebar.y);
+    expect(search!.y + search!.height).toBeLessThanOrEqual(
+      titlebar.y + titlebar.height,
+    );
     expect(search!.x + search!.width).toBeLessThanOrEqual(tools!.x);
     await expect(page.locator(".shortcut-bar")).toBeVisible();
     const footer = (await page.locator(".statusbar").boundingBox())!;

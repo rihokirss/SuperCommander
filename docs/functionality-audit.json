@@ -830,8 +830,16 @@
     "status": "release_requested",
     "changes": [
       "Compact F1–F9 controls share the status bar, aligned with the workspace and with status and transfer controls retained",
-      "Terminal padding is included when sizing xterm, keeping the bottom row and right edge visible"
+      "Terminal padding is included when sizing xterm, keeping the bottom row and right edge visible",
+      "Windows window position, normal size and maximized state are saved and restored; off-screen and malformed state fall back safely",
+      "Titlebar reduced from 49 to 42 pixels"
     ],
-    "verification": "Windows regression reproduces the old clipping and checks terminal geometry while resizing and in fullscreen; browser tests cover compact bar and workspace alignment."
+    "verification": "60 browser tests, 27 unit tests, Windows startup, status bar, terminal geometry and window-state restart, maximize, minimize, disconnected-monitor and malformed-state checks passed locally; Windows CI pending.",
+    "installedTrial": {
+      "version": "0.4.1",
+      "sha256": "1536dc1f97e8ae6d29a7beccc65d6f7c0917c4d4987badc4590cbe6eb42b07b0",
+      "settingsUnchangedDuringReplacement": true,
+      "executableBackupLeft": false
+    }
   }
 }
