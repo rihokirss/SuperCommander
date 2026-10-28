@@ -174,10 +174,10 @@ try {
   await expect(left.locator(".file-row.focused")).not.toContainText(firstName);
   assert.equal(
     (await left.locator(".file-row").first().boundingBox()).height,
-    32,
+    26,
   );
   console.log(
-    "PASS MC Insert advances without losing marks; compact 32px rows",
+    "PASS MC Insert advances without losing marks; compact 26px rows",
   );
 
   await left.getByText("Õunad.txt", { exact: true }).click();

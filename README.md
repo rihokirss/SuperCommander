@@ -96,7 +96,7 @@ Each pane has independent tabs, history, sorting and filtering. Click its locati
 | Ctrl+L / Alt+D | Edit the active pane's location |
 | Ctrl+R | Refresh the active pane |
 | Ctrl+Shift+R | Recovery and previous versions |
-| Ctrl+Shift+F | Focus the pane's filename filter |
+| Alt+S / Ctrl+Shift+F | Focus the pane's filename filter |
 | Alt+Up / Backspace | Parent folder |
 | Alt+Home | Home directory of the current source |
 | F2 | Rename, including bulk rename |
@@ -255,7 +255,7 @@ Folder sizes are calculated on request, with progress, cancellation and partial-
 
 Workspace collapses into an icon rail. Each section can also be collapsed independently; these choices persist. **Network** includes network folders and servers from Explorer Quick Access, mapped drives and saved Windows network shortcuts. Its refresh button reloads them. Use **+** to add a UNC location, rename a listed entry, remove it from SuperCommander or restore a removed Explorer entry. These customizations are saved in SuperCommander and leave Explorer's pins unchanged. Opening a server such as `\\server` lists its shared folders through the Windows shell; the `..` row at a share root returns to the server. UNC paths can also be entered directly; the app does not scan the network for devices.
 
-Settings offer dark, light or Windows-following themes, a glass toggle and a transparency slider. Compact mode uses 32 px rows for both files and Workspace; Comfortable uses 40 px. Transfers use dense rows, expanding details only when needed. Select menus, checkboxes and switches follow the app's theme.
+Settings offer dark, light or Windows-following themes, a glass toggle and a transparency slider. Compact mode uses 26 px rows for both files and Workspace; Comfortable uses 34 px. Transfers use dense rows, expanding details only when needed. Select menus, checkboxes and switches follow the app's theme.
 
 ## SSH connections and port forwarding
 

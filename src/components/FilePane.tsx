@@ -227,7 +227,7 @@ export function FilePane(p: Props) {
     pattern: (remove = false) =>
       setPattern({ remove, mask: "*", folders: true }),
   }));
-  const rowHeight = settings.density === "compact" ? 32 : 40;
+  const rowHeight = settings.density === "compact" ? 26 : 34;
   const virtual = useVirtualizer({
     count: visible.length,
     getScrollElement: () => scroller.current,
@@ -763,7 +763,7 @@ export function FilePane(p: Props) {
           <Search size={12} />
           <input
             ref={filterInput}
-            data-shortcut="Ctrl+Shift+F"
+            data-shortcut="Alt+S / Ctrl+Shift+F"
             aria-label={t.filter}
             placeholder={t.filter}
             value={filter}

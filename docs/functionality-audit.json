@@ -657,5 +657,24 @@
       "Published Windows artifact reports version 0.3.0 and passes isolated native F9/independent pane and search checks"
     ],
     "mainBranchDifference": "Only test helpers and audit documentation differ from the release commit; production source and dependency lockfiles are identical."
+  },
+  "compactContrastBatch": {
+    "features": [
+      "Alt+S focuses active pane filename filter; Enter focuses its first match; Escape clears and restores file-grid focus; existing Ctrl+Shift+F retained",
+      "Compact file/Workspace rows reduced from 32 to 26 px; comfortable rows from 40 to 34 px; smaller horizontal padding and icon gaps",
+      "Higher-contrast dark/light text, readable file metadata and navigation labels"
+    ],
+    "checks": {
+      "browser": "51 passed, including Alt+S and density persistence",
+      "unit": "26 passed",
+      "windows": "Executable and NSIS installer built; isolated native test passed Alt+S in both panes, Enter/Escape, 26px virtual rows and dark/light rendering",
+      "visual": [
+        "artifacts/density-dark.png",
+        "artifacts/density-light.png",
+        "artifacts/density-native-dark.png",
+        "artifacts/density-native-light.png"
+      ]
+    },
+    "distribution": "Committed source and local Windows build; published v0.3.0 remains pinned to its verified release commit."
   }
 }

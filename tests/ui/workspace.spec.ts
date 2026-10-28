@@ -248,7 +248,7 @@ test("workspace groups, rail, density and transparency persist", async ({
   await group.getByRole("button", { name: "Workspace", exact: true }).click();
   await expect(group.locator(".sidebar-item").first()).toHaveCSS(
     "height",
-    "32px",
+    "26px",
   );
   await page
     .locator(".toolbar-right")
@@ -257,7 +257,7 @@ test("workspace groups, rail, density and transparency persist", async ({
   await choose(page, "Row spacing", "Comfortable");
   await expect(group.locator(".sidebar-item").first()).toHaveCSS(
     "height",
-    "40px",
+    "34px",
   );
   const slider = page.getByRole("slider", {
     name: "Transparency",
@@ -274,8 +274,12 @@ test("workspace groups, rail, density and transparency persist", async ({
   await page.keyboard.press("Control+b");
   await expect(page.locator(".sidebar")).toHaveCSS("width", "54px");
 });
-test("collapsed workspace uses one tooltip owner for icons and labels", async ({ page }) => {
-  await page.getByRole("button", { name: "Collapse workspace", exact: true }).click();
+test("collapsed workspace uses one tooltip owner for icons and labels", async ({
+  page,
+}) => {
+  await page
+    .getByRole("button", { name: "Collapse workspace", exact: true })
+    .click();
   const item = page.locator(".sidebar-item").first();
   const icon = item.locator("svg").first();
   const label = (await item.textContent())!.trim();
@@ -284,33 +288,37 @@ test("collapsed workspace uses one tooltip owner for icons and labels", async ({
   await expect(page.getByRole("tooltip")).toHaveCount(1);
 
   // A nested hint must not compete with the owning sidebar button.
-  await icon.evaluate(el => el.setAttribute("data-tooltip", "Nested icon hint"));
+  await icon.evaluate((el) =>
+    el.setAttribute("data-tooltip", "Nested icon hint"),
+  );
   await page.mouse.move(500, 500);
   await icon.hover();
   await expect(page.getByRole("tooltip")).toHaveText(label);
 
   // Native titles on descendants and ancestors also provide their own tooltip.
   for (const nativeOwner of [icon, page.locator(".sidebar")]) {
-    await nativeOwner.evaluate(el => el.setAttribute("title", "Native hint"));
+    await nativeOwner.evaluate((el) => el.setAttribute("title", "Native hint"));
     await page.mouse.move(500, 500);
     await icon.hover();
     await page.waitForTimeout(500);
     await expect(page.getByRole("tooltip")).toHaveCount(0);
-    await nativeOwner.evaluate(el => el.removeAttribute("title"));
+    await nativeOwner.evaluate((el) => el.removeAttribute("title"));
   }
   await page.mouse.move(500, 500);
   await icon.hover();
   await expect(page.getByRole("tooltip")).toHaveText(label);
 
   // Focusing the button must not add a custom hint over its hovered icon's title.
-  await icon.evaluate(el => el.setAttribute("title", "Native icon hint"));
+  await icon.evaluate((el) => el.setAttribute("title", "Native icon hint"));
   await page.mouse.move(500, 500);
   await icon.hover();
   await item.focus();
   await page.waitForTimeout(500);
   await expect(page.getByRole("tooltip")).toHaveCount(0);
-  await icon.evaluate(el => el.removeAttribute("title"));
-  await page.getByRole("button", { name: "Expand workspace", exact: true }).click();
+  await icon.evaluate((el) => el.removeAttribute("title"));
+  await page
+    .getByRole("button", { name: "Expand workspace", exact: true })
+    .click();
   await expect(page.getByRole("tooltip")).toHaveCount(0);
 });
 
@@ -323,7 +331,10 @@ test("collapsed workspace yields to SVG titles and native hints added after hove
   const item = page.locator(".sidebar-item").first();
   const icon = item.locator("svg").first();
   await icon.evaluate((el) => {
-    const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
+    const title = document.createElementNS(
+      "http://www.w3.org/2000/svg",
+      "title",
+    );
     title.textContent = "Native SVG hint";
     el.prepend(title);
   });

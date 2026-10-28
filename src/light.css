@@ -1,9 +1,9 @@
 /* Light surfaces share the same geometry and restrained glass as the dark theme. */
 .app-shell[data-theme="light"] {
   color-scheme: light;
-  --text: #43516a;
+  --text: #293950;
   --bright: #1a2942;
-  --muted: #697b95;
+  --muted: #52627a;
   --accent: #5672bc;
   --accent-soft: #5672bc20;
   --line: #52688720;
@@ -67,7 +67,7 @@
 .app-shell[data-theme="light"] .file-size,
 .app-shell[data-theme="light"] .file-date,
 .app-shell[data-theme="light"] .file-type {
-  color: #5e7392;
+  color: var(--muted);
 }
 .app-shell[data-theme="light"] .sidebar-group h2,
 .app-shell[data-theme="light"] .sidebar-item.muted,
@@ -96,7 +96,7 @@
 .app-shell[data-theme="light"] .queue-empty p,
 .app-shell[data-theme="light"] .host-trust p,
 .app-shell[data-theme="light"] .conflict-actions label {
-  color: #6d7f99;
+  color: var(--muted);
 }
 .app-shell[data-theme="light"] .sidebar-item.active {
   color: #3f5e9e;

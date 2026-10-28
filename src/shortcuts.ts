@@ -34,7 +34,7 @@ export function shortcutGroups(t: Text) {
         ["Alt+Home", t.home],
         ["Ctrl+L / Alt+D", t.goToPath],
         ["Ctrl+R", t.refresh],
-        ["Ctrl+Shift+F", t.filter],
+        ["Alt+S / Ctrl+Shift+F", t.filter],
       ],
     },
     {

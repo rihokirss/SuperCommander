@@ -239,3 +239,25 @@ for (const theme of ["Dark", "Light"])
       animations: "disabled",
     });
   });
+
+test("Alt+S searches the active pane and Escape restores the list", async ({
+  page,
+}) => {
+  const right = page.locator('[data-pane="1"]');
+  await right.getByRole("grid").focus();
+  await page.keyboard.press("Alt+s");
+  const search = right.locator(".folder-filter input");
+  await expect(search).toBeFocused();
+  await search.fill("Meeting");
+  await expect(
+    right.getByText("Meeting notes.md", { exact: true }),
+  ).toBeVisible();
+  await page.keyboard.press("Enter");
+  await expect(right.locator(".file-row.focused")).toContainText(
+    "Meeting notes.md",
+  );
+  await page.keyboard.press("Alt+s");
+  await page.keyboard.press("Escape");
+  await expect(search).toHaveValue("");
+  await expect(right.getByRole("grid")).toBeFocused();
+});

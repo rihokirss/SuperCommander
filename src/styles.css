@@ -659,13 +659,13 @@ p {
   width: 100%;
 }
 .sidebar-item {
-  height: 40px;
+  height: 34px;
   display: flex;
   width: 100%;
   justify-content: flex-start;
-  padding: 0 11px;
-  gap: 11px;
-  color: #8e9bb3;
+  padding: 0 8px;
+  gap: 8px;
+  color: var(--text);
   font-size: 11px;
   position: relative;
   margin: 0;
@@ -710,7 +710,7 @@ p {
   font-size: 10px;
 }
 .drive-item {
-  height: 40px;
+  height: 34px;
 }
 .drive-item span {
   display: flex;
@@ -722,7 +722,7 @@ p {
   color: #5e6e89;
 }
 .app-shell[data-density="compact"] .sidebar-item {
-  height: 32px;
+  height: 26px;
 }
 .app-shell[data-density="compact"] .sidebar-group {
   margin-bottom: 14px;
@@ -1049,7 +1049,7 @@ p {
   text-overflow: ellipsis;
 }
 .breadcrumbs > span > span:not(:last-child) {
-  color: #657696;
+  color: var(--muted);
 }
 .breadcrumbs > span > span:first-child {
   flex-shrink: 1;
@@ -1081,14 +1081,14 @@ p {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 15px 10px;
+  padding: 0 8px 6px;
   gap: 10px;
 }
 .pane-context > span {
   display: flex;
   align-items: center;
   gap: 5px;
-  color: #596a88;
+  color: var(--muted);
   font-size: 9px;
   white-space: nowrap;
 }
@@ -1102,14 +1102,14 @@ p {
 .folder-filter input {
   background: transparent;
   border: 0;
-  font-size: 9px;
+  font-size: 11px;
   padding: 3px 0;
   width: 110px;
-  color: #9badd0;
+  color: var(--text);
   box-shadow: none;
 }
 .folder-filter input::placeholder {
-  color: #566783;
+  color: var(--muted);
 }
 .folder-filter button {
   width: 15px;
@@ -1126,22 +1126,22 @@ p {
 .list-columns,
 .file-row {
   display: grid;
-  grid-template-columns: 19px minmax(0, 1fr) 64px 42px 99px;
+  grid-template-columns: 16px minmax(0, 1fr) 64px 42px 99px;
   align-items: center;
-  padding: 0 13px;
+  padding: 0 8px;
   gap: 3px;
 }
 .list-columns {
-  height: 31px;
-  min-height: 31px;
+  height: 27px;
+  min-height: 27px;
   background: #a6b4d604;
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
 }
 .list-columns button {
   justify-content: flex-start;
-  font-size: 9px;
-  color: #5e7193;
+  font-size: 11px;
+  color: var(--muted);
   font-weight: 400;
   border-radius: 0;
   padding: 0;
@@ -1172,7 +1172,7 @@ p {
   width: 100%;
   border-bottom: 1px solid #ffffff02;
   user-select: none;
-  color: #aebbd2;
+  color: var(--text);
   cursor: default;
   font-size: 11px;
 }
@@ -1248,7 +1248,7 @@ p {
 .file-name {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 5px;
   min-width: 0;
   padding: 0 7px 0 0;
 }
@@ -1262,8 +1262,8 @@ p {
   position: relative;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 25px;
+  width: 18px;
+  height: 22px;
   flex-shrink: 0;
 }
 .file-icon.folder {
@@ -1303,22 +1303,22 @@ p {
   bottom: 0;
 }
 .file-size {
-  font-size: 10px;
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
   text-align: right;
   padding-right: 12px;
-  color: #637693;
+  color: var(--muted);
 }
 .file-date {
-  font-size: 9px;
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
   padding-left: 9px;
-  color: #667895;
+  color: var(--muted);
   white-space: nowrap;
 }
 .file-type {
-  font-size: 8px;
-  color: #617492;
+  font-size: 10px;
+  color: var(--muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2404,4 +2404,15 @@ p {
   .file-check {
     opacity: 1;
   }
+}
+
+/* Keep secondary navigation labels readable on both glass and opaque surfaces. */
+.app-shell .sidebar-group h2,
+.app-shell .sidebar-item.muted,
+.app-shell .drive-item small,
+.app-shell .local-status,
+.app-shell .pane-footer,
+.app-shell .pane-context > span,
+.app-shell .folder-filter {
+  color: var(--muted);
 }

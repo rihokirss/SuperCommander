@@ -1616,7 +1616,10 @@ export function App() {
         paneControls.current[active]?.refresh();
         return;
       }
-      if (ctrl && name === "f" && e.shiftKey) {
+      if (
+        (ctrl && name === "f" && e.shiftKey) ||
+        (e.altKey && !ctrl && !e.shiftKey && name === "s")
+      ) {
         e.preventDefault();
         paneControls.current[active]?.filter();
         return;
