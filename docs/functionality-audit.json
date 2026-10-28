@@ -70,7 +70,7 @@
     ]
   },
   "followUpFindings": [
-    "CRITICAL confirmed transfer defect: a disposable real loopback OpenSSH/local diagnostic on 2054edc moved a file onto the same physical path through different source IDs; the queue reported completed and then both aliases were absent. Same-source checks do not cover this. Fix cross-protocol move publication/deletion, directory traversal snapshots and nonrecursive cleanup before the next release; retain cancellation/rollback and metadata requirements. No user files were used in the diagnostic.",
+    "The cross-protocol alias data-loss defect confirmed by the disposable loopback probe on 2054edc is addressed by transferTransactionBatch. Publication now removes only a privately claimed file; directory cleanup is nonrecursive, manifests are frozen before output, and originals carry recovery records before renaming. The larger transfer/clipboard/queue lifecycle audit remains open.",
     "Editor create/Save As/format conversion and application-close protection are implemented and tested; the overall viewer/editor audit still needs its remaining larger-file and search behavior checks.",
     "Content search is implemented; directory comparison and the remaining search-lifecycle, viewer, navigation and transfer audits are still required. Bookmark management and file properties are implemented and verified.",
     "All native smoke scripts now launch owned processes with isolated settings and WebView profiles. Full file/SSH/terminal, network and editor-close tests passed after migration, with the user's settings checksum unchanged. An earlier interrupted properties test lost previous pane locations; owned test bookmarks were removed and affected panes reset to Home/Downloads. No file contents, SSH config or stored credentials were changed by that cleanup.",
@@ -108,9 +108,9 @@
     },
     {
       "id": "transfer-safety",
-      "status": "needs_current_audit",
+      "status": "in_progress",
       "scope": "Copy/move/delete/rename, conflicts, cancellation, partial failures, metadata handling and source/destination preservation",
-      "evidence": ["crates/core/tests/files.rs", "scripts/windows-smoke.mjs"]
+      "evidence": ["crates/core/tests/files.rs", "crates/core/tests/transfers.rs", "crates/core/tests/sftp.rs", "scripts/windows-transfer-smoke.mjs", "scripts/windows-smoke.mjs"]
     },
     {
       "id": "bookmarks-and-places",
@@ -307,8 +307,32 @@
     },
     "visualEvidence": ["artifacts/native-viewer-find.png"],
     "remaining": [
-      "Fix the confirmed cross-protocol move alias data-loss defect before releasing: completed copy publication is followed by source.remove(original_path), which can delete the published destination. Include same-object and nested directory aliases, cancellation/rollback and metadata behavior in the solution.",
+      "The confirmed cross-protocol alias defect is addressed by transferTransactionBatch; continue the remaining transfer lifecycle audit before overall completion.",
       "Directory comparison and other outstanding requirements remain in scope; this batch does not establish overall completion."
+    ]
+  },
+  "transferTransactionBatch": {
+    "features": [
+      "Disk-backed frozen directory manifests and bounded traversal depth",
+      "Source content/metadata validation, private source claims and deletion of only the claimed file",
+      "Nonrecursive source directory cleanup and live exclusive probes for cross-protocol aliases and descendants",
+      "Destination content/revision checks, no-clobber publication and original preservation on failed rollback",
+      "Cancellation before enqueue, during staging and during source claiming; recovery errors remain visible even on cancelled jobs",
+      "Write-ahead sibling recovery records for original names/paths, tested through process termination",
+      "Modification-time and supported mode/hidden/read-only preservation; private POSIX staging/journal permissions"
+    ],
+    "checks": {
+      "coreTests": "70 passed on Linux, including 14 transfer-suite checks; the large transfer acceptance test is additional",
+      "realOpenSshIntegration": "4 passed, including independent SSH sessions, local/SSH physical aliases, descendant moves and mode/time preservation",
+      "largeDirectory": "100,000 files copied successfully through the disk manifest on the final code; 24.68 seconds for the acceptance test on this WSL filesystem",
+      "nativeWindows": "Final 61a86717 build passed windows-transfer-smoke.mjs with native F6/directory moves, cancellation before enqueue for copy/move/delete, file times, hidden/read-only copies, protected-source moves, actual UNC/SFTP file/directory aliases/descendants, normal directory moves both ways and no abandoned staging files. Full windows-smoke.mjs also passed on this build including UI copy/move, ZIP round-trip, editor, real SSH, localhost forwarding and ConPTY. User settings checksum stayed unchanged.",
+      "windowsCompilation": "Workspace and all test targets checked; executable and NSIS installer built; fmt/clippy passed. Final executable SHA256 61a867170977fb4d6331897688444090a8e8f0c274e626da995b2fc537f6570d. Previous viewer runs 40606685622 and 40606951984 both passed."
+    },
+    "remaining": [
+      "Verify the matching public CI run for this source commit.",
+      "Continue queued file replacement/clipboard identity and interrupted-operation discovery/recovery UI audits; recovery records currently support manual restoration.",
+      "Continue delete/rename, archive edge cases and metadata policy audit. Ownership, ACLs and alternate data streams are explicitly not cloned.",
+      "Directory comparison, synchronization and all other outstanding requirements retain their original scope."
     ]
   }
 }

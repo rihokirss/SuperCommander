@@ -1,3 +1,5 @@
+mod transfer;
+
 use crate::{
     filesystem::{guard_destructive, FileSystem, LocalFs, Sources},
     Conflict, JobEvent, JobRequest, Operation,
@@ -16,14 +18,16 @@ use std::{
 
 pub type Sink = Arc<dyn Fn(JobEvent) + Send + Sync>;
 struct Control {
-    cancel: AtomicBool,
+    cancel: Arc<AtomicBool>,
+    _task: Option<crate::tasks::Task>,
     answer: Mutex<Option<(Conflict, bool)>>,
     ready: Condvar,
 }
 impl Default for Control {
     fn default() -> Self {
         Self {
-            cancel: AtomicBool::new(false),
+            cancel: Arc::new(AtomicBool::new(false)),
+            _task: None,
             answer: Mutex::new(None),
             ready: Condvar::new(),
         }
@@ -33,6 +37,7 @@ pub struct Engine {
     queue: mpsc::Sender<QueuedJob>,
     controls: Arc<Mutex<HashMap<String, Arc<Control>>>>,
     sources: Arc<Sources>,
+    tasks: crate::tasks::Tasks,
 }
 struct QueuedJob {
     request: JobRequest,
@@ -70,12 +75,14 @@ impl Engine {
                 context.emit();
                 let result = run(&sources, &req, &mut context);
                 context.event.conflict_path = None;
+                if let Err(error) = &result {
+                    if error.to_string() != "Cancelled" {
+                        context.event.errors.push(format!("{error:#}"));
+                    }
+                }
                 context.event.state = if context.control.cancel.load(Ordering::Relaxed) {
                     "cancelled".into()
-                } else if let Err(e) = result {
-                    context.event.errors.push(format!("{e:#}"));
-                    "failed".into()
-                } else if !context.event.errors.is_empty() {
+                } else if result.is_err() || !context.event.errors.is_empty() {
                     "failed".into()
                 } else {
                     "completed".into()
@@ -88,12 +95,14 @@ impl Engine {
             queue: tx,
             controls,
             sources,
+            tasks: crate::tasks::Tasks::default(),
         }
     }
     pub fn enqueue(&self, request: JobRequest) -> Result<()> {
         if request.paths.is_empty() {
             bail!("Select at least one file");
         }
+        let task = self.tasks.start(request.id.clone())?;
         // Bind a queued job to these connections. Resolving profile IDs only when
         // it starts could redirect an old job to a newly connected server.
         let source = self.sources.get(&request.source)?;
@@ -120,7 +129,11 @@ impl Engine {
         if controls.contains_key(&request.id) {
             bail!("Duplicate job ID");
         }
-        let control = Arc::new(Control::default());
+        let control = Arc::new(Control {
+            cancel: task.cancel.clone(),
+            _task: Some(task),
+            ..Default::default()
+        });
         controls.insert(request.id.clone(), control.clone());
         let id = request.id.clone();
         if self
@@ -138,8 +151,8 @@ impl Engine {
         Ok(())
     }
     pub fn cancel(&self, id: &str) {
+        self.tasks.cancel(id.into());
         if let Some(c) = self.controls.lock().unwrap().get(id) {
-            c.cancel.store(true, Ordering::Relaxed);
             c.ready.notify_all();
         }
     }
@@ -264,12 +277,17 @@ fn run(sources: &Sources, req: &JobRequest, ctx: &mut ContextJob) -> Result<()> 
             }
         }
     }
-    if matches!(req.operation, Operation::Copy | Operation::Move) {
-        for path in &req.paths {
-            ctx.event.total += measure(source.as_ref(), path, ctx)?;
-        }
-    }
-    for path in &req.paths {
+    let mut plan = if matches!(req.operation, Operation::Copy | Operation::Move) {
+        Some(transfer::Plan::build(
+            source.as_ref(),
+            &req.paths,
+            ctx,
+            req.source != req.destination.source,
+        )?)
+    } else {
+        None
+    };
+    for (index, path) in req.paths.iter().enumerate() {
         ctx.check()?;
         ctx.event.current = path.clone();
         ctx.emit();
@@ -298,22 +316,27 @@ fn run(sources: &Sources, req: &JobRequest, ctx: &mut ContextJob) -> Result<()> 
                     target = choose_target(dest.as_ref(), &target, ctx)?
                         .context("No available copy destination")?;
                 }
-                match copy_tree(source.as_ref(), dest.as_ref(), path, &target, ctx) {
-                    Ok(true) if req.operation == Operation::Move => {
-                        ctx.check()?;
-                        source.remove(path)
-                    }
-                    Ok(_) => Ok(()),
-                    Err(e) => Err(e),
-                }
+                plan.as_mut()
+                    .unwrap()
+                    .run_root(
+                        index,
+                        source.as_ref(),
+                        dest.as_ref(),
+                        &target,
+                        req.operation == Operation::Move,
+                        ctx,
+                    )
+                    .map(|_| ())
             }
             _ => unreachable!(),
         };
         match result {
             Ok(()) => ctx.event.completed += 1,
             Err(e) => {
+                if e.to_string() != "Cancelled" {
+                    ctx.event.errors.push(format!("{path}: {e:#}"));
+                }
                 ctx.check()?;
-                ctx.event.errors.push(format!("{path}: {e:#}"));
             }
         }
         ctx.emit();
@@ -366,103 +389,6 @@ fn choose_target(fs: &dyn FileSystem, path: &str, ctx: &mut ContextJob) -> Resul
     }
 }
 
-fn copy_tree(
-    src: &dyn FileSystem,
-    dst: &dyn FileSystem,
-    path: &str,
-    target: &str,
-    ctx: &mut ContextJob,
-) -> Result<bool> {
-    ctx.check()?;
-    let entry = src.stat(path)?;
-    if entry.is_symlink {
-        bail!("Symbolic links are not followed");
-    }
-    if entry.is_dir {
-        let target = if dst.exists(target)? {
-            if dst.stat(target)?.is_dir {
-                target.into()
-            } else {
-                choose_target(dst, target, ctx)?
-                    .context("Cannot merge a folder into a skipped file")?
-            }
-        } else {
-            target.into()
-        };
-        if !dst.exists(&target)? {
-            dst.mkdir(&target)?;
-        }
-        if !dst.stat(&target)?.is_dir || dst.stat(&target)?.is_symlink {
-            bail!("Destination is not a regular directory");
-        }
-        let mut all = true;
-        for child in src.list(path)? {
-            crate::filesystem::valid_name(&child.name)?;
-            all &= copy_tree(src, dst, &child.path, &dst.join(&target, &child.name), ctx)?;
-        }
-        return Ok(all);
-    }
-    let Some(target) = choose_target(dst, target, ctx)? else {
-        return Ok(false);
-    };
-    let temp = dst.join(
-        &crate::rename::parent(&target),
-        &format!(".supercommander-{}.part", uuid::Uuid::new_v4()),
-    );
-    let result = (|| -> Result<()> {
-        let mut reader = src.reader(path)?;
-        let mut writer = dst.writer(&temp)?;
-        let mut bytes = vec![0; 256 * 1024];
-        let mut written = 0;
-        loop {
-            ctx.check()?;
-            let n = reader.read(&mut bytes)?;
-            if n == 0 {
-                break;
-            }
-            writer.write_all(&bytes[..n])?;
-            written += n as u64;
-            ctx.progress(n as u64, path);
-        }
-        writer.flush()?;
-        drop(writer);
-        let after = src.stat(path)?;
-        if written != entry.size || after.size != entry.size || after.modified != entry.modified {
-            bail!("Source changed during copy; source preserved");
-        }
-        ctx.check()?;
-        commit(dst, &temp, &target)?;
-        Ok(())
-    })();
-    if result.is_err() {
-        let _ = dst.remove(&temp);
-    }
-    result?;
-    Ok(true)
-}
-
-fn commit(fs: &dyn FileSystem, temp: &str, target: &str) -> Result<()> {
-    if !fs.exists(target)? {
-        return fs.rename(temp, target);
-    }
-    if fs.stat(target)?.is_dir {
-        bail!("Cannot replace a directory with a file");
-    }
-    let backup = fs.join(
-        &crate::rename::parent(target),
-        &format!(".supercommander-{}.backup", uuid::Uuid::new_v4()),
-    );
-    fs.rename(target, &backup)?;
-    if let Err(e) = fs.rename(temp, target) {
-        if let Err(restore) = fs.rename(&backup, target) {
-            bail!("{e}; original is preserved at {backup}; restore failed: {restore}");
-        }
-        return Err(e);
-    }
-    fs.remove(&backup)?;
-    Ok(())
-}
-
 fn zip_job(req: &JobRequest, ctx: &mut ContextJob) -> Result<()> {
     if req.source != "local" || req.destination.source != "local" {
         bail!("ZIP creation currently requires local files");
@@ -478,6 +404,7 @@ fn zip_job(req: &JobRequest, ctx: &mut ContextJob) -> Result<()> {
     let Some(target) = choose_target(&LocalFs, &req.destination.path, ctx)? else {
         return Ok(());
     };
+    let expected = transfer::target_stamp(&LocalFs, &target, ctx)?;
     let temp = parent.join(format!(".supercommander-{}.part", uuid::Uuid::new_v4()));
     let control = ctx.control.clone();
     let result = crate::archive::create_zip(
@@ -494,7 +421,17 @@ fn zip_job(req: &JobRequest, ctx: &mut ContextJob) -> Result<()> {
         let _ = std::fs::remove_file(&temp);
         return Err(e);
     }
-    commit(&LocalFs, &temp.to_string_lossy(), &target)?;
+    if let Err(error) = transfer::commit(
+        &LocalFs,
+        &temp.to_string_lossy(),
+        &target,
+        expected.as_ref(),
+        ctx,
+        || ctx.check(),
+    ) {
+        let _ = std::fs::remove_file(&temp);
+        return Err(error);
+    }
     ctx.event.completed = req.paths.len() as u64;
     Ok(())
 }
@@ -539,6 +476,7 @@ fn extract_job(req: &JobRequest, ctx: &mut ContextJob) -> Result<()> {
             let Some(target) = choose_target(&LocalFs, &full.to_string_lossy(), ctx)? else {
                 continue;
             };
+            let expected = transfer::target_stamp(&LocalFs, &target, ctx)?;
             let temp = full
                 .parent()
                 .unwrap()
@@ -562,7 +500,14 @@ fn extract_job(req: &JobRequest, ctx: &mut ContextJob) -> Result<()> {
                 out.sync_all()?;
                 drop(out);
                 ctx.check()?;
-                commit(&LocalFs, &temp.to_string_lossy(), &target)
+                transfer::commit(
+                    &LocalFs,
+                    &temp.to_string_lossy(),
+                    &target,
+                    expected.as_ref(),
+                    ctx,
+                    || ctx.check(),
+                )
             })();
             if result.is_err() {
                 let _ = std::fs::remove_file(&temp);

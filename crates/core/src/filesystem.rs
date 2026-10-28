@@ -61,13 +61,34 @@ pub trait FileSystem: Send + Sync {
     }
     fn reader(&self, path: &str) -> Result<Box<dyn Read + Send>>;
     fn writer(&self, path: &str) -> Result<Box<dyn Write + Send>>;
+    fn private_writer(&self, path: &str) -> Result<Box<dyn Write + Send>> {
+        self.writer(path)
+    }
     fn mkdir(&self, path: &str) -> Result<()>;
     fn rename(&self, from: &str, to: &str) -> Result<()>;
-    /// Move a regular file into a new name without replacing an existing entry.
+    /// Move an entry into a new name without replacing an existing entry.
     fn rename_new(&self, _from: &str, _to: &str) -> Result<()> {
         bail!("This filesystem does not support publishing new files safely")
     }
     fn remove(&self, path: &str) -> Result<()>;
+    /// Transfer cleanup must never recursively delete a path that may now
+    /// contain the destination or a file created by another process.
+    fn remove_file(&self, _path: &str) -> Result<()> {
+        bail!("Safe file cleanup is not supported for this source")
+    }
+    fn remove_empty_dir(&self, _path: &str) -> Result<()> {
+        bail!("Safe directory cleanup is not supported for this source")
+    }
+    fn transfer_metadata(
+        &self,
+        _path: &str,
+        _original: &crate::properties::Properties,
+    ) -> Result<()> {
+        Ok(())
+    }
+    fn discard_temp(&self, path: &str) -> Result<()> {
+        self.remove_file(path)
+    }
     fn join(&self, parent: &str, name: &str) -> String;
     fn exists(&self, path: &str) -> Result<bool> {
         match self.stat(path) {
@@ -259,6 +280,16 @@ impl FileSystem for LocalFs {
         fs::create_dir(path)?;
         Ok(())
     }
+    fn private_writer(&self, path: &str) -> Result<Box<dyn Write + Send>> {
+        let mut options = fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        Ok(Box::new(options.open(path)?))
+    }
     fn rename(&self, from: &str, to: &str) -> Result<()> {
         fs::rename(from, to)?;
         Ok(())
@@ -276,11 +307,92 @@ impl FileSystem for LocalFs {
                 return Err(std::io::Error::last_os_error().into());
             }
         }
-        #[cfg(not(windows))]
+        #[cfg(target_os = "linux")]
+        {
+            rustix::fs::renameat_with(
+                rustix::fs::CWD,
+                from,
+                rustix::fs::CWD,
+                to,
+                rustix::fs::RenameFlags::NOREPLACE,
+            )?;
+        }
+        #[cfg(all(not(windows), not(target_os = "linux")))]
         {
             fs::hard_link(from, to)?;
             fs::remove_file(from)?;
         }
+        Ok(())
+    }
+    fn remove_file(&self, path: &str) -> Result<()> {
+        guard_destructive(path)?;
+        fs::remove_file(path)?;
+        Ok(())
+    }
+    fn discard_temp(&self, path: &str) -> Result<()> {
+        #[cfg(windows)]
+        {
+            let meta = fs::symlink_metadata(path)?;
+            if meta.is_file() && meta.permissions().readonly() {
+                let mut permissions = meta.permissions();
+                permissions.set_readonly(false);
+                fs::set_permissions(path, permissions)?;
+            }
+        }
+        self.remove_file(path)
+    }
+    fn transfer_metadata(
+        &self,
+        path: &str,
+        original: &crate::properties::Properties,
+    ) -> Result<()> {
+        if original.file.modified != 0
+            || !original.stamp.is_empty()
+            || original.mode.is_some()
+            || original.accessed.is_some()
+        {
+            let nanos = original
+                .stamp
+                .parse::<u128>()
+                .ok()
+                .unwrap_or(original.file.modified as u128 * 1_000_000_000);
+            let time = UNIX_EPOCH
+                .checked_add(std::time::Duration::new(
+                    (nanos / 1_000_000_000).try_into()?,
+                    (nanos % 1_000_000_000) as u32,
+                ))
+                .context("Unsupported file timestamp")?;
+            #[cfg(windows)]
+            let file = {
+                use std::os::windows::fs::OpenOptionsExt;
+                fs::OpenOptions::new()
+                    .access_mode(0x100)
+                    .custom_flags(0x02000000)
+                    .open(path)?
+            };
+            #[cfg(not(windows))]
+            let file = fs::File::open(path)?;
+            file.set_modified(time)?;
+        }
+        #[cfg(unix)]
+        if let Some(mode) = original.mode {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(path, fs::Permissions::from_mode(mode & 0o7777))?;
+        }
+        #[cfg(windows)]
+        crate::properties::apply_local(
+            path,
+            &crate::properties::Changes {
+                readonly: (!original.file.is_dir).then_some(original.readonly.unwrap_or(false)),
+                hidden: original.hidden,
+                ..Default::default()
+            },
+        )?;
+        Ok(())
+    }
+    fn remove_empty_dir(&self, path: &str) -> Result<()> {
+        guard_destructive(path)?;
+        fs::remove_dir(path)?;
         Ok(())
     }
     fn remove(&self, path: &str) -> Result<()> {

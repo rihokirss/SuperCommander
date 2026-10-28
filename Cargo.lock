@@ -525,6 +525,7 @@ dependencies = [
  "regex",
  "russh",
  "russh-sftp",
+ "rustix",
  "same-file",
  "serde",
  "serde_json",

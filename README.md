@@ -233,7 +233,13 @@ Inherited or shared forwarding directives can be changed in the config text edit
 
 Settings, pane tabs, bookmarks and trusted fingerprints are stored in `%APPDATA%/SuperCommander/settings.json`, with a backup of the previous settings. Secrets are stored separately in Windows Credential Manager.
 
-File operations run in a queue. Copies are staged in temporary `.part` files, preserving the old destination until replacement is ready. A move removes its source only after the copy succeeds. Skipped or failed directory moves retain their source. Cancellation removes the current partial copy but does not undo completed files. Removing one directory cannot be interrupted halfway through.
+File operations run in a queue. Copy/move directory listings are captured in a private disk-backed manifest before output starts, so an alias cannot cause recursive copying of newly created output. Copies are staged in temporary `.part` files. Replacements check the destination's metadata and contents, preserve its original in a backup, and publish without overwriting a concurrently created file.
+
+Sources are checked against the copied contents before publication. Moves delete only their privately claimed source file. They never recursively remove a source tree: completed files move individually, skipped/unprocessed files stay at their source, and only empty source directories are removed. Cross-source directory moves also check for aliases and descendants before writing. Cancellation is remembered even if it arrives before enqueue; it cleans up the current partial copy and restores its claimed source, while already completed files stay at their destination. A failed restoration preserves the original and reports its exact path in the queue's **Details**.
+
+Before temporarily renaming any original, the app writes a sibling `.recovery.json` record containing its `original` and `preserved` paths. Normal completion/restoration removes this record. After an unexpected process exit, enable hidden files and open the record with F3; inspect the preserved file/folder before using F2 to restore its original name. If that name is occupied, keep both copies for review. Remove the record after confirming recovery. Recovery currently uses these files and queue details; automatic discovery after restarting the app is not implemented.
+
+Copies preserve modification times and supported permissions; newly created directories receive their source metadata after their contents finish. Copy/move staging files and recovery records start with owner-only POSIX permissions on Unix/SFTP backends; Windows uses the destination directory's ACL. Windows copies also preserve hidden/read-only flags. Protected Windows sources must have their read-only attribute cleared before moving, and read-only destinations are not replaced. Ownership, ACLs and alternate data streams are not cloned. Explicit directory deletion remains recursive and cannot be interrupted halfway through one directory.
 
 Recursive searches and copies do not follow symbolic links or Windows junctions. ZIP extraction validates paths and prevents escapes through symbolic links. Extract an archive instead of copying an individual file larger than 128 MiB from the ZIP browser.
 
@@ -250,7 +256,7 @@ cargo test -p commander-core
 cargo test -p commander-core streams_one_hundred -- --ignored
 ```
 
-Playwright covers independent panes, navigation, selection, shortcuts, dialogs, themes, settings persistence and layouts from 960 to 1920 px. Rust tests use real temporary files for transfers, cancellation, conflicts, ZIP handling, previews, renaming, editor encoding and concurrent-change detection, and SSH config preservation.
+Playwright covers independent panes, navigation, selection, shortcuts, dialogs, themes, settings persistence and layouts from 960 to 1920 px. Rust tests use real temporary files for transfers, cancellation, conflicts, ZIP handling, previews, renaming, editor encoding and concurrent-change detection, and SSH config preservation. Transfer regressions include physical aliases through different source IDs, same-size/same-time external edits, failed restoration, source files created during a move, interrupted child processes and recovery records. `scripts/windows-transfer-smoke.mjs` tests native Windows moves and attributes; with the temporary loopback fixture, it also checks actual UNC ↔ SFTP aliases and directory moves in both directions.
 
 For a real OpenSSH integration test on WSL, install `openssh-server` and `ssh-keygen`, then run:
 

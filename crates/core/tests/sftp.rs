@@ -70,6 +70,145 @@ fn start() -> Server {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[ignore = "Requires local OpenSSH server and ssh-keygen"]
+async fn cross_protocol_moves_and_copies_preserve_aliases_and_transfer_metadata() {
+    use commander_core::{
+        engine::Engine, filesystem::Sources, Conflict, JobRequest, Location, Operation,
+    };
+    use std::{
+        os::unix::fs::{symlink, PermissionsExt},
+        sync::{mpsc, Arc},
+    };
+    let server = start();
+    let (probe, _) = remote::connect(&server.profile, "", None).await.unwrap();
+    let (_, first) = remote::connect(&server.profile, "", Some(probe.fingerprint.clone()))
+        .await
+        .unwrap();
+    let (_, second) = remote::connect(&server.profile, "", Some(probe.fingerprint))
+        .await
+        .unwrap();
+    let (first, second) = (first.unwrap(), second.unwrap());
+    let directory = server._directory.path().join("alias-transfer");
+    fs::create_dir(&directory).unwrap();
+    let alias = directory.with_file_name("another-path");
+    symlink(&directory, &alias).unwrap();
+    let sources = Arc::new(Sources::default());
+    sources.insert("sftp:first".into(), first.clone());
+    sources.insert("sftp:second".into(), second.clone());
+    tokio::task::spawn_blocking(move || {
+        let (tx, rx) = mpsc::channel();
+        let engine = Engine::new(
+            sources,
+            Arc::new(move |e| {
+                let _ = tx.send(e);
+            }),
+        );
+        let run = |operation,
+                   source: &str,
+                   path: &std::path::Path,
+                   destination: &str,
+                   target: &std::path::Path| {
+            engine
+                .enqueue(JobRequest {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    operation,
+                    source: source.into(),
+                    paths: vec![path.to_string_lossy().into()],
+                    destination: Location {
+                        source: destination.into(),
+                        path: target.to_string_lossy().into(),
+                    },
+                    conflict: Conflict::Replace,
+                    source_connection: None,
+                    destination_connection: None,
+                })
+                .unwrap();
+            loop {
+                let e = rx.recv_timeout(Duration::from_secs(20)).unwrap();
+                if ["completed", "failed", "cancelled"].contains(&e.state.as_str()) {
+                    break e;
+                }
+            }
+        };
+        let file = directory.join("Õunad.txt");
+        fs::write(&file, "must survive through both aliases").unwrap();
+        for (source, destination) in [
+            ("sftp:first", "local"),
+            ("local", "sftp:first"),
+            ("sftp:first", "sftp:second"),
+        ] {
+            for operation in [Operation::Copy, Operation::Move] {
+                let event = run(operation, source, &file, destination, &alias);
+                assert_eq!(event.state, "failed", "{:?}", event.errors);
+                assert_eq!(
+                    fs::read_to_string(&file).unwrap(),
+                    "must survive through both aliases"
+                );
+                assert_eq!(fs::read_dir(&directory).unwrap().count(), 1);
+            }
+        }
+        let folder = directory.join("folder");
+        fs::create_dir_all(folder.join("child")).unwrap();
+        fs::write(folder.join("original.txt"), "unchanged source tree").unwrap();
+        for target in [&alias, &alias.join("folder/child")] {
+            let event = run(Operation::Move, "sftp:first", &folder, "local", target);
+            assert_eq!(event.state, "failed", "{:?}", event.errors);
+            assert_eq!(
+                fs::read_to_string(folder.join("original.txt")).unwrap(),
+                "unchanged source tree"
+            );
+            assert_eq!(fs::read_dir(folder.join("child")).unwrap().count(), 0);
+        }
+        let dest = directory.join("destination");
+        fs::create_dir(&dest).unwrap();
+        let private = dest.join("private.part");
+        let mut private_writer = second.private_writer(private.to_str().unwrap()).unwrap();
+        assert_eq!(
+            fs::metadata(&private).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+        private_writer
+            .write_all(b"private staging payload")
+            .unwrap();
+        private_writer.flush().unwrap();
+        drop(private_writer);
+        second.remove_file(private.to_str().unwrap()).unwrap();
+        fs::set_permissions(&file, fs::Permissions::from_mode(0o640)).unwrap();
+        let modified = std::time::UNIX_EPOCH + Duration::from_secs(1_700_000_000);
+        fs::OpenOptions::new()
+            .write(true)
+            .open(&file)
+            .unwrap()
+            .set_modified(modified)
+            .unwrap();
+        let event = run(Operation::Move, "sftp:first", &file, "sftp:second", &dest);
+        assert_eq!(event.state, "completed", "{:?}", event.errors);
+        assert!(!file.exists());
+        let saved = dest.join("Õunad.txt");
+        assert_eq!(
+            fs::read_to_string(&saved).unwrap(),
+            "must survive through both aliases"
+        );
+        assert_eq!(fs::metadata(&saved).unwrap().modified().unwrap(), modified);
+        assert_eq!(
+            fs::metadata(&saved).unwrap().permissions().mode() & 0o777,
+            0o640
+        );
+        let event = run(Operation::Move, "sftp:first", &folder, "local", &dest);
+        assert_eq!(event.state, "completed", "{:?}", event.errors);
+        assert!(!folder.exists());
+        assert_eq!(
+            fs::read_to_string(dest.join("folder/original.txt")).unwrap(),
+            "unchanged source tree"
+        );
+        FileSystem::close(first.as_ref()).unwrap();
+        FileSystem::close(second.as_ref()).unwrap();
+    })
+    .await
+    .unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "Requires local OpenSSH server and ssh-keygen"]
 async fn remote_properties_preserve_permissions_and_reject_replaced_connections() {
     use commander_core::properties::{self, Changes, SizeSummary};
     use std::{

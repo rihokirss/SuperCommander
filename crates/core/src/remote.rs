@@ -515,6 +515,21 @@ impl FileSystem for RemoteFs {
         self.runtime.block_on(self.sftp.create_dir(path))?;
         Ok(())
     }
+    fn private_writer(&self, path: &str) -> Result<Box<dyn Write + Send>> {
+        Ok(Box::new(RemoteFile {
+            file: self
+                .runtime
+                .block_on(self.sftp.open_with_flags_and_attributes(
+                    path,
+                    OpenFlags::CREATE | OpenFlags::EXCLUDE | OpenFlags::WRITE,
+                    russh_sftp::protocol::FileAttributes {
+                        permissions: Some(0o600),
+                        ..Default::default()
+                    },
+                ))?,
+            runtime: self.runtime.clone(),
+        }))
+    }
     fn rename(&self, from: &str, to: &str) -> Result<()> {
         self.runtime.block_on(self.sftp.rename(from, to))?;
         Ok(())
@@ -539,6 +554,36 @@ impl FileSystem for RemoteFs {
         } else {
             self.runtime.block_on(self.sftp.remove_file(path))?;
         }
+        Ok(())
+    }
+    fn remove_file(&self, path: &str) -> Result<()> {
+        self.runtime.block_on(self.sftp.remove_file(path))?;
+        Ok(())
+    }
+    fn remove_empty_dir(&self, path: &str) -> Result<()> {
+        self.runtime.block_on(self.sftp.remove_dir(path))?;
+        Ok(())
+    }
+    fn transfer_metadata(
+        &self,
+        path: &str,
+        original: &crate::properties::Properties,
+    ) -> Result<()> {
+        let time = (original.file.modified != 0
+            || !original.stamp.is_empty()
+            || original.mode.is_some()
+            || original.accessed.is_some())
+        .then(|| original.file.modified.try_into())
+        .transpose()?;
+        self.runtime.block_on(self.sftp.set_metadata(
+            path,
+            russh_sftp::client::fs::Metadata {
+                permissions: original.mode,
+                atime: time,
+                mtime: time,
+                ..Default::default()
+            },
+        ))?;
         Ok(())
     }
     fn join(&self, parent: &str, name: &str) -> String {
