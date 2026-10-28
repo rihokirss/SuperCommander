@@ -149,8 +149,8 @@ fn failed_replacement_preserves_both_external_file_and_original_backup() {
     )
     .unwrap();
     assert_eq!(
-        record["original"],
-        tmp.path().join("target.txt").to_str().unwrap()
+        fs::canonicalize(record["original"].as_str().unwrap()).unwrap(),
+        fs::canonicalize(tmp.path().join("target.txt")).unwrap()
     );
     assert_eq!(fs::read_dir(tmp.path()).unwrap().count(), 3);
 }
