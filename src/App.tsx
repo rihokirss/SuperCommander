@@ -137,6 +137,7 @@ type Dialog =
 const emptySnapshot: PaneSnapshot = { entries: [], selected: [] };
 export function App() {
   const [boot, setBoot] = useState<Bootstrap>();
+  const networkRequest = useRef(0);
   const [settings, setSettings] = useState<Settings>();
   const [bootError, setBootError] = useState("");
   const [active, setActive] = useState(0);
@@ -306,7 +307,7 @@ export function App() {
               }))
           : defaults.panes,
       } as Settings;
-      setBoot(data);
+      setBoot(api.desktop ? { ...data, network: undefined } : data);
       setSettings(restored);
     } catch (e) {
       setBootError(String(e));
@@ -344,6 +345,13 @@ export function App() {
       window.removeEventListener("focus", load);
     };
   }, [!!settings, settings?.sshConfigPath]);
+  useEffect(() => {
+    if (!boot) return;
+    void refreshNetwork().catch(() => {});
+    return () => {
+      networkRequest.current++;
+    };
+  }, [!!boot]);
   useEffect(() => {
     if (toast) {
       const timer = setTimeout(() => setToast(""), 6500);
@@ -1895,7 +1903,16 @@ export function App() {
     };
   }
   async function refreshNetwork() {
-    const data = await api.bootstrap();
+    const request = ++networkRequest.current;
+    let data: Bootstrap;
+    try {
+      data = await api.bootstrap(true);
+    } catch (error) {
+      if (request === networkRequest.current)
+        setBoot((old) => (old ? { ...old, networkError: String(error) } : old));
+      throw error;
+    }
+    if (request !== networkRequest.current) return;
     setBoot((old) =>
       old
         ? {
@@ -2189,7 +2206,8 @@ export function App() {
               ))}
               {!locations.length && (
                 <p className="sidebar-empty">
-                  {boot.networkError || t.networkEmpty}
+                  {boot.networkError ||
+                    (boot.network === undefined ? t.loading : t.networkEmpty)}
                 </p>
               )}
             </WorkspaceGroup>

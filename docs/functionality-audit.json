@@ -715,5 +715,49 @@
       "v0.3.0"
     ],
     "cleanupVerification": "Authenticated GitHub release listing contains only published v0.3.1."
+  },
+  "startupBatch": {
+    "changes": [
+      "Load settings and local panes without waiting for PowerShell/Explorer network discovery",
+      "Load network catalog asynchronously, show pending/error state, and reject stale refresh results",
+      "Enumerate Windows drive letters without filesystem probes; retain configured known-folder paths without availability checks"
+    ],
+    "measurements": {
+      "baselineBootstrapMs": [
+        1756,
+        1801,
+        1763
+      ],
+      "optimizedBootstrapMs": [
+        3,
+        4,
+        2
+      ],
+      "baselineNavigationToBothPanesMs": [
+        2037,
+        2001,
+        1928
+      ],
+      "optimizedNavigationToBothPanesMs": [
+        102,
+        107,
+        119
+      ],
+      "scope": "Same Windows machine, isolated app/settings; pane timing begins at WebView navigation, excluding native process/WebView startup."
+    },
+    "checks": {
+      "browser": "51 passed",
+      "unit": "26 passed",
+      "core": "142 passed",
+      "lint": "fmt and workspace/all-target clippy passed",
+      "native": "windows-startup-smoke.mjs passed with a real delayed Explorer request; windows-network-smoke.mjs passed Explorer import, saved UNC and server-root browsing"
+    },
+    "delivery": {
+      "method": "Replaced installed executable at user request; no new release",
+      "candidateSha256": "fe711784bd796924c2e59df4a853b2c653cd38973be4e118a63b78cf57bd6cac",
+      "previousSha256": "f47415a83f05303acb1d201ab68eef4e602a6edc2bdca1a36fb7e39ef02782af",
+      "backup": "supercommander.before-startup-fix-f47415a83f05.exe.bak",
+      "settings": "Hash unchanged during replacement; normal installed app launched afterward with existing settings and two ready panes; read-only fast bootstrap check took 6 ms."
+    }
   }
 }

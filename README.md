@@ -294,6 +294,8 @@ Inherited or shared forwarding directives can be changed in the config text edit
 
 ## Data and operation behavior
 
+Local panes and settings load first at startup. Explorer network locations load in the background; their loading or failure does not block the file panes. Drive letters are enumerated without probing mapped shares.
+
 Settings, pane tabs, bookmarks and trusted fingerprints are stored in `%APPDATA%/SuperCommander/settings.json`, with a backup of the previous settings. Secrets are stored separately in Windows Credential Manager.
 
 File operations run in a queue. Copy/move directory listings are captured in a private disk-backed manifest before output starts, so an alias cannot cause recursive copying of newly created output. Copies are staged in temporary `.part` files. Replacements check the destination's metadata and contents, preserve its original in a backup, and publish without overwriting a concurrently created file.
@@ -360,3 +362,5 @@ Source: [rihokirss/SuperCommander](https://github.com/rihokirss/SuperCommander).
 `node scripts/windows-rename-smoke.mjs [path-to-supercommander.exe]` owns an isolated Windows app and checks reviewed source replacement, refreshing after failure, case-only changes, cancellation before worker registration, a complete virtualized bulk review, keyboard help and compact dark/light layouts. It observes actual delayed IPC requests when checking pending-preview and pending-apply behavior. With the WSL SFTP fixture it also verifies remote renaming and rejection after reconnecting. It does not use the desktop clipboard.
 
 `node scripts/windows-archive-smoke.mjs [path-to-supercommander.exe]` checks the native ZIP shortcuts, browsing/F3, exact modification times, empty directories, Windows read-only state, retained previous versions, hard-link source aliases, early cancellation and junction protection. It owns its app and temporary files and does not use the desktop clipboard. The larger `cargo test -p commander-core --test archives zip64_round_trip_extracts_an_entry_larger_than_four_gibibytes -- --ignored --nocapture` acceptance test creates a sparse input above 4 GiB and extracts its full contents; run it separately with enough disk space.
+
+`node scripts/windows-startup-smoke.mjs [path-to-supercommander.exe]` verifies that both file panes remain usable while the real Explorer discovery request is held, then lets discovery complete and reports startup IPC timings. It uses an isolated Windows app and settings.

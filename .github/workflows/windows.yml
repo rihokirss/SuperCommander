@@ -32,6 +32,7 @@ jobs:
       - run: npm run tauri build
         id: windows_build
       - run: node scripts/windows-clipboard-smoke.mjs
+      - run: node scripts/windows-startup-smoke.mjs
       - run: node scripts/windows-properties-smoke.mjs
       - run: node scripts/windows-search-smoke.mjs
       - run: node scripts/windows-transfer-smoke.mjs

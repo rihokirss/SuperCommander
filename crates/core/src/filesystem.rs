@@ -697,7 +697,9 @@ pub fn local_places() -> (String, Vec<crate::Place>, Vec<crate::Place>) {
         ("music", dirs::audio_dir()),
         ("videos", dirs::video_dir()),
     ] {
-        if let Some(path) = path.filter(|p| p.exists()) {
+        // Known folders may be redirected to offline network shares. Listing
+        // their configured paths must not probe those shares during startup.
+        if let Some(path) = path.filter(|p| cfg!(windows) || p.exists()) {
             places.push(crate::Place {
                 name: name.into(),
                 path: path.to_string_lossy().into(),
@@ -706,16 +708,24 @@ pub fn local_places() -> (String, Vec<crate::Place>, Vec<crate::Place>) {
         }
     }
     #[cfg(windows)]
-    let drives = ('A'..='Z')
-        .filter_map(|letter| {
-            let path = format!("{letter}:\\");
-            Path::new(&path).exists().then(|| crate::Place {
-                name: format!("{letter}:"),
-                path,
-                kind: "drive".into(),
+    let drives = {
+        // Read the drive-letter mask without contacting mapped drives.
+        let mask = unsafe { windows_sys::Win32::Storage::FileSystem::GetLogicalDrives() };
+        (0..26u8)
+            .filter_map(|index| {
+                if mask & (1 << index) == 0 {
+                    return None;
+                }
+                let letter = (b'A' + index) as char;
+                let path = format!("{letter}:\\");
+                Some(crate::Place {
+                    name: format!("{letter}:"),
+                    path,
+                    kind: "drive".into(),
+                })
             })
-        })
-        .collect();
+            .collect()
+    };
     #[cfg(not(windows))]
     let drives = vec![crate::Place {
         name: "Filesystem".into(),

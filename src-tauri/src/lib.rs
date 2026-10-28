@@ -178,10 +178,14 @@ struct Bootstrap {
 }
 
 #[tauri::command]
-async fn bootstrap() -> Reply<Bootstrap> {
-    blocking(|| {
+async fn bootstrap(include_network: Option<bool>) -> Reply<Bootstrap> {
+    blocking(move || {
         let (home, places, drives) = filesystem::local_places();
-        let (network, network_error) = match filesystem::network_places() {
+        let (network, network_error) = match if include_network.unwrap_or(true) {
+            filesystem::network_places()
+        } else {
+            Ok(vec![])
+        } {
             Ok(v) => (v, None),
             Err(e) => (vec![], Some(error(e))),
         };

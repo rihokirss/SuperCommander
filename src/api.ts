@@ -366,8 +366,8 @@ function sample(path: string): Entry[] {
     hidden: name.startsWith("."),
   }));
 }
-export async function bootstrap(): Promise<Bootstrap> {
-  if (desktop) return invoke("bootstrap");
+export async function bootstrap(includeNetwork = false): Promise<Bootstrap> {
+  if (desktop) return invoke("bootstrap", { includeNetwork });
   let settings: Settings | null = null;
   try {
     settings = JSON.parse(
