@@ -70,7 +70,7 @@
     ]
   },
   "followUpFindings": [
-    "Transfer safety still needs an audit of physical aliases reached through different protocols (for example UNC and SFTP), cancellation/rollback and metadata preservation.",
+    "CRITICAL confirmed transfer defect: a disposable real loopback OpenSSH/local diagnostic on 2054edc moved a file onto the same physical path through different source IDs; the queue reported completed and then both aliases were absent. Same-source checks do not cover this. Fix cross-protocol move publication/deletion, directory traversal snapshots and nonrecursive cleanup before the next release; retain cancellation/rollback and metadata requirements. No user files were used in the diagnostic.",
     "Editor create/Save As/format conversion and application-close protection are implemented and tested; the overall viewer/editor audit still needs its remaining larger-file and search behavior checks.",
     "Content search is implemented; directory comparison and the remaining search-lifecycle, viewer, navigation and transfer audits are still required. Bookmark management and file properties are implemented and verified.",
     "All native smoke scripts now launch owned processes with isolated settings and WebView profiles. Full file/SSH/terminal, network and editor-close tests passed after migration, with the user's settings checksum unchanged. An earlier interrupted properties test lost previous pane locations; owned test bookmarks were removed and affected panes reset to Home/Downloads. No file contents, SSH config or stored credentials were changed by that cleanup.",
@@ -307,7 +307,7 @@
     },
     "visualEvidence": ["artifacts/native-viewer-find.png"],
     "remaining": [
-      "Continue transfer alias, cancellation/rollback and metadata audit.",
+      "Fix the confirmed cross-protocol move alias data-loss defect before releasing: completed copy publication is followed by source.remove(original_path), which can delete the published destination. Include same-object and nested directory aliases, cancellation/rollback and metadata behavior in the solution.",
       "Directory comparison and other outstanding requirements remain in scope; this batch does not establish overall completion."
     ]
   }
