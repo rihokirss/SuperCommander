@@ -14,8 +14,11 @@ export function TerminalPanel({
   t,
   onClose,
   theme,
+  palette,
   hidden,
   fullscreen,
+  height,
+  onResize,
   onToggleFullscreen,
 }: {
   path: string;
@@ -24,25 +27,50 @@ export function TerminalPanel({
   t: Text;
   onClose: () => void;
   theme: "dark" | "light";
+  palette: string;
   hidden: boolean;
   fullscreen: boolean;
+  height: number;
+  onResize: (height: number) => void;
   onToggleFullscreen: () => void;
 }) {
   const element = useRef<HTMLDivElement>(null);
+  const panel = useRef<HTMLElement>(null);
+  const resizeStart = useRef<{ y: number; height: number } | null>(null);
   const [error, setError] = useState("");
   const instance = useRef<Terminal | null>(null);
+  function resize(height: number) {
+    const section = panel.current;
+    const pane =
+      section?.parentElement?.querySelector<HTMLElement>(".pane-layout");
+    if (!section || !pane) return;
+    const max = Math.max(
+      120,
+      section.offsetHeight + Math.max(0, pane.offsetHeight - 180),
+    );
+    onResize(Math.round(Math.max(120, Math.min(max, height))));
+  }
   const terminalTheme = (light: boolean) => ({
     background: "#00000000",
     foreground: light ? "#18354d" : "#d8ebfa",
     cursor: light ? "#287db8" : "#a6dcff",
-    selectionBackground: light ? "#acd9f7" : "#80caff",
-    selectionForeground: "#102b42",
-    selectionInactiveBackground: light ? "#c5e5fc" : "#6398bd",
+    selectionBackground: light
+      ? "#acd9f7"
+      : palette.toLowerCase().includes("red")
+        ? "#f1a3ad"
+        : "#80caff",
+    selectionForeground:
+      !light && palette.toLowerCase().includes("red") ? "#35151b" : "#102b42",
+    selectionInactiveBackground: light
+      ? "#c5e5fc"
+      : palette.toLowerCase().includes("red")
+        ? "#b8757c"
+        : "#6398bd",
   });
   useEffect(() => {
     if (instance.current)
       instance.current.options.theme = terminalTheme(theme === "light");
-  }, [theme]);
+  }, [theme, palette]);
   useEffect(() => {
     if (!element.current || !desktop) return;
     let id: string | undefined;
@@ -131,10 +159,65 @@ export function TerminalPanel({
   }, [hidden, fullscreen]);
   return (
     <section
+      ref={panel}
       className={`terminal-panel glass ${fullscreen ? "terminal-fullscreen" : ""}`}
+      style={
+        fullscreen
+          ? undefined
+          : { height: Math.max(120, Number.isFinite(height) ? height : 242) }
+      }
       hidden={hidden}
       data-terminal-source={source}
     >
+      {!fullscreen && (
+        <div
+          className="terminal-resize"
+          role="separator"
+          aria-label={t.resizeTerminal}
+          data-tooltip={t.resizeTerminal}
+          aria-orientation="horizontal"
+          aria-valuemin={120}
+          aria-valuemax={window.innerHeight}
+          aria-valuenow={Math.round(height)}
+          tabIndex={0}
+          onPointerDown={(event) => {
+            if (event.button !== 0 || !panel.current) return;
+            resizeStart.current = {
+              y: event.clientY,
+              height: panel.current.offsetHeight,
+            };
+            event.currentTarget.setPointerCapture(event.pointerId);
+            event.preventDefault();
+          }}
+          onPointerMove={(event) => {
+            if (
+              resizeStart.current &&
+              event.currentTarget.hasPointerCapture(event.pointerId)
+            )
+              resize(
+                resizeStart.current.height +
+                  resizeStart.current.y -
+                  event.clientY,
+              );
+          }}
+          onPointerUp={() => {
+            resizeStart.current = null;
+          }}
+          onPointerCancel={() => {
+            resizeStart.current = null;
+          }}
+          onKeyDown={(event) => {
+            if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+            event.preventDefault();
+            resize(
+              (panel.current?.offsetHeight ?? height) +
+                (event.key === "ArrowUp" ? 16 : -16),
+            );
+          }}
+        >
+          <span />
+        </div>
+      )}
       <header>
         <span>
           <TerminalSquare size={14} />

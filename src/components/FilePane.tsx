@@ -176,9 +176,9 @@ export function FilePane(p: Props) {
   const scroller = useRef<HTMLDivElement>(null);
   const generation = useRef(0);
   const loadedLocation = useRef("");
-  const reveal = useRef<{ folder: Location; path: string } | undefined>(
-    undefined,
-  );
+  const reveal = useRef<
+    { folder: Location; path: string; navigation?: boolean } | undefined
+  >(undefined);
   useEffect(() => {
     // Tab changes return navigation to the list; merely clicking another pane's input must keep that input focused.
     if (p.active && !document.querySelector('[role="dialog"]'))
@@ -480,14 +480,24 @@ export function FilePane(p: Props) {
       request.folder.path !== location.path
     )
       return;
-    const index = visible.findIndex((entry) => entry.path === request.path);
+    const pathKey = (path: string) => {
+      const normalized = path.replace(/[\\/]+$/, "");
+      return request.folder.source === "local" && path.includes("\\")
+        ? normalized.toLocaleLowerCase()
+        : normalized;
+    };
+    const index = visible.findIndex(
+      (entry) => pathKey(entry.path) === pathKey(request.path),
+    );
     reveal.current = undefined;
     if (index < 0) return;
-    setFocused(request.path);
-    setSelected(new Set([request.path]));
+    setFocused(visible[index].path);
+    anchor.current = index;
+    if (!request.navigation) setSelected(new Set([visible[index].path]));
     requestAnimationFrame(() => {
       virtual.scrollToIndex(index, { align: "auto" });
-      root.current?.querySelector<HTMLElement>(".file-grid")?.focus();
+      if (!request.navigation)
+        root.current?.querySelector<HTMLElement>(".file-grid")?.focus();
     });
   }, [visible, loading, settled, location.source, location.path]);
   useEffect(() => {
@@ -721,11 +731,21 @@ export function FilePane(p: Props) {
     sort === key ? setDesc(!desc) : (setSort(key), setDesc(false));
   }
   function goUp() {
-    p.navigate(
+    const folder =
       location.source.startsWith("zip:") && location.path === "/"
         ? { source: "local", path: parentPath(location.source.slice(4)) }
-        : { ...location, path: parentPath(location.path) },
-    );
+        : { ...location, path: parentPath(location.path) };
+    if (folder.source === location.source && folder.path === location.path)
+      return;
+    reveal.current = {
+      folder,
+      path:
+        folder.source !== location.source
+          ? location.source.slice(4)
+          : location.path,
+      navigation: true,
+    };
+    p.navigate(folder);
   }
   return (
     <section

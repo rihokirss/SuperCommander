@@ -31,7 +31,6 @@ import {
   History,
   Home,
   Image,
-  Keyboard,
   LayoutGrid,
   LoaderCircle,
   Minus,
@@ -76,7 +75,7 @@ import { SearchDialog } from "./components/SearchDialog";
 import { TextWorkbench } from "./components/TextWorkbench";
 import { QueuePanel } from "./components/QueuePanel";
 import { TerminalPanel } from "./components/TerminalPanel";
-import { WorkspaceTools } from "./components/WorkspaceTools";
+import { ActionsMenuButton, WorkspaceTools } from "./components/WorkspaceTools";
 import { formatRemoteAddress, parseRemoteAddress } from "./address";
 import { ForwardDialog, SshCatalogDialog } from "./components/SshTools";
 import { Tooltips } from "./components/Tooltips";
@@ -99,7 +98,6 @@ import type {
   Settings,
   SftpProfile,
   SshCatalog,
-  CatalogHost,
   Tab,
   Bookmark,
 } from "./types";
@@ -126,6 +124,8 @@ type Dialog =
       kind: "connect";
       profile?: SftpProfile;
       destination?: { pane: number; path: string };
+      initialError?: string;
+      initialFingerprint?: string;
     }
   | { kind: "sshConfig"; add?: boolean }
   | { kind: "forward"; source: string; title: string }
@@ -143,6 +143,11 @@ export function App() {
   const [active, setActive] = useState(0);
   const [refresh, setRefresh] = useState(0);
   const [dialog, setDialog] = useState<Dialog>();
+  const dialogRef = useRef(dialog);
+  dialogRef.current = dialog;
+  const connectingRef = useRef(new Set<string>());
+  const connectionAttempt = useRef([0, 0]);
+  const [connecting, setConnecting] = useState(new Set<string>());
   const [bookmarkMenu, setBookmarkMenu] = useState<{
     bookmark: Bookmark;
     x: number;
@@ -209,7 +214,7 @@ export function App() {
   const resolvedPalette =
     resolvedTheme === "light"
       ? settings?.lightPalette || "sky"
-      : settings?.darkPalette || "blue";
+      : settings?.darkPalette || "midnight";
   useEffect(() => {
     document.documentElement.dataset.theme = resolvedTheme;
     document.documentElement.dataset.palette = resolvedPalette;
@@ -293,6 +298,18 @@ export function App() {
       const restored = {
         ...defaults,
         ...saved,
+        darkPalette: (
+          [
+            "midnight",
+            "midnightClassic",
+            "graphiteBlue",
+            "midnightRed",
+            "midnightClassicRed",
+            "graphiteRed",
+          ] as string[]
+        ).includes(saved?.darkPalette || "")
+          ? saved?.darkPalette
+          : "midnight",
         bookmarks: normalizeBookmarks(saved?.bookmarks),
         language:
           saved?.language === "et"
@@ -1847,23 +1864,30 @@ export function App() {
     fingerprint: string,
     path: string,
     destination?: { pane: number; path: string },
+    navigateOnConnect = true,
   ) {
     setSessions((old) => [...old.filter((p) => p.id !== profile.id), profile]);
     setFileClipboard((value) =>
       value?.source === `sftp:${profile.id}` ? null : value,
     );
     clipboardRevision.current = -1;
-    update({
-      trustedHosts: {
-        ...settings!.trustedHosts,
-        [`${profile.host}:${profile.port}`]: fingerprint,
-      },
-    });
-    remoteHomes.current.set(`sftp:${profile.id}`, path);
-    navigate(
-      { source: `sftp:${profile.id}`, path: destination?.path || path },
-      destination?.pane ?? activeRef.current,
+    setSettings((s) =>
+      s
+        ? {
+            ...s,
+            trustedHosts: {
+              ...s.trustedHosts,
+              [`${profile.host}:${profile.port}`]: fingerprint,
+            },
+          }
+        : s,
     );
+    remoteHomes.current.set(`sftp:${profile.id}`, path);
+    if (navigateOnConnect)
+      navigate(
+        { source: `sftp:${profile.id}`, path: destination?.path || path },
+        destination?.pane ?? activeRef.current,
+      );
     notify(t.connectionSaved);
   }
   async function saveProfile(
@@ -1907,11 +1931,82 @@ export function App() {
       )
       .catch((e) => notify(String(e)));
   }
-  function openCatalogHost(host: CatalogHost) {
-    const source = `sftp:${host.profile.id}`;
+  async function openSavedConnection(profile: SftpProfile) {
+    const source = `sftp:${profile.id}`;
+    const paneIndex = activeRef.current;
+    if (connectingRef.current.has(profile.id)) return;
+    const attempt = ++connectionAttempt.current[paneIndex];
     const path = remoteHomes.current.get(source);
-    if (path) navigate({ source, path });
-    else setDialog({ kind: "connect", profile: host.profile });
+    if (path) {
+      navigate({ source, path }, paneIndex);
+      return;
+    }
+    const paneState = stateRef.current?.panes[paneIndex];
+    const originalTab = paneState?.tabs.find(
+      (tab) => tab.id === paneState.activeTab,
+    );
+    if (!originalTab) return;
+    const stillAtOrigin = () => {
+      const current = stateRef.current?.panes[paneIndex];
+      const tab = current?.tabs.find((item) => item.id === originalTab.id);
+      return (
+        connectionAttempt.current[paneIndex] === attempt &&
+        current?.activeTab === originalTab.id &&
+        tab?.location.source === originalTab.location.source &&
+        tab.location.path === originalTab.location.path
+      );
+    };
+    const ask = (detail: {
+      initialError?: string;
+      initialFingerprint?: string;
+    }) => {
+      if (!stillAtOrigin() || dialogRef.current) {
+        notify(detail.initialError || t.hostTrust);
+        return;
+      }
+      const next: Dialog = {
+        kind: "connect",
+        profile,
+        destination: { pane: paneIndex, path: "" },
+        ...detail,
+      };
+      dialogRef.current = next;
+      setDialog(next);
+    };
+    connectingRef.current.add(profile.id);
+    setConnecting(new Set(connectingRef.current));
+    try {
+      const result = await api.command<{
+        fingerprint: string;
+        needsTrust: boolean;
+        path: string;
+        forwardErrors: string[];
+      }>("connect_sftp", {
+        profile,
+        secret: "",
+        expected:
+          stateRef.current?.trustedHosts[`${profile.host}:${profile.port}`] ||
+          null,
+        configPath: stateRef.current?.sshConfigPath || null,
+      });
+      if (result.needsTrust) ask({ initialFingerprint: result.fingerprint });
+      else {
+        connected(
+          profile,
+          result.fingerprint,
+          result.path,
+          { pane: paneIndex, path: result.path },
+          stillAtOrigin(),
+        );
+        if (result.forwardErrors.length)
+          notify(`${t.forwarding}: ${result.forwardErrors.join("; ")}`);
+      }
+    } catch (error) {
+      ask({ initialError: String(error) });
+    } finally {
+      connectingRef.current.delete(profile.id);
+      setConnecting(new Set(connectingRef.current));
+    }
   }
   function groupProps(id: string, title: string) {
     return {
@@ -1986,11 +2081,15 @@ export function App() {
           t={t}
           hidden={settings.showHidden}
           terminal={terminalView !== "hidden"}
+          theme={resolvedTheme}
           onSwap={() =>
             update({ panes: [settings.panes[1], settings.panes[0]] })
           }
           onHidden={() => update({ showHidden: !settings.showHidden })}
           onTerminal={toggleTerminal}
+          onToggleTheme={() =>
+            update({ theme: resolvedTheme === "dark" ? "light" : "dark" })
+          }
           onSettings={() => setDialog({ kind: "settings" })}
           actions={actions}
         />
@@ -2259,15 +2358,20 @@ export function App() {
               {catalog?.hosts.map((host) => (
                 <button
                   className={`sidebar-item ${current.source === `sftp:${host.profile.id}` ? "active" : ""}`}
-                  disabled={host.disabled}
+                  disabled={host.disabled || connecting.has(host.profile.id)}
+                  aria-busy={connecting.has(host.profile.id)}
                   data-tooltip={[
                     `${host.profile.username}@${host.profile.host}:${host.profile.port}`,
                     ...host.warnings,
                   ].join("\n")}
                   key={host.profile.id}
-                  onClick={() => openCatalogHost(host)}
+                  onClick={() => void openSavedConnection(host.profile)}
                 >
-                  <ServerIcon />
+                  {connecting.has(host.profile.id) ? (
+                    <LoaderCircle size={14} className="spin" />
+                  ) : (
+                    <ServerIcon />
+                  )}
                   <span>{host.alias}</span>
                 </button>
               ))}
@@ -2282,14 +2386,15 @@ export function App() {
                   <button
                     key={p.id}
                     className="sidebar-item"
-                    onClick={() => {
-                      const source = `sftp:${p.id}`;
-                      const path = remoteHomes.current.get(source);
-                      if (path) navigate({ source, path });
-                      else setDialog({ kind: "connect", profile: p });
-                    }}
+                    disabled={connecting.has(p.id)}
+                    aria-busy={connecting.has(p.id)}
+                    onClick={() => void openSavedConnection(p)}
                   >
-                    <ServerIcon />
+                    {connecting.has(p.id) ? (
+                      <LoaderCircle size={14} className="spin" />
+                    ) : (
+                      <ServerIcon />
+                    )}
                     <span>{p.name}</span>
                   </button>
                 ))}
@@ -2326,7 +2431,7 @@ export function App() {
             className="pane-layout"
             hidden={terminalView === "full"}
             style={{
-              gridTemplateColumns: `minmax(0,${split}fr) 11px minmax(0,${100 - split}fr)`,
+              gridTemplateColumns: `minmax(0,${split}fr) 8px minmax(0,${100 - split}fr)`,
             }}
           >
             {settings.panes
@@ -2447,10 +2552,13 @@ export function App() {
               label={terminal.label}
               t={t}
               theme={resolvedTheme}
+              palette={resolvedPalette}
               hidden={
                 terminalView === "hidden" || terminalSource !== terminal.source
               }
               fullscreen={terminalView === "full"}
+              height={settings.terminalHeight ?? 242}
+              onResize={(terminalHeight) => update({ terminalHeight })}
               onToggleFullscreen={toggleFullTerminal}
               onClose={() => {
                 setTerminals((old) => {
@@ -2482,6 +2590,7 @@ export function App() {
           )}
           <div className="shortcut-bar" hidden={terminalView === "full"}>
             {[
+              ["F1", t.help, () => setDialog({ kind: "shortcuts" })],
               ["F2", t.rename, rename],
               ["F3", t.preview, preview],
               ["F4", t.edit, edit],
@@ -2500,13 +2609,7 @@ export function App() {
                 <span>{label as string}</span>
               </button>
             ))}
-            <IconButton
-              title={t.keyboard}
-              shortcut="F1"
-              onClick={() => setDialog({ kind: "shortcuts" })}
-            >
-              <Keyboard size={16} />
-            </IconButton>
+            <ActionsMenuButton t={t} actions={actions} footer />
           </div>
         </main>
       </div>
@@ -2840,6 +2943,8 @@ export function App() {
       {dialog?.kind === "connect" && (
         <ConnectDialog
           profile={dialog.profile}
+          initialError={dialog.initialError}
+          initialFingerprint={dialog.initialFingerprint}
           settings={settings}
           t={t}
           onClose={closeDialog}

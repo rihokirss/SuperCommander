@@ -5,6 +5,24 @@ import fs from "node:fs/promises";
 import path from "node:path";
 const instance = await startNativeTest("theme", process.argv[2]);
 const { page, root } = instance;
+function contrast(first, second) {
+  const luminance = (color) => {
+    const channels = color
+      .match(/\d+/g)
+      .slice(0, 3)
+      .map((n) => {
+        const value = Number(n) / 255;
+        return value <= 0.04045
+          ? value / 12.92
+          : ((value + 0.055) / 1.055) ** 2.4;
+      });
+    return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+  };
+  const [high, low] = [luminance(first), luminance(second)].sort(
+    (a, b) => b - a,
+  );
+  return (high + 0.05) / (low + 0.05);
+}
 try {
   for (const [index, name] of [
     [0, "Projects"],
@@ -26,6 +44,8 @@ try {
   await expect(left.locator(".file-row.focused")).toHaveClass(/parent-entry/);
   await left.getByRole("grid").focus();
   await page.keyboard.press("Enter");
+  await expect(left.locator(".file-row.focused")).toContainText("Archive");
+  await expect(left.locator(".file-row.selected")).toHaveCount(0);
   await expect(left.getByText("layout.md", { exact: true })).toBeVisible();
   await left.getByText("README.md", { exact: true }).click();
   const rows = await left.locator(".file-row").count();
@@ -67,7 +87,14 @@ try {
     [
       "Dark",
       "Dark palette",
-      ["Classic blue", "Sky blue", "Denim", "Midnight blue"],
+      [
+        "Midnight blue",
+        "Midnight · classic blue",
+        "Graphite backdrop · blue panels",
+        "Midnight red",
+        "Midnight · classic red",
+        "Graphite backdrop · red panels",
+      ],
     ],
     ["Light", "Light palette", ["Sky blue", "Ice blue", "Azure"]],
   ]) {
@@ -75,13 +102,30 @@ try {
     const colors = new Set();
     for (const name of names) {
       await choose(label, name);
+      if (mode === "Dark") {
+        const surfaces = await page.locator(".app-shell").evaluate((shell) => ({
+          frame: getComputedStyle(shell)
+            .getPropertyValue("--canvas-start")
+            .trim()
+            .split(/\s+/)
+            .join(", "),
+          dialog: getComputedStyle(shell.querySelector(".modal"))
+            .backgroundImage,
+        }));
+        expect(surfaces.dialog).toContain(surfaces.frame);
+      }
       colors.add(
         await page
           .locator(".app-shell")
-          .evaluate((e) => getComputedStyle(e).backgroundImage),
+          .evaluate(
+            (e) =>
+              getComputedStyle(e).backgroundImage +
+              "|" +
+              getComputedStyle(e.querySelector(".file-pane")).backgroundColor,
+          ),
       );
     }
-    expect(colors.size).toBe(mode === "Dark" ? 4 : 3);
+    expect(colors.size).toBe(mode === "Dark" ? 6 : 3);
     await page.screenshot({
       path: `artifacts/sky-palettes-${mode.toLowerCase()}.png`,
     });
@@ -95,14 +139,27 @@ try {
         return b.settings.darkPalette + " " + b.settings.lightPalette;
       }),
     )
-    .toBe("midnight azure");
+    .toBe("graphiteRed azure");
   await page.reload();
   await expect(page.locator(".app-shell")).toHaveAttribute(
     "data-palette",
     "azure",
   );
   console.log(
-    "PASS all seven native palettes, separate dark/light choices, persistence and reload",
+    "PASS all nine native palettes, separate dark/light choices, persistence and reload",
+  );
+  await page.getByRole("button", { name: "Switch to dark theme" }).click();
+  await expect(page.locator(".app-shell")).toHaveAttribute(
+    "data-palette",
+    "graphiteRed",
+  );
+  await page.getByRole("button", { name: "Switch to light theme" }).click();
+  await expect(page.locator(".app-shell")).toHaveAttribute(
+    "data-palette",
+    "azure",
+  );
+  console.log(
+    "PASS native titlebar theme toggle preserves both palette choices",
   );
   await page.keyboard.press("Control+Backquote");
   const terminal = page.locator(".terminal-panel");
@@ -114,18 +171,31 @@ try {
   await page.keyboard.type(`Write-Output '${marker}'`);
   await page.keyboard.press("Enter");
   await expect(terminal.locator(".xterm-rows")).toContainText(marker);
-  for (const theme of ["Dark", "Light"]) {
+  for (const [theme, palette] of [
+    ["Dark", "Midnight blue"],
+    ["Dark", "Midnight red"],
+    ["Light", "Sky blue"],
+  ]) {
     await page
       .locator(".toolbar-right")
       .getByRole("button", { name: "Settings", exact: true })
       .click();
     await page.getByRole("combobox", { name: "Theme", exact: true }).click();
     await page.getByRole("option", { name: theme, exact: true }).click();
-    await choose(
-      theme === "Dark" ? "Dark palette" : "Light palette",
-      "Sky blue",
-    );
+    await choose(theme === "Dark" ? "Dark palette" : "Light palette", palette);
     await page.keyboard.press("Escape");
+    if (theme === "Dark") {
+      const surfaces = await page.locator(".app-shell").evaluate((shell) => ({
+        frame: getComputedStyle(shell)
+          .getPropertyValue("--canvas-start")
+          .trim()
+          .split(/\s+/)
+          .join(", "),
+        terminal: getComputedStyle(shell.querySelector(".terminal-panel"))
+          .backgroundColor,
+      }));
+      expect(surfaces.terminal).toContain(surfaces.frame);
+    }
     const row = terminal
       .locator(".xterm-rows > div")
       .filter({ hasText: marker })
@@ -147,7 +217,7 @@ try {
         .filter((n) => n.text.trim()),
     );
     await page.screenshot({
-      path: `artifacts/sky-terminal-${theme.toLowerCase()}-focused.png`,
+      path: `artifacts/terminal-${palette.replaceAll(" ", "-")}-focused.png`,
     });
     await page.locator('[data-pane="0"]').getByRole("grid").focus();
     await expect(selection).toBeVisible();
@@ -159,12 +229,16 @@ try {
     const inactive = await selection.evaluate(
       (e) => getComputedStyle(e).backgroundColor,
     );
+    const selectedGlyph = glyphs.find((glyph) => glyph.text.includes(marker));
+    expect(selectedGlyph).toBeTruthy();
+    expect(contrast(selectedGlyph.color, focused)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(selectedGlyph.color, inactive)).toBeGreaterThanOrEqual(4.5);
     console.log(
       "PASS terminal selection",
-      JSON.stringify({ theme, focused, inactive, glyphs }),
+      JSON.stringify({ theme, palette, focused, inactive, glyphs }),
     );
     await page.screenshot({
-      path: `artifacts/sky-terminal-${theme.toLowerCase()}-inactive.png`,
+      path: `artifacts/terminal-${palette.replaceAll(" ", "-")}-inactive.png`,
     });
   }
 } finally {

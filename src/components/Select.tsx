@@ -28,14 +28,29 @@ export function Select({
   });
   function reveal() {
     const rect = button.current!.getBoundingClientRect();
-    const height = options.length * 33 + 10;
+    const context = document.createElement("canvas").getContext("2d");
+    if (context) context.font = getComputedStyle(button.current!).font;
+    const labelWidth = Math.max(
+      ...options.map(
+        (option) =>
+          context?.measureText(option.label).width || option.label.length * 7,
+      ),
+      0,
+    );
+    const width = Math.min(
+      innerWidth - 20,
+      Math.max(140, rect.width, labelWidth + 64),
+    );
+    const height = Math.min(innerHeight - 20, options.length * 33 + 10);
     setPosition({
-      left: Math.min(rect.left, innerWidth - Math.max(140, rect.width) - 10),
-      top:
+      left: Math.max(10, Math.min(rect.left, innerWidth - width - 10)),
+      top: Math.max(
+        10,
         rect.bottom + height > innerHeight
           ? rect.top - height - 5
           : rect.bottom + 5,
-      width: Math.max(140, rect.width),
+      ),
+      width,
       theme:
         button.current!.closest<HTMLElement>(".app-shell")?.dataset.theme ||
         "dark",

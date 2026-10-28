@@ -649,126 +649,139 @@ export function SettingsDialog({
   onClose: () => void;
 }) {
   return (
-    <Modal closeLabel={t.close} title={t.settings} onClose={onClose}>
-      <div className="settings-section">
-        <h3>
-          <SlidersHorizontal size={15} />
-          {t.appearance}
-        </h3>
-        <label className="setting-row">
-          <span>{t.theme}</span>
-          <Select
-            label={t.theme}
-            value={settings.theme}
-            onChange={(value) => update({ theme: value as Settings["theme"] })}
-            options={(["dark", "light", "system"] as const).map((value) => ({
-              value,
-              label: t[value],
-            }))}
-          />
-        </label>
-        <label className="setting-row">
-          <span>{t.darkPalette}</span>
-          <Select
-            label={t.darkPalette}
-            value={settings.darkPalette || "blue"}
-            onChange={(value) =>
-              update({ darkPalette: value as Settings["darkPalette"] })
-            }
-            options={(["blue", "sky", "denim", "midnight"] as const).map(
-              (value) => ({
+    <div className="settings-preview">
+      <Modal closeLabel={t.close} title={t.settings} onClose={onClose}>
+        <div className="settings-section">
+          <h3>
+            <SlidersHorizontal size={15} />
+            {t.appearance}
+          </h3>
+          <label className="setting-row">
+            <span>{t.theme}</span>
+            <Select
+              label={t.theme}
+              value={settings.theme}
+              onChange={(value) =>
+                update({ theme: value as Settings["theme"] })
+              }
+              options={(["dark", "light", "system"] as const).map((value) => ({
                 value,
                 label: t[value],
-              }),
-            )}
-          />
-        </label>
-        <label className="setting-row">
-          <span>{t.lightPalette}</span>
-          <Select
-            label={t.lightPalette}
-            value={settings.lightPalette || "sky"}
-            onChange={(value) =>
-              update({ lightPalette: value as Settings["lightPalette"] })
-            }
-            options={(["sky", "ice", "azure"] as const).map((value) => ({
-              value,
-              label: t[value],
-            }))}
-          />
-        </label>
-        <label className="setting-row">
-          <span>
-            <strong>{t.glass}</strong>
-            <small>{t.glassHint}</small>
-          </span>
-          <input
-            aria-label={t.glass}
-            type="checkbox"
-            role="switch"
-            checked={settings.glass}
-            onChange={(e) => update({ glass: e.target.checked })}
-          />
-        </label>
-        <label className="setting-row">
-          <span>
-            <strong>{t.transparency}</strong>
-            <small>{t.transparencyHint}</small>
-          </span>
-          <span className="transparency-control">
-            <input
-              aria-label={t.transparency}
-              type="range"
-              min={0}
-              max={70}
-              step={1}
-              disabled={!settings.glass}
-              value={settings.transparency ?? 15}
-              onChange={(e) => update({ transparency: Number(e.target.value) })}
+              }))}
             />
-            <output>
-              {settings.glass ? (settings.transparency ?? 15) : 0}%
-            </output>
-          </span>
-        </label>
-        <label className="setting-row">
-          <span>{t.density}</span>
-          <Select
-            label={t.density}
-            value={settings.density}
-            onChange={(value) =>
-              update({ density: value as Settings["density"] })
-            }
-            options={(["comfortable", "compact"] as const).map((value) => ({
-              value,
-              label: t[value],
-            }))}
-          />
-        </label>
-        <label className="setting-row">
-          <span>{t.language}</span>
-          <Select
-            label={t.language}
-            value={settings.language}
-            onChange={(value) =>
-              update({ language: value as Settings["language"] })
-            }
-            options={[
-              { value: "en", label: "English" },
-              { value: "et", label: "Eesti" },
-            ]}
-          />
-        </label>
-        <label className="setting-row">
-          <span>{t.hidden}</span>
-          <input
-            type="checkbox"
-            checked={settings.showHidden}
-            onChange={(e) => update({ showHidden: e.target.checked })}
-          />
-        </label>
-      </div>
-    </Modal>
+          </label>
+          <label className="setting-row">
+            <span>{t.darkPalette}</span>
+            <Select
+              label={t.darkPalette}
+              value={settings.darkPalette || "midnight"}
+              onChange={(value) =>
+                update({ darkPalette: value as Settings["darkPalette"] })
+              }
+              options={(
+                [
+                  "midnight",
+                  "midnightClassic",
+                  "graphiteBlue",
+                  "midnightRed",
+                  "midnightClassicRed",
+                  "graphiteRed",
+                ] as const
+              ).map((value) => ({
+                value,
+                label: t[value],
+              }))}
+            />
+          </label>
+          <label className="setting-row">
+            <span>{t.lightPalette}</span>
+            <Select
+              label={t.lightPalette}
+              value={settings.lightPalette || "sky"}
+              onChange={(value) =>
+                update({ lightPalette: value as Settings["lightPalette"] })
+              }
+              options={(["sky", "ice", "azure"] as const).map((value) => ({
+                value,
+                label: t[value],
+              }))}
+            />
+          </label>
+          <label className="setting-row">
+            <span>
+              <strong>{t.glass}</strong>
+              <small>{t.glassHint}</small>
+            </span>
+            <input
+              aria-label={t.glass}
+              type="checkbox"
+              role="switch"
+              checked={settings.glass}
+              onChange={(e) => update({ glass: e.target.checked })}
+            />
+          </label>
+          <label className="setting-row">
+            <span>
+              <strong>{t.transparency}</strong>
+              <small>{t.transparencyHint}</small>
+            </span>
+            <span className="transparency-control">
+              <input
+                aria-label={t.transparency}
+                type="range"
+                min={0}
+                max={70}
+                step={1}
+                disabled={!settings.glass}
+                value={settings.transparency ?? 15}
+                onChange={(e) =>
+                  update({ transparency: Number(e.target.value) })
+                }
+              />
+              <output>
+                {settings.glass ? (settings.transparency ?? 15) : 0}%
+              </output>
+            </span>
+          </label>
+          <label className="setting-row">
+            <span>{t.density}</span>
+            <Select
+              label={t.density}
+              value={settings.density}
+              onChange={(value) =>
+                update({ density: value as Settings["density"] })
+              }
+              options={(["comfortable", "compact"] as const).map((value) => ({
+                value,
+                label: t[value],
+              }))}
+            />
+          </label>
+          <label className="setting-row">
+            <span>{t.language}</span>
+            <Select
+              label={t.language}
+              value={settings.language}
+              onChange={(value) =>
+                update({ language: value as Settings["language"] })
+              }
+              options={[
+                { value: "en", label: "English" },
+                { value: "et", label: "Eesti" },
+              ]}
+            />
+          </label>
+          <label className="setting-row">
+            <span>{t.hidden}</span>
+            <input
+              type="checkbox"
+              checked={settings.showHidden}
+              onChange={(e) => update({ showHidden: e.target.checked })}
+            />
+          </label>
+        </div>
+      </Modal>
+    </div>
   );
 }
 
@@ -923,6 +936,8 @@ export function ShortcutsDialog({
 
 export function ConnectDialog({
   profile,
+  initialError,
+  initialFingerprint,
   settings,
   t,
   onClose,
@@ -932,6 +947,8 @@ export function ConnectDialog({
   onSaveProfile,
 }: {
   profile?: SftpProfile;
+  initialError?: string;
+  initialFingerprint?: string;
   settings: Settings;
   t: Text;
   onClose: () => void;
@@ -961,9 +978,9 @@ export function ConnectDialog({
     },
   );
   const [secret, setSecret] = useState("");
-  const [fingerprint, setFingerprint] = useState("");
+  const [fingerprint, setFingerprint] = useState(initialFingerprint || "");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(initialError || "");
   const [saved, setSaved] = useState(false);
   const revision = useRef(configRevision);
   const secretTouched = useRef(false);

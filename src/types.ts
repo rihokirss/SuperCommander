@@ -63,13 +63,20 @@ export type PaneState = { tabs: Tab[]; activeTab: string };
 export type Settings = {
   language: Language;
   theme: "dark" | "light" | "system";
-  darkPalette?: "blue" | "sky" | "denim" | "midnight";
+  darkPalette?:
+    | "midnight"
+    | "midnightClassic"
+    | "graphiteBlue"
+    | "midnightRed"
+    | "midnightClassicRed"
+    | "graphiteRed";
   lightPalette?: "sky" | "ice" | "azure";
   panes: PaneState[];
   bookmarks: Bookmark[];
   showHidden: boolean;
   glass: boolean;
   transparency?: number;
+  terminalHeight?: number;
   workspaceCollapsed?: boolean;
   collapsedGroups?: string[];
   networkLocations?: Place[];

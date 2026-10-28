@@ -34,6 +34,7 @@ jobs:
       - run: node scripts/windows-clipboard-smoke.mjs
       - run: node scripts/windows-startup-smoke.mjs
       - run: node scripts/windows-theme-smoke.mjs
+      - run: node scripts/windows-terminal-resize-smoke.mjs
       - run: node scripts/windows-folder-size-smoke.mjs
       - run: node scripts/windows-properties-smoke.mjs
       - run: node scripts/windows-search-smoke.mjs

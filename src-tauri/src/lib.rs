@@ -223,7 +223,13 @@ fn set_window_appearance(
             (false, Some("denim")) => (27, 45, 74, alpha),
             (false, Some("midnight")) => (17, 23, 34, alpha),
             (false, Some("sky")) => (20, 44, 70, alpha),
-            (false, _) => (18, 43, 80, alpha),
+            (false, Some("midnightRed")) => (40, 16, 21, alpha),
+            (false, Some("midnightClassicRed")) => (48, 14, 23, alpha),
+            (false, Some("graphiteRed")) => (24, 27, 32, alpha),
+            (false, Some("softGraphite")) => (25, 33, 46, alpha),
+            (false, Some("midnightClassic")) => (16, 35, 65, alpha),
+            (false, Some("graphiteBlue")) => (24, 27, 32, alpha),
+            (false, _) => (17, 23, 34, alpha),
         };
         window_vibrancy::apply_acrylic(&window, Some(color)).map_err(error)?;
     }
@@ -1192,7 +1198,7 @@ pub fn run() {
             });
             #[cfg(windows)]
             if let Some(window) = app.get_webview_window("main") {
-                let _ = window_vibrancy::apply_acrylic(&window, Some((18, 43, 80, 210)));
+                let _ = window_vibrancy::apply_acrylic(&window, Some((17, 23, 34, 210)));
             }
             Ok(())
         })

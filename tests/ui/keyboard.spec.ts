@@ -122,6 +122,40 @@ test("F9 menu supports real focus, arrows, type-ahead, Enter and focus restorati
   ).toBeVisible();
 });
 
+test("footer F1 and F9 buttons open help and actions above the bar", async ({
+  page,
+}) => {
+  for (const width of [960, 1440]) {
+    await page.setViewportSize({ width, height: 700 });
+    const bar = page.locator(".shortcut-bar");
+    const buttons = bar.locator("button");
+    await expect(buttons).toHaveCount(9);
+    const left = (await bar.boundingBox())!.x;
+    const right = left + (await bar.boundingBox())!.width;
+    for (const button of await buttons.all()) {
+      const box = (await button.boundingBox())!;
+      expect(box.x).toBeGreaterThanOrEqual(left);
+      expect(box.x + box.width).toBeLessThanOrEqual(right + 1);
+    }
+    await bar.getByRole("button", { name: /Help/ }).click();
+    await expect(
+      page.getByRole("dialog", { name: "Keyboard shortcuts" }),
+    ).toBeVisible();
+    await page.keyboard.press("Escape");
+    const actions = bar.getByRole("button", { name: "Actions" });
+    await actions.click();
+    const menu = page.getByRole("menu", { name: "Actions" });
+    await expect(
+      menu.getByRole("menuitem", { name: /Calculate folder sizes/ }),
+    ).toBeVisible();
+    expect(
+      (await menu.boundingBox())!.y + (await menu.boundingBox())!.height,
+    ).toBeLessThanOrEqual((await actions.boundingBox())!.y);
+    await page.keyboard.press("Escape");
+    await expect(actions).toBeFocused();
+  }
+});
+
 test("F9 exposes comparison and recovery with their shortcuts", async ({
   page,
 }) => {
@@ -240,24 +274,236 @@ for (const theme of ["Dark", "Light"])
     });
   });
 
-test("Alt+S searches the active pane and Escape restores the list", async ({
+test("Alt+S moves between matches without filtering or clearing marks", async ({
   page,
 }) => {
-  const right = page.locator('[data-pane="1"]');
-  await right.getByRole("grid").focus();
+  const pane = page.locator('[data-pane="0"]');
+  await pane.getByText("README.md", { exact: true }).click();
+  const count = await pane.locator(".file-row").count();
   await page.keyboard.press("Alt+s");
-  const search = right.locator(".folder-filter input");
-  await expect(search).toBeFocused();
-  await search.fill("Meeting");
-  await expect(
-    right.getByText("Meeting notes.md", { exact: true }),
-  ).toBeVisible();
-  await page.keyboard.press("Enter");
-  await expect(right.locator(".file-row.focused")).toContainText(
-    "Meeting notes.md",
+  const input = pane.locator(".quick-find input");
+  await expect(input).toBeFocused();
+  await input.fill(".md");
+  await expect(pane.locator(".file-row.focused")).toContainText(
+    "project-notes.md",
   );
+  await expect(pane.locator(".file-row")).toHaveCount(count);
+  await expect(pane.locator(".file-row.selected")).toContainText("README.md");
+  await page.keyboard.press("Enter");
+  await expect(pane.locator(".file-row.focused")).toContainText("README.md");
   await page.keyboard.press("Alt+s");
+  await expect(pane.locator(".file-row.focused")).toContainText(
+    "project-notes.md",
+  );
+  await input.fill("not-a-match");
+  await expect(input).toHaveAttribute("aria-invalid", "true");
+  await expect(pane.locator(".file-row")).toHaveCount(count);
   await page.keyboard.press("Escape");
-  await expect(search).toHaveValue("");
-  await expect(right.getByRole("grid")).toBeFocused();
+  await expect(pane.locator(".quick-find")).toHaveCount(0);
+  await expect(pane.getByRole("grid")).toBeFocused();
+  await page.keyboard.press("Control+Shift+f");
+  const filter = pane.locator(".folder-filter input");
+  await filter.fill("README");
+  await expect(pane.locator(".file-row:not(.parent-entry)")).toHaveCount(1);
+});
+
+test("entering a folder focuses its parent row and an empty root has no stale cursor", async ({
+  page,
+}) => {
+  const pane = page.locator('[data-pane="0"]');
+  await pane.getByText("Aurora", { exact: true }).dblclick();
+  await expect(pane.locator(".file-row.focused")).toHaveClass(/parent-entry/);
+  await expect(pane.locator(".file-row.selected")).toHaveCount(0);
+  await pane.getByRole("grid").focus();
+  await page.keyboard.press("Enter");
+  await expect(pane.locator(".file-row.focused")).toContainText("Aurora");
+  await expect(pane.locator(".file-row.selected")).toHaveCount(0);
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Backspace");
+  await expect(pane.locator(".file-row.focused")).toContainText("Aurora");
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Alt+ArrowUp");
+  await expect(pane.locator(".file-row.focused")).toContainText("Aurora");
+  await page.keyboard.press("Enter");
+  await pane.getByRole("button", { name: "Up one level", exact: true }).click();
+  await expect(pane.locator(".file-row.focused")).toContainText("Aurora");
+  await page.keyboard.press("Control+l");
+  await pane.locator(".path-form input").fill("C:\\");
+  await pane.locator(".path-form input").press("Enter");
+  await expect(pane.locator(".parent-entry")).toHaveCount(0);
+  await expect(pane.locator(".file-row")).toHaveCount(0);
+  await expect(pane.locator(".file-row.focused")).toHaveCount(0);
+});
+
+test("dark and light palettes preview independently and survive reload", async ({
+  page,
+}) => {
+  async function choose(label: string, value: string) {
+    await page.getByRole("combobox", { name: label, exact: true }).click();
+    await page.getByRole("option", { name: value, exact: true }).click();
+  }
+  await page
+    .locator(".toolbar-right")
+    .getByRole("button", { name: "Settings", exact: true })
+    .click();
+  const dark = new Set<string>();
+  const light = new Set<string>();
+  for (const [mode, label, names, target] of [
+    [
+      "Dark",
+      "Dark palette",
+      [
+        "Midnight blue",
+        "Midnight · classic blue",
+        "Graphite backdrop · blue panels",
+        "Midnight red",
+        "Midnight · classic red",
+        "Graphite backdrop · red panels",
+      ],
+      dark,
+    ],
+    ["Light", "Light palette", ["Sky blue", "Ice blue", "Azure"], light],
+  ] as const) {
+    await choose("Theme", mode);
+    for (const name of names) {
+      await choose(label, name);
+      target.add(
+        await page
+          .locator(".app-shell")
+          .evaluate(
+            (e) =>
+              getComputedStyle(e).backgroundImage +
+              "|" +
+              getComputedStyle(e.querySelector(".file-pane")!).backgroundColor,
+          ),
+      );
+    }
+  }
+  expect(dark.size).toBe(6);
+  expect(light.size).toBe(3);
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          JSON.parse(localStorage.getItem("supercommander-preview") || "{}")
+            .lightPalette,
+      ),
+    )
+    .toBe("azure");
+  await page.reload();
+  await expect(page.locator(".app-shell")).toHaveAttribute(
+    "data-palette",
+    "azure",
+  );
+  await page
+    .locator(".toolbar-right")
+    .getByRole("button", { name: "Settings", exact: true })
+    .click();
+  await choose("Theme", "Dark");
+  await expect(page.locator(".app-shell")).toHaveAttribute(
+    "data-palette",
+    "graphiteRed",
+  );
+});
+
+test("titlebar theme toggle remembers each palette and persists", async ({
+  page,
+}) => {
+  const shell = page.locator(".app-shell");
+  await expect(shell).toHaveAttribute("data-theme", "dark");
+  await expect(shell).toHaveAttribute("data-palette", "midnight");
+  const light = page.getByRole("button", { name: "Switch to light theme" });
+  await expect(light).toHaveAttribute("data-tooltip", "Switch to light theme");
+  await light.click();
+  await expect(shell).toHaveAttribute("data-theme", "light");
+  await expect(shell).toHaveAttribute("data-palette", "sky");
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          JSON.parse(localStorage.getItem("supercommander-preview") || "{}")
+            .theme,
+      ),
+    )
+    .toBe("light");
+  await page.reload();
+  await expect(shell).toHaveAttribute("data-theme", "light");
+  await page.getByRole("button", { name: "Switch to dark theme" }).click();
+  await expect(shell).toHaveAttribute("data-theme", "dark");
+  await expect(shell).toHaveAttribute("data-palette", "midnight");
+});
+
+test("legacy dark palette falls back to Midnight without losing other settings", async ({
+  page,
+}) => {
+  await expect
+    .poll(() =>
+      page.evaluate(() => localStorage.getItem("supercommander-preview")),
+    )
+    .not.toBeNull();
+  await page.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem("supercommander-preview")!);
+    saved.darkPalette = "blue";
+    saved.lightPalette = "azure";
+    saved.transparency = 33;
+    localStorage.setItem("supercommander-preview", JSON.stringify(saved));
+  });
+  await page.reload();
+  await expect(page.locator(".app-shell")).toHaveAttribute(
+    "data-palette",
+    "midnight",
+  );
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const saved = JSON.parse(
+          localStorage.getItem("supercommander-preview") || "{}",
+        );
+        return [saved.darkPalette, saved.lightPalette, saved.transparency];
+      }),
+    )
+    .toEqual(["midnight", "azure", 33]);
+});
+
+test("F1 categories navigate with the keyboard and Settings contains only preferences", async ({
+  page,
+}) => {
+  await page.keyboard.press("F1");
+  const dialog = page.getByRole("dialog", {
+    name: "Keyboard shortcuts",
+    exact: true,
+  });
+  const tabs = dialog.getByRole("tablist", {
+    name: "Shortcut categories",
+    exact: true,
+  });
+  await tabs.getByRole("tab", { name: /Navigation/ }).click();
+  await expect(dialog.getByRole("tabpanel")).toContainText("Quick find");
+  await expect(dialog.getByRole("tabpanel")).not.toContainText(
+    "Copy files to clipboard",
+  );
+  await page.keyboard.press("ArrowDown");
+  await expect(tabs.getByRole("tab", { name: /Selection/ })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await page.keyboard.press("Escape");
+  await page
+    .locator(".toolbar-right")
+    .getByRole("button", { name: "Settings", exact: true })
+    .click();
+  const settings = page.getByRole("dialog", { name: "Settings", exact: true });
+  await expect(settings.locator("kbd")).toHaveCount(0);
+  await expect(
+    settings.getByRole("combobox", { name: "Dark palette", exact: true }),
+  ).toBeVisible();
+});
+
+test("F9 exposes folder size calculation and its shortcut", async ({
+  page,
+}) => {
+  await page.keyboard.press("F9");
+  await expect(
+    page.getByRole("menuitem", { name: /Calculate folder sizes/ }),
+  ).toContainText("Alt+Shift+Enter");
 });

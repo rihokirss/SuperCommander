@@ -51,13 +51,19 @@ export function Menu({
     const rect =
       anchor instanceof HTMLElement
         ? anchor.getBoundingClientRect()
-        : { left: anchor.x, bottom: anchor.y };
+        : { left: anchor.x, top: anchor.y, bottom: anchor.y };
     const bounds = menu.current!.getBoundingClientRect();
     setPosition({
       left: Math.max(8, Math.min(rect.left, innerWidth - bounds.width - 8)),
       top: Math.max(
         8,
-        Math.min(rect.bottom + 4, innerHeight - bounds.height - 8),
+        Math.min(
+          anchor instanceof HTMLElement &&
+            rect.bottom + 4 + bounds.height > innerHeight - 8
+            ? rect.top - bounds.height - 4
+            : rect.bottom + 4,
+          innerHeight - bounds.height - 8,
+        ),
       ),
     });
     const first = items.current.findIndex((a) => !a.disabled);

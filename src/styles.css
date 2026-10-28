@@ -68,7 +68,7 @@ button svg {
 }
 input,
 select {
-  background: #102d4680;
+  background: var(--input-surface);
   color: var(--bright);
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -160,6 +160,31 @@ p {
   display: flex;
   flex-direction: column;
 }
+.terminal-panel:not(.terminal-fullscreen) {
+  min-height: 120px;
+  flex-shrink: 1;
+}
+.terminal-resize {
+  flex: none;
+  height: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: ns-resize;
+  touch-action: none;
+}
+.terminal-resize span {
+  width: 36px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--muted);
+  opacity: 0.45;
+}
+.terminal-resize:hover span,
+.terminal-resize:focus-visible span {
+  background: var(--accent);
+  opacity: 1;
+}
 .terminal-panel > header {
   flex-shrink: 0;
 }
@@ -183,7 +208,7 @@ p {
   z-index: -1;
   border-radius: 50%;
   filter: blur(120px);
-  opacity: 0.18;
+  opacity: var(--ambient-opacity, 0.18);
 }
 .ambient-one {
   height: 700px;
@@ -279,23 +304,28 @@ p {
   min-height: 0;
 }
 .sidebar {
-  width: 208px;
-  min-width: 208px;
+  width: 192px;
+  min-width: 192px;
   border-right: 1px solid var(--line);
   display: flex;
   flex-direction: column;
-  padding: 20px 12px 0;
-  background: linear-gradient(150deg, #2457803d, #16354f44);
+  padding: 20px 6px 0 12px;
+  background: linear-gradient(
+    150deg,
+    rgb(var(--glass-rgb) / 0.8),
+    rgb(var(--glass-rgb) / 0.55)
+  );
 }
 .workspace-label {
   display: flex;
   align-items: center;
   gap: 9px;
-  padding: 0 7px 20px;
+  padding: 0 0 20px 7px;
 }
 .workspace-mark {
   width: 31px;
   height: 31px;
+  flex: none;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -309,6 +339,12 @@ p {
   flex-direction: column;
   gap: 3px;
   flex: 1;
+  min-width: 0;
+}
+.workspace-label small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .workspace-label strong {
   font-weight: 550;
@@ -431,7 +467,7 @@ p {
     Consolas,
     monospace;
   tab-size: 4;
-  background: #102d4650;
+  background: var(--chrome-surface);
   color: var(--text);
 }
 .config-warnings {
@@ -593,7 +629,7 @@ p {
   min-width: 140px;
   justify-content: space-between;
   padding: 9px 10px;
-  background: #102d4660;
+  background: var(--control-surface);
   border: 1px solid var(--line);
   color: var(--text);
   border-radius: 6px;
@@ -706,6 +742,17 @@ p {
   background: #80caff;
   flex: none;
 }
+.app-shell[data-theme="dark"] .sidebar-item.active {
+  color: var(--text);
+  background: var(--accent-soft);
+}
+.app-shell[data-theme="dark"] .sidebar-item.active:before,
+.app-shell[data-theme="dark"] .sidebar-item .active-dot {
+  background: var(--accent);
+}
+.app-shell[data-theme="dark"] .sidebar-item.active > svg {
+  color: var(--accent);
+}
 .sidebar-item.muted {
   color: #6b7993;
   font-size: 10px;
@@ -779,7 +826,7 @@ p {
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 14px 16px 0;
+  padding: 8px 8px 0;
 }
 .sr-only {
   position: absolute;
@@ -1188,10 +1235,10 @@ p {
   flex-shrink: 0;
 }
 .file-row.selected {
-  background: #7a98e315;
+  background: var(--marked-bg);
 }
 .active .file-row.selected {
-  background: #80caff21;
+  background: var(--marked-active-bg);
 }
 .file-row.selected:before {
   content: "";
@@ -1200,7 +1247,7 @@ p {
   top: 7px;
   bottom: 7px;
   width: 2px;
-  background: #80caff;
+  background: var(--accent);
   border-radius: 3px;
 }
 .active .file-row.focused {
@@ -1217,7 +1264,7 @@ p {
   bottom: 5px;
   width: 3px;
   border-radius: 0 3px 3px 0;
-  background: #a6dcff;
+  background: var(--accent);
 }
 .active .file-row.focused .file-name {
   color: #e1e9fb;
@@ -1396,7 +1443,8 @@ p {
   justify-content: space-between;
   gap: 2px;
 }
-.shortcut-bar > button {
+.shortcut-bar > button,
+.shortcut-bar .shortcut-action {
   font-size: 9px;
   color: #7688a7;
   padding: 6px 7px;
@@ -2030,10 +2078,13 @@ p {
   border: 1px solid var(--line);
   border-radius: 8px;
   overflow: hidden;
-  margin-top: 12px;
+  margin-top: 8px;
   min-height: 0;
   flex-shrink: 0;
   background: #101927a1;
+}
+.app-shell[data-theme="dark"] .terminal-panel {
+  background: rgb(var(--canvas-start) / var(--surface-opacity, 0.85));
 }
 .queue-panel > header,
 .terminal-panel > header {
@@ -2199,10 +2250,14 @@ p {
   line-height: 1.6;
 }
 .terminal-mount {
-  height: 205px;
+  flex: 1;
+  min-height: 0;
   padding: 10px 14px;
 }
 .terminal-notice {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
   padding: 22px;
   line-height: 1.8;
   font-size: 11px;
@@ -2287,12 +2342,9 @@ p {
   }
 }
 @media (min-width: 1600px) {
-  .main-workspace {
-    padding: 14px 20px 0;
-  }
   .sidebar {
-    width: 224px;
-    min-width: 224px;
+    width: 208px;
+    min-width: 208px;
   }
   .file-row {
     font-size: 12px;
@@ -2313,13 +2365,10 @@ p {
 }
 @media (max-width: 1150px) {
   .sidebar {
-    width: 174px;
-    min-width: 174px;
+    width: 170px;
+    min-width: 170px;
     padding-left: 8px;
-    padding-right: 8px;
-  }
-  .main-workspace {
-    padding: 12px 12px 0;
+    padding-right: 4px;
   }
   .global-search {
     max-width: 300px;
@@ -2349,7 +2398,8 @@ p {
     gap: 6px;
     font-size: 10px;
   }
-  .shortcut-bar > button {
+  .shortcut-bar > button,
+  .shortcut-bar .shortcut-action {
     padding: 5px 4px;
     gap: 4px;
   }
@@ -2377,7 +2427,8 @@ p {
     font-size: 9px;
     margin-left: 0;
   }
-  .shortcut-bar > button span {
+  .shortcut-bar > button span,
+  .shortcut-bar .shortcut-action span {
     font-size: 8px;
   }
 }
@@ -2442,4 +2493,13 @@ p {
   height: 18px;
   padding: 0;
   flex-shrink: 0;
+}
+
+.app-shell .settings-preview > .modal-overlay {
+  background: #05091014;
+  backdrop-filter: none;
+}
+.select-options {
+  max-height: calc(100vh - 20px);
+  overflow-y: auto;
 }

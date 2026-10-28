@@ -8,7 +8,7 @@ Browse local drives, UNC paths, ZIP archives and SSH/SFTP servers. Work with fam
 
 The latest release is **[SuperCommander 0.4.0](https://github.com/rihokirss/SuperCommander/releases/tag/v0.4.0)**.
 
-Version 0.4.0 adds faster startup, selectable blue palettes for both themes, a category-based F1 reference, next-match quick finding and folder sizes in the file list. It includes keyboard-accessible menus, bookmarks, file properties, native file clipboard support, quick editing, content search, reviewed folder synchronization, recovery of saved copies and safe ZIP operations.
+Version 0.4.0 adds faster startup, selectable blue and dark red palettes, a category-based F1 reference, next-match quick finding and folder sizes in the file list. It includes keyboard-accessible menus, bookmarks, file properties, native file clipboard support, quick editing, content search, reviewed folder synchronization, recovery of saved copies and safe ZIP operations.
 
 - [Windows x64 installer](https://github.com/rihokirss/SuperCommander/releases/download/v0.4.0/SuperCommander_0.4.0_x64-setup.exe) — recommended.
 - [Standalone Windows x64 executable](https://github.com/rihokirss/SuperCommander/releases/download/v0.4.0/SuperCommander_0.4.0_x64.exe) — requires WebView2.
@@ -154,7 +154,7 @@ Transfers show **Checking source files** while recording the selected file versi
 
 **Alt+F5** creates a ZIP from the marked files or folder; **Alt+F6** extracts selected ZIPs to the other pane's local folder. Both actions are also in F9 and the command palette. Creation uses the active pane's local folder, including when the other pane is connected to SSH. Local drives and UNC paths are supported.
 
-Double-click a ZIP to browse its read-only contents. The file list shows modification times, **F3** opens a file and **F5** copies selected entries out. The `..` row at the ZIP root returns to its local parent. Entries larger than 128 MiB require **Extract** rather than the ZIP browser; extraction streams their contents and supports ZIP64 files larger than 4 GiB.
+Double-click a ZIP to browse its read-only contents. The file list shows modification times, **F3** opens a file and **F5** copies selected entries out. The `..` row at the ZIP root returns to its local parent and focuses the archive. Navigating up from a folder focuses the folder just exited. Entries larger than 128 MiB require **Extract** rather than the ZIP browser; extraction streams their contents and supports ZIP64 files larger than 4 GiB.
 
 Creation uses the queued file manifest, checksums the bytes being compressed and checks the sources again before publishing. A source replacement, changed contents or new folder children prevents the archive from replacing an existing destination. Extraction first makes and validates private copies of all selected ZIP containers, so replacing an input during extraction cannot change its entry names or contents. The private copies require temporary disk space for the compressed inputs.
 
@@ -261,7 +261,7 @@ Folder sizes are calculated on request, with progress, cancellation and partial-
 
 Workspace collapses into an icon rail. Each section can also be collapsed independently; these choices persist. **Network** includes network folders and servers from Explorer Quick Access, mapped drives and saved Windows network shortcuts. Its refresh button reloads them. Use **+** to add a UNC location, rename a listed entry, remove it from SuperCommander or restore a removed Explorer entry. These customizations are saved in SuperCommander and leave Explorer's pins unchanged. Opening a server such as `\\server` lists its shared folders through the Windows shell; the `..` row at a share root returns to the server. UNC paths can also be entered directly; the app does not scan the network for devices.
 
-Settings offer dark, light or Windows-following modes and separate blue palette choices: Classic blue (#173E76), Sky blue, Denim and Midnight blue for dark mode, and Sky blue, Ice blue and Azure for light mode. Choices preview immediately, persist independently and apply to menus, dialogs and native glass. Settings offer a glass toggle and a transparency slider. Compact mode uses 26 px rows for both files and Workspace; Comfortable uses 34 px. Transfers use dense rows, expanding details only when needed. Select menus, checkboxes and switches follow the app's theme.
+Settings offer dark, light or Windows-following modes and separate palette choices: Midnight blue, Midnight with classic blue (#173E76), graphite with blue panels, and corresponding three dark red palettes for dark mode, and Sky blue, Ice blue and Azure for light mode. Choices preview immediately, persist independently and apply to menus, dialogs and native glass. The titlebar sun/moon button switches modes while keeping each palette; using it replaces the Windows-following mode with an explicit choice. Settings offer a glass toggle and a transparency slider. Compact mode uses 26 px rows for both files and Workspace; Comfortable uses 34 px. Transfers use dense rows, expanding details only when needed. Select menus, checkboxes and switches follow the app's theme.
 
 ## SSH connections and port forwarding
 
@@ -278,7 +278,7 @@ user@server:/path
 ssh://my-config-alias/path
 ```
 
-SSH locations open as SFTP in the requested pane. Both panes can reuse an open connection. Different servers or users authenticate separately. Verify the server's SHA-256 fingerprint before trusting it. Remembered passwords and key passphrases use Windows Credential Manager, not the settings file.
+Select a saved connection in the sidebar to connect immediately using its configured key, agent or saved secret. If authentication or connection fails, the prefilled form opens with the error; an unknown or changed server key still requires explicit confirmation. SSH locations open as SFTP in the requested pane. Both panes can reuse an open connection. Different servers or users authenticate separately. Verify the server's SHA-256 fingerprint before trusting it. Remembered passwords and key passphrases use Windows Credential Manager, not the settings file.
 
 The catalog resolves concrete aliases, Host patterns, first-value-wins defaults, Include files, usernames, ports and identity files. With no explicit key, authentication tries the Windows OpenSSH agent and default key files. Comments and other options are preserved. Saving creates a backup and checks for external config changes.
 
@@ -286,7 +286,7 @@ The catalog resolves concrete aliases, Host patterns, first-value-wins defaults,
 
 ### Server shells
 
-The terminal follows the active pane when opened. Local panes use PowerShell 7, falling back to Windows PowerShell. SSH panes open the server's interactive shell with a PTY through the existing authenticated SSH connection. Local and per-server shell sessions remain separate and survive Ctrl+O toggling. Closing a shell leaves SFTP connected; disconnecting SSH closes its shells and tunnels.
+The terminal follows the active pane when opened. Local panes use PowerShell 7, falling back to Windows PowerShell. SSH panes open the server's interactive shell with a PTY through the existing authenticated SSH connection. Local and per-server shell sessions remain separate and survive Ctrl+O toggling. Drag the docked terminal’s top edge or use the focused separator’s Up/Down keys to change its height; the choice is remembered. Closing a shell leaves SFTP connected; disconnecting SSH closes its shells and tunnels.
 
 A remote shell starts in the server's default home directory. Pane navigation does not inject commands into an existing shell. If a server denies a shell or PTY, the error is shown.
 
@@ -363,7 +363,7 @@ Source: [rihokirss/SuperCommander](https://github.com/rihokirss/SuperCommander).
 
 `node scripts/windows-editor-smoke.mjs [path-to-supercommander.exe]`, run with Windows Node, launches its own isolated test app and tests new files, Save As, encoding conversions, overwrite conflicts, and native window close protection. The Save & Close assertion closes only that test window. Run native test scripts sequentially; they reserve port 9224.
 
-`node scripts/windows-recovery-smoke.mjs [path-to-supercommander.exe]` owns an isolated Windows app and verifies discovery, read-only viewing, previous-version links in Transfers, file/folder restoration, complete virtualized review, empty folders, orphan copies, record cleanup and stale reviews. With the WSL SFTP fixture it also verifies remote records written through UNC, SSH-to-local recovery, cross-protocol directory aliases and replaced sessions. `windows-tooltip-smoke.mjs` checks collapsed workspace hints in WebView2, including native HTML/SVG hints appearing after hover.
+`node scripts/windows-recovery-smoke.mjs [path-to-supercommander.exe]` owns an isolated Windows app and verifies discovery, read-only viewing, previous-version links in Transfers, file/folder restoration, complete virtualized review, empty folders, orphan copies, record cleanup and stale reviews. With the WSL SFTP fixture it also verifies remote records written through UNC, SSH-to-local recovery, cross-protocol directory aliases and replaced sessions. `windows-terminal-resize-smoke.mjs` checks a real PowerShell resize, session continuity and saved height. With the WSL fixture, `windows-ssh-autoconnect-smoke.mjs` checks direct connections, failures and host-key confirmation. `windows-tooltip-smoke.mjs` checks collapsed workspace hints in WebView2, including native HTML/SVG hints appearing after hover.
 
 `node scripts/windows-rename-smoke.mjs [path-to-supercommander.exe]` owns an isolated Windows app and checks reviewed source replacement, refreshing after failure, case-only changes, cancellation before worker registration, a complete virtualized bulk review, keyboard help and compact dark/light layouts. It observes actual delayed IPC requests when checking pending-preview and pending-apply behavior. With the WSL SFTP fixture it also verifies remote renaming and rejection after reconnecting. It does not use the desktop clipboard.
 

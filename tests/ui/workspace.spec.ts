@@ -100,6 +100,62 @@ test("Ctrl+O swaps full terminal and panels while preserving the session element
   await page.keyboard.press("Control+o");
   await expect(page.locator(".terminal-fullscreen")).toBeVisible();
 });
+test("docked terminal can be resized and keeps its height", async ({
+  page,
+}) => {
+  await page.keyboard.press("Control+Backquote");
+  const terminal = page.locator(".terminal-panel");
+  const handle = page.getByRole("separator", { name: "Resize terminal" });
+  await expect(handle).toBeVisible();
+  const initial = (await terminal.boundingBox())!.height;
+  const box = (await handle.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2, box.y - 100, { steps: 8 });
+  await page.mouse.up();
+  await expect
+    .poll(async () => (await terminal.boundingBox())!.height)
+    .toBeGreaterThan(initial + 80);
+  await handle.focus();
+  const dragged = (await terminal.boundingBox())!.height;
+  await page.keyboard.press("ArrowDown");
+  await expect
+    .poll(async () => (await terminal.boundingBox())!.height)
+    .toBeLessThan(dragged);
+  const resized = (await terminal.boundingBox())!.height;
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          JSON.parse(localStorage.getItem("supercommander-preview") || "{}")
+            .terminalHeight,
+      ),
+    )
+    .toBe(resized);
+  await terminal
+    .getByRole("button", { name: "Full terminal / file panels" })
+    .click();
+  await expect(handle).toHaveCount(0);
+  await terminal.getByRole("button", { name: "Restore file panels" }).click();
+  await expect
+    .poll(async () => (await terminal.boundingBox())!.height)
+    .toBe(resized);
+  await page.reload();
+  await expect(page.locator(".file-row").first()).toBeVisible();
+  await page.keyboard.press("Control+Backquote");
+  await expect
+    .poll(async () => (await terminal.boundingBox())!.height)
+    .toBe(resized);
+  await page.setViewportSize({ width: 960, height: 600 });
+  await handle.focus();
+  for (let i = 0; i < 50; i++) await page.keyboard.press("ArrowUp");
+  expect(
+    (await page.locator(".pane-layout").boundingBox())!.height,
+  ).toBeGreaterThanOrEqual(180);
+  expect(
+    (await terminal.boundingBox())!.y + (await terminal.boundingBox())!.height,
+  ).toBeLessThanOrEqual(600);
+});
 test("F8 and Shift+F8 use the corresponding deletion confirmations", async ({
   page,
 }) => {
@@ -142,6 +198,43 @@ test("SSH paths open authentication for the requested panel", async ({
   await expect(
     page.locator('[data-pane="0"]').getByText("Aurora", { exact: true }),
   ).toBeVisible();
+});
+test("saved connection opens prefilled details when the connection fails", async ({
+  page,
+}) => {
+  await expect
+    .poll(() =>
+      page.evaluate(() => localStorage.getItem("supercommander-preview")),
+    )
+    .not.toBeNull();
+  await page.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem("supercommander-preview")!);
+    saved.profiles = [
+      {
+        id: "saved-test",
+        name: "Saved test",
+        host: "example.test",
+        port: 22,
+        username: "alice",
+        keyPath: "",
+        saveSecret: false,
+      },
+    ];
+    localStorage.setItem("supercommander-preview", JSON.stringify(saved));
+  });
+  await page.reload();
+  await page
+    .locator(".sidebar")
+    .getByRole("button", { name: "Saved test", exact: true })
+    .click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByRole("alert")).toContainText("desktop app");
+  await expect(dialog.getByLabel("Host", { exact: true })).toHaveValue(
+    "example.test",
+  );
+  await expect(dialog.getByLabel("Username", { exact: true })).toHaveValue(
+    "alice",
+  );
 });
 test("language, glass setting and command palette", async ({ page }) => {
   await page

@@ -791,5 +791,39 @@
     "remaining": [
       "Matching public release CI and release publication pending; broader original objective remains in progress."
     ]
+  },
+  "colourReview": {
+    "status": "release_requested_by_user",
+    "publication": "User requested release 0.4.0 after reviewing colours; publication depends on successful checks and Windows CI.",
+    "variants": [
+      "Midnight blue (default)",
+      "Midnight classic blue (#173E76)",
+      "Graphite backdrop / blue panels",
+      "Midnight red",
+      "Midnight classic red",
+      "Graphite backdrop / red panels"
+    ],
+    "checks": {
+      "browser": "60 passed",
+      "unit": "27 passed",
+      "native": "All 6 dark + 3 light palettes, persistence/reload, titlebar toggle, next-match search, up-navigation focus, folder/root cursor and real terminal selection passed",
+      "selection": "Native selected glyph to highlight contrast >= 4.5 in focused and inactive blue, red, and light selections",
+      "windowsBuild": "Windows x64 NSIS installer and executable built locally",
+      "frameAndLayout": "Native WebView verified darker frame-matched dialogs and terminal across blue/red palettes; browser checks covered compact workspace, multiple viewport sizes, and splitter dragging",
+      "ssh": "Loopback Windows native smoke test: saved alias auto-connect, key authentication, unknown-key confirmation, failure fallback and navigation race",
+      "terminal": "Windows native smoke test: drag, terminal row resize, shell continuity, fullscreen restoration, keyboard adjustment and persistence",
+      "core": "cargo test -p commander-core --locked passed; cargo fmt check passed"
+    },
+    "installedTrial": {
+      "version": "0.4.0",
+      "sha256": "af0e598bf4cdcfd9796cb45dbc70faf55551c050ff1324109396a723f34004e6",
+      "settingsUnchangedDuringReplacement": true,
+      "executableBackupLeft": false
+    },
+    "visualEvidence": [
+      "artifacts/redblue-comparison.png",
+      "artifacts/frame-terminal-blue.png",
+      "artifacts/frame-settings-blue.png"
+    ]
   }
 }
