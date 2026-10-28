@@ -595,7 +595,7 @@
       "artifacts/native-archive-light.png"
     ],
     "remaining": [
-      "Verify matching public Windows CI and preserve the current working profile when updating its executable. The normal profile changed pane locations during this turn and contained no owned smoke paths; its new checksum is user state and must not be reset to the previous one.",
+      "Matching public Windows CI passed and v0.3.0 is published. If replacing a currently running development executable later, preserve the latest user profile; changed pane locations are user state and must not be reset to an earlier checksum.",
       "Stored/Deflate ZIP is the implemented archive format; encrypted ZIP and 7z/RAR remain explicitly unsupported. ZIP view/copy has a 128 MiB per-entry limit; Extract streams larger entries. Archive operations cap 200,000 file/folder paths and 256 path components.",
       "Continue original-scope navigation/selection/context, network/SSH/session/tunnel/terminal lifecycle, viewer/search/editor, UI/shortcut consistency, persistence/recovery and distribution audits. No overall completion is claimed."
     ]
