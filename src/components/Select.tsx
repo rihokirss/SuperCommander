@@ -7,11 +7,13 @@ export function Select({
   value,
   options,
   onChange,
+  disabled = false,
 }: {
   label: string;
   value: string;
   options: { value: string; label: string }[];
   onChange: (value: string) => void;
+  disabled?: boolean;
 }) {
   const id = useId();
   const button = useRef<HTMLButtonElement>(null);
@@ -52,6 +54,9 @@ export function Select({
     button.current?.focus();
   }
   useEffect(() => {
+    if (disabled) setOpen(false);
+  }, [disabled]);
+  useEffect(() => {
     if (!open) return;
     const outside = (e: PointerEvent) => {
       if (
@@ -73,6 +78,7 @@ export function Select({
       <button
         ref={button}
         type="button"
+        disabled={disabled}
         className={`select-control ${open ? "open" : ""}`}
         role="combobox"
         aria-label={label}
@@ -122,7 +128,12 @@ export function Select({
                     ),
             );
           } else if (e.key === "Tab") setOpen(false);
-          else if (e.key.length === 1) {
+          else if (
+            e.key.length === 1 &&
+            !e.ctrlKey &&
+            !e.metaKey &&
+            !e.altKey
+          ) {
             const index = options.findIndex((o) =>
               o.label.toLocaleLowerCase().startsWith(e.key.toLocaleLowerCase()),
             );

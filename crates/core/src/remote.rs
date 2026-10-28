@@ -515,6 +515,17 @@ impl FileSystem for RemoteFs {
         self.runtime.block_on(self.sftp.create_dir(path))?;
         Ok(())
     }
+    fn private_mkdir(&self, path: &str) -> Result<()> {
+        self.mkdir(path)?;
+        self.runtime.block_on(self.sftp.set_metadata(
+            path,
+            russh_sftp::client::fs::Metadata {
+                permissions: Some(0o700),
+                ..Default::default()
+            },
+        ))?;
+        Ok(())
+    }
     fn private_writer(&self, path: &str) -> Result<Box<dyn Write + Send>> {
         Ok(Box::new(RemoteFile {
             file: self

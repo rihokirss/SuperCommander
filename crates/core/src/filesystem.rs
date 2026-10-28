@@ -65,6 +65,9 @@ pub trait FileSystem: Send + Sync {
         self.writer(path)
     }
     fn mkdir(&self, path: &str) -> Result<()>;
+    fn private_mkdir(&self, path: &str) -> Result<()> {
+        self.mkdir(path)
+    }
     fn rename(&self, from: &str, to: &str) -> Result<()>;
     /// Move an entry into a new name without replacing an existing entry.
     fn rename_new(&self, _from: &str, _to: &str) -> Result<()> {
@@ -278,6 +281,18 @@ impl FileSystem for LocalFs {
     }
     fn mkdir(&self, path: &str) -> Result<()> {
         fs::create_dir(path)?;
+        Ok(())
+    }
+    fn private_mkdir(&self, path: &str) -> Result<()> {
+        let builder = fs::DirBuilder::new();
+        #[cfg(unix)]
+        let builder = {
+            use std::os::unix::fs::DirBuilderExt;
+            let mut builder = builder;
+            builder.mode(0o700);
+            builder
+        };
+        builder.create(path)?;
         Ok(())
     }
     fn private_writer(&self, path: &str) -> Result<Box<dyn Write + Send>> {

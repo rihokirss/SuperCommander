@@ -54,6 +54,7 @@ pub enum Operation {
     Trash,
     Zip,
     Extract,
+    Synchronize,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -91,6 +92,15 @@ pub struct JobEvent {
     pub completed: u64,
     pub errors: Vec<String>,
     pub conflict_path: Option<String>,
+    pub preserved_count: u64,
+    pub preserved: Vec<PreservedFile>,
+}
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PreservedFile {
+    pub original: String,
+    pub path: String,
+    pub record: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

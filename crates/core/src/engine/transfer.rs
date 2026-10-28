@@ -160,7 +160,7 @@ fn transfer_tree(
     };
     let created = !dst.exists(&target)?;
     if created {
-        dst.mkdir(&target)?;
+        dst.private_mkdir(&target)?;
     }
     let destination = dst.stat(&target)?;
     if !destination.is_dir || destination.is_symlink {
@@ -308,6 +308,11 @@ fn transfer_file(
         return Ok(false);
     };
     let expected = target_stamp(dst, &target, ctx)?;
+    if let Some(reviewed) = &ctx.expected_copy {
+        if expected.as_ref().map(|value| value.content.as_str()) != reviewed.target.as_deref() {
+            bail!("Destination contents changed since comparison: {target}");
+        }
+    }
     let metadata = src.properties(&entry.path)?;
     if moving && cfg!(windows) && metadata.readonly == Some(true) {
         bail!(
@@ -350,15 +355,26 @@ fn transfer_file(
         writer.flush()?;
         drop(writer);
         drop(reader);
-        dst.transfer_metadata(&temp, &metadata)?;
+        let copied_digest = hex(&hash.finalize());
+        if ctx
+            .expected_copy
+            .as_ref()
+            .is_some_and(|expected| expected.source != copied_digest)
+        {
+            bail!(
+                "Source contents changed since comparison; compare again: {}",
+                entry.path
+            );
+        }
         if written != entry.size || stamp(src, &entry.path)? != original {
             bail!("Source changed during copy; source preserved");
         }
         ctx.check()?;
         if !moving {
-            if digest(src, &entry.path, ctx)? != hex(&hash.finalize()) {
+            if digest(src, &entry.path, ctx)? != copied_digest {
                 bail!("Source changed during copy; source preserved");
             }
+            dst.transfer_metadata(&temp, &metadata)?;
             return commit(dst, &temp, &target, expected.as_ref(), ctx, || {
                 ctx.check()?;
                 if stamp(src, &entry.path)? != original {
@@ -370,11 +386,10 @@ fn transfer_file(
         let claim = Claim::start(src, &entry.path, "move-source")?;
         let claimed = &claim.preserved;
         let publish = (|| -> Result<()> {
-            if stamp(src, claimed)? != original
-                || digest(src, claimed, ctx)? != hex(&hash.finalize())
-            {
+            if stamp(src, claimed)? != original || digest(src, claimed, ctx)? != copied_digest {
                 bail!("Source changed during move; source preserved");
             }
+            dst.transfer_metadata(&temp, &metadata)?;
             commit(dst, &temp, &target, expected.as_ref(), ctx, || {
                 ctx.check()?;
                 if stamp(src, claimed)? != original {
@@ -580,6 +595,14 @@ pub(super) fn commit(
     })();
     if let Err(error) = result {
         return Err(claim.restore(error));
+    }
+    if ctx.keep_backups {
+        ctx.preserve(crate::PreservedFile {
+            original: target.into(),
+            path: backup.clone(),
+            record: claim.journal.clone(),
+        });
+        return Ok(());
     }
     fs.remove_file(backup).with_context(|| {
         format!(

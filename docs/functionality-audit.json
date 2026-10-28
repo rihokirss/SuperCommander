@@ -2,6 +2,7 @@
   "objectiveOriginal": "jätka niikaua kuni kõik mõistlik funktsionaalsus olemas, UI ühetaolisus ja sobivus kontrollitud, kõik mõistlikud shortcut keyd olemas",
   "status": "in_progress",
   "baselineRelease": "v0.2.0",
+  "lastVerifiedBatchId": "directoryComparisonBatch",
   "lastVerifiedBatch": {
     "features": [
       "Keyboard-accessible command and context menus",
@@ -22,7 +23,7 @@
       "artifacts/shortcuts-light.png"
     ]
   },
-  "currentBatch": {
+  "clipboardBatch": {
     "features": [
       "Windows file clipboard copy/cut/paste and full paths",
       "Same-folder file/tree duplication",
@@ -110,7 +111,13 @@
       "id": "transfer-safety",
       "status": "in_progress",
       "scope": "Copy/move/delete/rename, conflicts, cancellation, partial failures, metadata handling and source/destination preservation",
-      "evidence": ["crates/core/tests/files.rs", "crates/core/tests/transfers.rs", "crates/core/tests/sftp.rs", "scripts/windows-transfer-smoke.mjs", "scripts/windows-smoke.mjs"]
+      "evidence": [
+        "crates/core/tests/files.rs",
+        "crates/core/tests/transfers.rs",
+        "crates/core/tests/sftp.rs",
+        "scripts/windows-transfer-smoke.mjs",
+        "scripts/windows-smoke.mjs"
+      ]
     },
     {
       "id": "bookmarks-and-places",
@@ -202,8 +209,14 @@
     },
     {
       "id": "directory-comparison",
-      "status": "pending",
-      "scope": "Preview and act on useful differences between the two panes, with review before synchronization or replacement"
+      "status": "verified",
+      "scope": "Preview and act on useful differences between the two panes, with review before synchronization or replacement",
+      "evidence": [
+        "crates/core/tests/comparison.rs",
+        "crates/core/tests/sftp.rs",
+        "tests/ui/comparison.spec.ts",
+        "scripts/windows-comparison-smoke.mjs"
+      ]
     },
     {
       "id": "ui-consistency",
@@ -329,10 +342,43 @@
       "windowsCompilation": "Workspace and all test targets checked; executable and NSIS installer built; fmt/clippy passed. Final executable SHA256 61a867170977fb4d6331897688444090a8e8f0c274e626da995b2fc537f6570d. Previous viewer runs 40606685622 and 40606951984 both passed."
     },
     "remaining": [
-      "Verify the matching public CI run for this source commit.",
       "Continue queued file replacement/clipboard identity and interrupted-operation discovery/recovery UI audits; recovery records currently support manual restoration.",
       "Continue delete/rename, archive edge cases and metadata policy audit. Ownership, ACLs and alternate data streams are explicitly not cloned.",
       "Directory comparison, synchronization and all other outstanding requirements retain their original scope."
+    ],
+    "ci": "Windows CI run 40609749502 completed successfully on f27e914b34bb48d6fd623d20aad2b859347e459b; confirmed before the comparison batch."
+  },
+  "directoryComparisonBatch": {
+    "features": [
+      "Shift+F2 compares local/UNC, SSH and read-only ZIP folders, with SHA-256 content or quick metadata matching",
+      "Recursive, hidden, case, exclusion, timestamp-tolerance and entry-limit controls with cancellable progress",
+      "Virtualized results, path filtering, newer/one-way/manual policies, folder choices and per-file directions",
+      "Retained F3/F4 viewing/editing and invalidation after an editor save",
+      "Complete virtualized review with root context, create/replace counts and Ctrl+Enter confirmation",
+      "Queued bidirectional copies, snapshot and connection checks, private directory creation and retained previous versions/recovery records",
+      "Insert advances; Home/End/Page Up/Down, Ctrl+F, Ctrl+A/Shift+A and contextual F1 help",
+      "Preventing F3's opening key from closing the newly opened viewer, and positioning loaded text before accepting input"
+    ],
+    "checks": {
+      "javascriptUnitTests": "26 passed",
+      "browserTests": "43 passed in the full regression, including dark/light 960x640 comparison/review, complete review navigation and the reproduced F3 opening-key regression. The four comparison tests passed again after guarding the browser demo's Ctrl+Enter confirmation.",
+      "coreTests": "81 passed on Linux; 11 comparison tests include equal-size/equal-time changes, stale/queued snapshots, overlapping namespaces with retained originals, ZIP read-only directions, parent casing, selection order and private directory modes",
+      "realOpenSshIntegration": "5 passed, including real local/SSH comparison, bidirectional synchronization, preserved originals and rejecting a replacement session",
+      "nativeWindows": "windows-comparison-smoke.mjs passed on final 2a325843 with a 129-action review reaching its final row, F3/F4/save invalidation, keyboard directions, bidirectional copies, previous versions, stale-data rejection, entry limits, early cancellation and real SSH comparison/reconnect checks. Full windows-smoke.mjs, windows-search-smoke.mjs, windows-editor-smoke.mjs and windows-transfer-smoke.mjs passed on f2116846, before the final browser-demo-only confirmation guard; those cover real SSH/tunnels, ConPTY, ZIP, images/PDF, editor save/close, whole-file Find and UNC/SFTP transfer aliases. The user's settings checksum remained unchanged.",
+      "windowsCompilation": "All workspace and test targets checked; executable and NSIS installer built; fmt/clippy passed. Final executable SHA256 2a325843d36817173317907b46d998eb0cf426c2d304ee0315b9a0262723d7ba. Regression executable SHA256 f21168468f80be44bd3452569c33e48de852d44d090cc97153a3baecc431749b."
+    },
+    "visualEvidence": [
+      "docs/screenshots/comparison.png",
+      "artifacts/comparison-dark.png",
+      "artifacts/comparison-light.png",
+      "artifacts/native-comparison.png",
+      "artifacts/native-comparison-review.png"
+    ],
+    "behavior": "Synchronization copies explicitly reviewed differences without automatic deletion. Replaced versions remain on disk until removed by the user. Known overlapping roots are rejected; unresolved cross-namespace overlap can fail after completed copies, with overwritten originals retained and reported.",
+    "remaining": [
+      "Verify the matching public Windows CI run after pushing this batch; it includes native clipboard tests that are intentionally not run against the user's desktop clipboard.",
+      "The broader navigation, clipboard, transfer, recovery, archive, viewer, lifecycle, UI and distribution audits retain their original scope; overall completion is unproven.",
+      "ZIP view currently reports zero modified times; verify and improve archive timestamp handling during the archive audit."
     ]
   }
 }

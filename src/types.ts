@@ -113,7 +113,58 @@ export type Operation =
   | "delete"
   | "trash"
   | "zip"
-  | "extract";
+  | "extract"
+  | "synchronize";
+export type ComparisonOptions = {
+  content: boolean;
+  recursive: boolean;
+  showHidden: boolean;
+  caseSensitive: boolean;
+  exclude: string;
+  maxEntries: number;
+  timeTolerance: number;
+};
+export type ComparisonDirection = "left_to_right" | "right_to_left";
+export type ComparisonNode = {
+  entry: Entry;
+  relative: string;
+  error: string | null;
+  empty: boolean;
+};
+export type ComparisonRow = {
+  id: number;
+  path: string;
+  status: string;
+  left: ComparisonNode | null;
+  right: ComparisonNode | null;
+  blocked: string | null;
+  toLeft: boolean;
+  toRight: boolean;
+};
+export type ComparisonProgress = {
+  scanned: number;
+  bytes: number;
+  side: number;
+  current: string;
+  done: boolean;
+  cancelled: boolean;
+  limited: boolean;
+  errors: string[];
+};
+export type ComparisonRoot = {
+  location: Location;
+  connection: string | null;
+  writable: boolean;
+};
+export type ComparisonPlan = {
+  left: ComparisonRoot;
+  right: ComparisonRoot;
+  options: ComparisonOptions;
+  rows: ComparisonRow[];
+  progress: ComparisonProgress;
+};
+export type ComparisonResult = { id: string; plan: ComparisonPlan };
+export type ComparisonChoice = { id: number; direction: ComparisonDirection };
 export type JobRequest = {
   id: string;
   operation: Operation;
@@ -147,6 +198,8 @@ export type JobEvent = {
   completed: number;
   errors: string[];
   conflictPath?: string;
+  preservedCount?: number;
+  preserved?: { original: string; path: string; record: string }[];
 };
 export type Job = JobEvent & { operation: Operation; count: number };
 export type RenameRules = {

@@ -70,6 +70,128 @@ fn start() -> Server {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[ignore = "Requires local OpenSSH server and ssh-keygen"]
+async fn directory_comparison_synchronizes_reviewed_local_and_ssh_snapshots() {
+    use commander_core::{
+        comparison::{self, Choice, Direction, Options},
+        engine::Engine,
+        filesystem::{LocalFs, Sources},
+        Location,
+    };
+    use std::sync::{atomic::AtomicBool, mpsc, Arc};
+    let server = start();
+    let (probe, _) = remote::connect(&server.profile, "", None).await.unwrap();
+    let (_, first) = remote::connect(&server.profile, "", Some(probe.fingerprint.clone()))
+        .await
+        .unwrap();
+    let (_, second) = remote::connect(&server.profile, "", Some(probe.fingerprint))
+        .await
+        .unwrap();
+    let (first, second) = (first.unwrap(), second.unwrap());
+    let left = server._directory.path().join("local");
+    let right = server._directory.path().join("remote");
+    fs::create_dir(&left).unwrap();
+    fs::create_dir(&right).unwrap();
+    fs::create_dir_all(left.join("new/empty")).unwrap();
+    fs::write(left.join("new/file.txt"), "new contents").unwrap();
+    fs::write(left.join("replace.bin"), b"\0before\xff").unwrap();
+    fs::write(right.join("replace.bin"), b"\0edited\xff").unwrap();
+    fs::write(right.join("remote.txt"), "remote payload").unwrap();
+    let time = std::time::UNIX_EPOCH + Duration::from_secs(1_700_000_000);
+    for root in [&left, &right] {
+        fs::OpenOptions::new()
+            .write(true)
+            .open(root.join("replace.bin"))
+            .unwrap()
+            .set_modified(time)
+            .unwrap();
+    }
+    tokio::task::spawn_blocking(move || {
+        let cancel = AtomicBool::new(false);
+        let plan = Arc::new(
+            comparison::scan(
+                &LocalFs,
+                first.as_ref(),
+                Location {
+                    source: "local".into(),
+                    path: left.to_string_lossy().into(),
+                },
+                Location {
+                    source: "sftp:reviewed".into(),
+                    path: right.to_string_lossy().into(),
+                },
+                Options::default(),
+                &cancel,
+                &|_| {},
+            )
+            .unwrap(),
+        );
+        assert_eq!(
+            plan.rows
+                .iter()
+                .find(|r| r.path == "replace.bin")
+                .unwrap()
+                .status,
+            "different"
+        );
+        let choices: Vec<_> = [
+            ("new", Direction::LeftToRight),
+            ("new/empty", Direction::LeftToRight),
+            ("new/file.txt", Direction::LeftToRight),
+            ("replace.bin", Direction::LeftToRight),
+            ("remote.txt", Direction::RightToLeft),
+        ]
+        .into_iter()
+        .map(|(name, direction)| Choice {
+            id: plan.rows.iter().find(|r| r.path == name).unwrap().id,
+            direction,
+        })
+        .collect();
+        assert!(
+            comparison::prepare(plan.clone(), &choices, &LocalFs, second.as_ref(), &cancel)
+                .is_err()
+        );
+        let prepared =
+            comparison::prepare(plan, &choices, &LocalFs, first.as_ref(), &cancel).unwrap();
+        let sources = Arc::new(Sources::default());
+        sources.insert("sftp:reviewed".into(), first);
+        let (tx, rx) = mpsc::channel();
+        let engine = Engine::new(
+            sources,
+            Arc::new(move |event| {
+                let _ = tx.send(event);
+            }),
+        );
+        engine
+            .enqueue_synchronization(uuid::Uuid::new_v4().to_string(), prepared)
+            .unwrap();
+        let event = loop {
+            let event = rx.recv_timeout(Duration::from_secs(30)).unwrap();
+            if ["completed", "failed", "cancelled"].contains(&event.state.as_str()) {
+                break event;
+            }
+        };
+        assert_eq!(event.state, "completed", "{:?}", event.errors);
+        assert_eq!(
+            fs::read(right.join("replace.bin")).unwrap(),
+            b"\0before\xff"
+        );
+        assert_eq!(fs::read(&event.preserved[0].path).unwrap(), b"\0edited\xff");
+        assert!(right.join("new/empty").is_dir());
+        assert_eq!(
+            fs::read_to_string(right.join("new/file.txt")).unwrap(),
+            "new contents"
+        );
+        assert_eq!(
+            fs::read_to_string(left.join("remote.txt")).unwrap(),
+            "remote payload"
+        );
+    })
+    .await
+    .unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "Requires local OpenSSH server and ssh-keygen"]
 async fn cross_protocol_moves_and_copies_preserve_aliases_and_transfer_metadata() {
     use commander_core::{
         engine::Engine, filesystem::Sources, Conflict, JobRequest, Location, Operation,

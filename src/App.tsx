@@ -69,6 +69,7 @@ import {
   type PaletteAction,
 } from "./components/Dialogs";
 import { PreviewDialog } from "./components/PreviewDialog";
+import { ComparisonDialog } from "./components/ComparisonDialog";
 import { SearchDialog } from "./components/SearchDialog";
 import { TextWorkbench } from "./components/TextWorkbench";
 import { QueuePanel } from "./components/QueuePanel";
@@ -127,6 +128,7 @@ type Dialog =
   | { kind: "forward"; source: string; title: string }
   | { kind: "bookmarks"; seed?: Bookmark | null }
   | { kind: "properties"; location: Location; entries: Entry[] }
+  | { kind: "comparison"; left: Location; right: Location }
   | { kind: "settings" | "search" | "palette" | "network" | "shortcuts" };
 const emptySnapshot: PaneSnapshot = { entries: [], selected: [] };
 export function App() {
@@ -605,6 +607,23 @@ export function App() {
   function locationAt(index: number) {
     const pane = settings?.panes[index];
     return pane?.tabs.find((t) => t.id === pane.activeTab)?.location;
+  }
+  function compareDirectories() {
+    const left = locationAt(0),
+      right = locationAt(1);
+    if (left && right)
+      setDialog({ kind: "comparison", left: { ...left }, right: { ...right } });
+  }
+  function comparisonLabel(location: Location) {
+    if (location.source === "local") return t.local;
+    if (location.source.startsWith("zip:"))
+      return basename(location.source.slice(4));
+    const profile = sessions.find(
+      (profile) => `sftp:${profile.id}` === location.source,
+    );
+    return profile
+      ? `${profile.name} · ${profile.username}@${profile.host}:${profile.port}`
+      : t.remoteFiles;
   }
   async function enqueue(request: JobRequest) {
     const job: Job = {
@@ -1240,6 +1259,13 @@ export function App() {
   }
   const actions: PaletteAction[] = [
     {
+      id: "compare",
+      label: t.compareDirectories,
+      icon: <ArrowDownUp size={16} />,
+      key: "Shift+F2",
+      run: compareDirectories,
+    },
+    {
       id: "properties",
       label: t.properties,
       icon: <Info size={16} />,
@@ -1530,6 +1556,11 @@ export function App() {
       if (ctrl && name === "f") {
         e.preventDefault();
         setDialog({ kind: "search" });
+        return;
+      }
+      if (e.key === "F2" && e.shiftKey && !ctrl && !e.altKey) {
+        e.preventDefault();
+        compareDirectories();
         return;
       }
       if (ctrl && e.key === ",") {
@@ -2480,6 +2511,81 @@ export function App() {
           update={update}
           onClose={closeDialog}
           onShortcuts={() => setDialog({ kind: "shortcuts" })}
+        />
+      )}
+      {dialog?.kind === "comparison" && (
+        <ComparisonDialog
+          left={dialog.left}
+          right={dialog.right}
+          showHidden={settings.showHidden}
+          density={settings.density}
+          initialSide={active}
+          labels={[comparisonLabel(dialog.left), comparisonLabel(dialog.right)]}
+          t={t}
+          onClose={closeDialog}
+          onSaved={() => setRefresh((value) => value + 1)}
+          destinations={[
+            {
+              source: dialog.left.source,
+              folder: dialog.left.path,
+              label: t.leftSide,
+            },
+            {
+              source: dialog.right.source,
+              folder: dialog.right.path,
+              label: t.rightSide,
+            },
+          ].filter(
+            (destination, index, all) =>
+              all.findIndex((other) => other.source === destination.source) ===
+              index,
+          )}
+          onReveal={(side, location) => {
+            closeDialog();
+            setActive(side);
+            navigate(location, side);
+          }}
+          onQueue={async (id, comparison, choices) => {
+            setJobs((old) => [
+              ...old,
+              {
+                id,
+                operation: "synchronize",
+                count: choices.length,
+                state: "queued",
+                current: dialog.left.path,
+                bytes: 0,
+                total: 0,
+                completed: 0,
+                errors: [],
+              },
+            ]);
+            setQueueOpen(true);
+            try {
+              await api.command("enqueue_comparison", {
+                id,
+                comparison,
+                choices,
+              });
+            } catch (error) {
+              setJobs((old) =>
+                old.map((job) =>
+                  job.id === id
+                    ? {
+                        ...job,
+                        state: String(error).includes("Cancelled")
+                          ? "cancelled"
+                          : "failed",
+                        errors: String(error).includes("Cancelled")
+                          ? []
+                          : [String(error)],
+                      }
+                    : job,
+                ),
+              );
+              throw error;
+            }
+          }}
         />
       )}
       {dialog?.kind === "shortcuts" && (

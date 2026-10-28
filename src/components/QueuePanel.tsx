@@ -143,6 +143,27 @@ function JobRow({
             <pre>{job.errors.join("\n")}</pre>
           </details>
         )}
+        {!!job.preservedCount && (
+          <details>
+            <summary>
+              {t.previousVersions} ({job.preservedCount})
+            </summary>
+            <p>{t.previousVersionsHint}</p>
+            <pre>
+              {job.preserved
+                ?.map(
+                  (entry) =>
+                    `${entry.original}\n→ ${entry.path}\n${entry.record}`,
+                )
+                .join("\n\n")}
+            </pre>
+            {job.preservedCount > (job.preserved?.length || 0) && (
+              <small>
+                +{job.preservedCount - (job.preserved?.length || 0)} {t.items}
+              </small>
+            )}
+          </details>
+        )}
       </div>
       {pending && (
         <IconButton

@@ -8,7 +8,7 @@ Browse local drives, UNC paths, ZIP archives and SSH/SFTP servers. Work with fam
 
 The first public release is **[SuperCommander 0.2.0](https://github.com/rihokirss/SuperCommander/releases/tag/v0.2.0)**.
 
-The `main` branch contains ongoing improvements beyond that release, including keyboard-accessible menus, bookmark management, file properties, native file clipboard support and quick editing. The shortcuts below describe the current source.
+The `main` branch contains ongoing improvements beyond that release, including keyboard-accessible menus, bookmark management, file properties, native file clipboard support, quick editing, content search and reviewed folder synchronization. The shortcuts below describe the current source.
 
 - [Windows x64 installer](https://github.com/rihokirss/SuperCommander/releases/download/v0.2.0/SuperCommander_0.2.0_x64-setup.exe) — recommended.
 - [Standalone Windows x64 executable](https://github.com/rihokirss/SuperCommander/releases/download/v0.2.0/SuperCommander_0.2.0_x64.exe) — requires WebView2.
@@ -114,6 +114,7 @@ Each pane has independent tabs, history, sorting and filtering. Click its locati
 | Ctrl+U | Swap panes |
 | Ctrl+H | Toggle hidden files |
 | Ctrl+F | Search filenames and text contents |
+| Shift+F2 | Compare the folders open in the two panes |
 | Ctrl+K / Ctrl+P | Command palette |
 | Ctrl+B | Collapse / expand Workspace |
 | Ctrl+O | Full terminal / file panes, preserving the shell session |
@@ -142,6 +143,16 @@ Details include excluded names/relative paths, recursion, hidden items, file/fol
 Navigate results with arrows, Home/End or Page Up/Down. **Enter** opens the containing folder and marks the file; **Ctrl+Enter** uses the other pane. **F3/F4** open the viewer/editor at the matching position and return to the retained results when closed. **F1** opens the shortcut reference. Results from a replaced SSH connection require a new search before opening.
 
 ![Text search with matching lines and excerpts](docs/screenshots/search.png)
+
+### Folder comparison and synchronization
+
+**Shift+F2** compares the folders open in the two panes, including local, UNC, SSH and read-only ZIP locations. The default content comparison uses SHA-256 for binary as well as text files; quick comparison uses size and modified time. Choose recursion, hidden files, case matching, semicolon-separated exclusions, timestamp tolerance and an entry limit. Pane filename filters do not narrow the comparison.
+
+Review differences, filter their relative paths with **Ctrl+F**, and choose each copy direction with **Alt+Left / Alt+Right**. Folder selections include their compared descendants. The default policy copies missing and newer files both ways; differences with equal timestamps require an explicit choice. **Insert** toggles a choice and advances, **Space** toggles without advancing, and **Ctrl+A / Ctrl+Shift+A** select or clear the visible differences. **F3/F4** view or edit a file on the side chosen with Left/Right; closing returns to the comparison. Saving invalidates the comparison.
+
+**Ctrl+Enter** opens a review of every selected path, its direction and the create/replace counts; press it again to queue those copies. Synchronization does not delete files. Replacements keep their previous versions beside the destination, with recovery records listing the original paths; expand **Previous versions** in Transfers for their locations. These copies are retained until you remove them yourself. Source contents, destinations and SSH sessions are checked again before copying, including after a wait in the queue. Changed files, new conflicting destinations, replaced connections, incomplete scans and entry-limited results require a new comparison. Symlinks, junctions, ambiguous case matches and file/folder conflicts remain blocked for review.
+
+![Folder comparison with per-file copy directions](docs/screenshots/comparison.png)
 
 ### Viewer and quick editor
 

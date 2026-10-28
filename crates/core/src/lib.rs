@@ -1,5 +1,6 @@
 pub mod archive;
 pub mod clipboard;
+pub mod comparison;
 pub mod editor;
 pub mod engine;
 pub mod filesystem;

@@ -3,6 +3,7 @@
 @import url("./controls.css");
 @import url("./workbench.css");
 @import url("./menu.css");
+@import url("./comparison.css");
 * {
   box-sizing: border-box;
 }

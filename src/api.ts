@@ -1,6 +1,13 @@
 import { Channel, invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type {
+  ComparisonOptions,
+  ComparisonResult,
+  ComparisonProgress,
+  ComparisonNode,
+  ComparisonRow,
+} from "./types";
+import type {
   Bootstrap,
   Entry,
   JobEvent,
@@ -14,6 +21,117 @@ import type {
   SizeSummary,
 } from "./types";
 export const desktop = isTauri();
+export async function compareFolders(
+  id: string,
+  left: Location,
+  right: Location,
+  options: ComparisonOptions,
+  receive: (progress: ComparisonProgress) => void,
+): Promise<ComparisonResult> {
+  if (desktop) {
+    const channel = new Channel<ComparisonProgress>();
+    channel.onmessage = receive;
+    return invoke("compare_directories", { id, left, right, options, channel });
+  }
+  if (options.content)
+    throw new Error("Content comparison is available in the desktop app.");
+  const progress: ComparisonProgress = {
+    scanned: 0,
+    bytes: 0,
+    side: 0,
+    current: "",
+    done: true,
+    cancelled: false,
+    limited: false,
+    errors: [],
+  };
+  const trees = [
+    new Map<string, ComparisonNode>(),
+    new Map<string, ComparisonNode>(),
+  ];
+  async function scan(
+    side: number,
+    location: Location,
+    prefix = "",
+    depth = 0,
+  ) {
+    if (depth > 16) return;
+    const entries: Entry[] = [];
+    await list(location, (batch) => entries.push(...batch.entries));
+    for (const entry of entries) {
+      if (!options.showHidden && entry.hidden) continue;
+      const relative = prefix ? prefix + "/" + entry.name : entry.name;
+      if (trees[side].size >= options.maxEntries) {
+        progress.limited = true;
+        break;
+      }
+      const node = { entry, relative, error: null, empty: false };
+      trees[side].set(relative, node);
+      progress.scanned++;
+      if (entry.isDir) {
+        const children: Entry[] = [];
+        await list({ ...location, path: entry.path }, (batch) =>
+          children.push(...batch.entries),
+        );
+        node.empty = children.length === 0;
+        if (options.recursive)
+          await scan(
+            side,
+            { ...location, path: entry.path },
+            relative,
+            depth + 1,
+          );
+      }
+    }
+  }
+  await scan(0, left);
+  await scan(1, right);
+  const paths = [...new Set([...trees[0].keys(), ...trees[1].keys()])].sort();
+  const rows: ComparisonRow[] = paths.map((path, id) => {
+    const left = trees[0].get(path) || null,
+      right = trees[1].get(path) || null;
+    const conflict =
+      !!left && !!right && left.entry.isDir !== right.entry.isDir;
+    const status = conflict
+      ? "conflict"
+      : !left
+        ? "right_only"
+        : !right
+          ? "left_only"
+          : left.entry.isDir ||
+              (left.entry.size === right.entry.size &&
+                Math.abs(left.entry.modified - right.entry.modified) <=
+                  options.timeTolerance)
+            ? "same_metadata"
+            : left.entry.modified > right.entry.modified + options.timeTolerance
+              ? "left_newer"
+              : right.entry.modified >
+                  left.entry.modified + options.timeTolerance
+                ? "right_newer"
+                : "different";
+    return {
+      id,
+      path,
+      left,
+      right,
+      status,
+      blocked: conflict ? "File/folder type conflict" : null,
+      toLeft: !conflict && status !== "same_metadata" && !!right,
+      toRight: !conflict && status !== "same_metadata" && !!left,
+    };
+  });
+  receive(progress);
+  return {
+    id,
+    plan: {
+      left: { location: left, connection: null, writable: true },
+      right: { location: right, connection: null, writable: true },
+      rows,
+      options,
+      progress,
+    },
+  };
+}
 export async function command<T>(
   name: string,
   args?: Record<string, unknown>,

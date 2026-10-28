@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronUp, LoaderCircle, Search, X } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { command, desktop } from "../api";
@@ -85,6 +85,7 @@ export function TextWorkbench({
   const [text, setText] = useState(initial || "");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(true);
+  const [loaded, setLoaded] = useState(0);
   const [wrap, setWrap] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -167,33 +168,34 @@ export function TextWorkbench({
       .finally(() => {
         if (alive) {
           setBusy(false);
-          requestAnimationFrame(() => {
-            if (!alive) return;
-            const element = area.current;
-            if (!element) return;
-            element.focus();
-            const rows = element.value.split("\n");
-            const row = Math.max(
-              0,
-              Math.min(rows.length - 1, initialLine - lineOffset - 1),
-            );
-            const index =
-              rows
-                .slice(0, row)
-                .reduce((sum, text) => sum + text.length + 1, 0) +
-              Array.from(rows[row])
-                .slice(0, Math.max(0, initialColumn - 1))
-                .join("").length;
-            element.setSelectionRange(index, index + initialSelectionLength);
-            element.scrollTop = Math.max(0, (row - 4) * 20);
-            setPosition({ line: row + lineOffset + 1, col: initialColumn });
-          });
+          setLoaded((value) => value + 1);
         }
       });
     return () => {
       alive = false;
     };
   }, [location.source, location.path, newFile, initial, initialVersion]);
+  // Position the loaded document before it can receive input. A deferred frame
+  // can otherwise erase a selection made immediately after loading.
+  useLayoutEffect(() => {
+    if (!loaded) return;
+    const element = area.current;
+    if (!element) return;
+    element.focus();
+    const rows = element.value.split("\n");
+    const row = Math.max(
+      0,
+      Math.min(rows.length - 1, initialLine - lineOffset - 1),
+    );
+    const index =
+      rows.slice(0, row).reduce((sum, text) => sum + text.length + 1, 0) +
+      Array.from(rows[row])
+        .slice(0, Math.max(0, initialColumn - 1))
+        .join("").length;
+    element.setSelectionRange(index, index + initialSelectionLength);
+    element.scrollTop = Math.max(0, (row - 4) * 20);
+    setPosition({ line: row + lineOffset + 1, col: initialColumn });
+  }, [loaded]);
   useEffect(() => {
     const unload = (event: BeforeUnloadEvent) => {
       if (lifecycle.current.dirty && !closing.current) {
@@ -395,6 +397,7 @@ export function TextWorkbench({
   }
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
+      if (e.defaultPrevented) return;
       const ctrl = e.ctrlKey || e.metaKey;
       const name = e.key.toLowerCase();
       const dialogs = document.querySelectorAll(

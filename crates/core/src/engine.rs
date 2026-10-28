@@ -1,3 +1,4 @@
+mod synchronize;
 mod transfer;
 
 use crate::{
@@ -43,6 +44,7 @@ struct QueuedJob {
     request: JobRequest,
     control: Arc<Control>,
     sources: Sources,
+    synchronization: Option<crate::comparison::Prepared>,
 }
 
 impl Engine {
@@ -55,6 +57,7 @@ impl Engine {
                 request: req,
                 control,
                 sources,
+                synchronization,
             } in rx
             {
                 let mut context = ContextJob {
@@ -67,13 +70,22 @@ impl Engine {
                         completed: 0,
                         errors: vec![],
                         conflict_path: None,
+                        preserved_count: 0,
+                        preserved: vec![],
                     },
                     control,
                     sink: sink.clone(),
                     policy: req.conflict.clone(),
+                    keep_backups: synchronization.is_some(),
+                    preserved: std::cell::RefCell::new(Vec::new()),
+                    preserved_count: std::cell::Cell::new(0),
+                    expected_copy: None,
                 };
                 context.emit();
-                let result = run(&sources, &req, &mut context);
+                let result = match synchronization {
+                    Some(plan) => synchronize::run(&sources, plan, &mut context),
+                    None => run(&sources, &req, &mut context),
+                };
                 context.event.conflict_path = None;
                 if let Err(error) = &result {
                     if error.to_string() != "Cancelled" {
@@ -99,6 +111,38 @@ impl Engine {
         }
     }
     pub fn enqueue(&self, request: JobRequest) -> Result<()> {
+        if request.operation == Operation::Synchronize {
+            bail!("Use a reviewed comparison to synchronize");
+        }
+        self.enqueue_inner(request, None)
+    }
+    pub fn enqueue_synchronization(
+        &self,
+        id: String,
+        prepared: crate::comparison::Prepared,
+    ) -> Result<()> {
+        let plan = &prepared.plan;
+        let request = JobRequest {
+            id,
+            operation: Operation::Synchronize,
+            source: plan.left.location.source.clone(),
+            paths: prepared
+                .actions
+                .iter()
+                .map(|a| a.source.entry.path.clone())
+                .collect(),
+            destination: plan.right.location.clone(),
+            conflict: Conflict::Replace,
+            source_connection: plan.left.connection.clone(),
+            destination_connection: plan.right.connection.clone(),
+        };
+        self.enqueue_inner(request, Some(prepared))
+    }
+    fn enqueue_inner(
+        &self,
+        request: JobRequest,
+        synchronization: Option<crate::comparison::Prepared>,
+    ) -> Result<()> {
         if request.paths.is_empty() {
             bail!("Select at least one file");
         }
@@ -142,6 +186,7 @@ impl Engine {
                 request,
                 control,
                 sources,
+                synchronization,
             })
             .is_err()
         {
@@ -173,10 +218,27 @@ struct ContextJob {
     control: Arc<Control>,
     sink: Sink,
     policy: Conflict,
+    keep_backups: bool,
+    preserved: std::cell::RefCell<Vec<crate::PreservedFile>>,
+    preserved_count: std::cell::Cell<u64>,
+    expected_copy: Option<CopyExpectation>,
+}
+struct CopyExpectation {
+    source: String,
+    target: Option<String>,
 }
 impl ContextJob {
     fn emit(&self) {
-        (self.sink)(self.event.clone());
+        let mut event = self.event.clone();
+        event.preserved_count = self.preserved_count.get();
+        event.preserved = self.preserved.borrow().clone();
+        (self.sink)(event);
+    }
+    fn preserve(&self, entry: crate::PreservedFile) {
+        self.preserved_count.set(self.preserved_count.get() + 1);
+        if self.preserved.borrow().len() < 20 {
+            self.preserved.borrow_mut().push(entry);
+        }
     }
     fn check(&self) -> Result<()> {
         if self.control.cancel.load(Ordering::Relaxed) {

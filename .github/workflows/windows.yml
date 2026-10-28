@@ -35,6 +35,7 @@ jobs:
       - run: node scripts/windows-properties-smoke.mjs
       - run: node scripts/windows-search-smoke.mjs
       - run: node scripts/windows-transfer-smoke.mjs
+      - run: node scripts/windows-comparison-smoke.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -46,6 +47,7 @@ jobs:
             artifacts/native-search*.png
             artifacts/native-viewer-find*.png
             artifacts/native-transfers*.png
+            artifacts/native-comparison*.png
           if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         if: always()

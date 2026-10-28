@@ -59,6 +59,7 @@ export function shortcutGroups(t: Text) {
         ["Ctrl+U", t.swap],
         ["Ctrl+H", t.hidden],
         ["Ctrl+F", t.search],
+        ["Shift+F2", t.compareDirectories],
         ["Ctrl+P / Ctrl+K", t.commandPalette],
         ["Ctrl+,", t.settings],
         ["F1", t.keyboard],
@@ -103,6 +104,22 @@ export function shortcutGroups(t: Text) {
     {
       title: t.actions,
       items: [["↑ / ↓ / Home / End / Enter / Esc", t.menuNavigation]],
+    },
+    {
+      title: t.comparisonKeys,
+      items: [
+        ["F5 / Ctrl+R", t.compareStart],
+        ["Ctrl+F", t.filterDifferences],
+        ["Ctrl+A / Ctrl+Shift+A", `${t.selectAll} / ${t.clearSelection}`],
+        ["↑ / ↓ / Home / End / PgUp / PgDn", t.menuNavigation],
+        ["← / →", t.comparePreviewSide],
+        ["Alt+← / Alt+→", `${t.copyRightLeft} / ${t.copyLeftRight}`],
+        ["Insert / Space", t.toggleMark],
+        ["Delete / Backspace", t.compareSkip],
+        ["F3 / F4", `${t.view} / ${t.edit}`],
+        ["Ctrl+Enter", t.compareReview],
+        ["F1 / Esc", `${t.keyboard} / ${t.close}`],
+      ],
     },
   ];
 }

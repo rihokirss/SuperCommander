@@ -135,7 +135,7 @@ export function PreviewDialog({
   useEffect(() => {
     if (data?.kind === "text") return;
     const key = (e: KeyboardEvent) => {
-      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;
       if (e.key === "F10" || e.key === "F3") {
         e.preventDefault();
         onClose();

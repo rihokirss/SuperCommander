@@ -22,7 +22,17 @@ struct AppState {
     engine: Engine,
     terminals: Terminals,
     searches: core::tasks::Tasks,
+    comparisons: Mutex<HashMap<String, ComparisonRecord>>,
     watchers: Mutex<HashMap<String, RecommendedWatcher>>,
+}
+struct ComparisonRecord {
+    plan: Arc<core::comparison::Plan>,
+    created: std::time::Instant,
+}
+#[derive(Serialize)]
+struct ComparisonResult {
+    id: String,
+    plan: Arc<core::comparison::Plan>,
 }
 type Reply<T> = Result<T, String>;
 fn error(e: impl std::fmt::Display) -> String {
@@ -137,6 +147,97 @@ async fn search_files(
 fn cancel_search(state: State<AppState>, id: String) {
     state.searches.cancel(id);
 }
+#[tauri::command]
+async fn compare_directories(
+    state: State<'_, AppState>,
+    id: String,
+    left: Location,
+    right: Location,
+    options: core::comparison::Options,
+    channel: Channel<core::comparison::Progress>,
+) -> Reply<ComparisonResult> {
+    let task = state.searches.start(id.clone()).map_err(error)?;
+    let left_fs = state.sources.get(&left.source).map_err(error)?;
+    let right_fs = state.sources.get(&right.source).map_err(error)?;
+    let cancel = task.cancel.clone();
+    let plan = Arc::new(
+        blocking(move || {
+            core::comparison::scan(
+                left_fs.as_ref(),
+                right_fs.as_ref(),
+                left,
+                right,
+                options,
+                &task.cancel,
+                &|progress| {
+                    if channel.send(progress).is_err() {
+                        task.cancel.store(true, Ordering::Relaxed);
+                    }
+                },
+            )
+        })
+        .await?,
+    );
+    if !cancel.load(Ordering::Relaxed) && !plan.progress.cancelled && !plan.progress.limited {
+        let mut cache = state.comparisons.lock().unwrap();
+        cache.retain(|_, record| record.created.elapsed().as_secs() < 1800);
+        while cache.len() >= 4 {
+            let oldest = cache
+                .iter()
+                .min_by_key(|(_, record)| record.created)
+                .map(|(id, _)| id.clone())
+                .unwrap();
+            cache.remove(&oldest);
+        }
+        cache.insert(
+            id.clone(),
+            ComparisonRecord {
+                plan: plan.clone(),
+                created: std::time::Instant::now(),
+            },
+        );
+    }
+    Ok(ComparisonResult { id, plan })
+}
+#[tauri::command]
+fn release_comparison(state: State<AppState>, id: String) {
+    state.comparisons.lock().unwrap().remove(&id);
+}
+#[tauri::command]
+async fn enqueue_comparison(
+    state: State<'_, AppState>,
+    id: String,
+    comparison: String,
+    choices: Vec<core::comparison::Choice>,
+) -> Reply<()> {
+    let task = state.searches.start(id.clone()).map_err(error)?;
+    let plan = state
+        .comparisons
+        .lock()
+        .unwrap()
+        .get(&comparison)
+        .filter(|record| record.created.elapsed().as_secs() < 1800)
+        .map(|record| record.plan.clone())
+        .ok_or("Comparison expired; compare again")?;
+    let left = state
+        .sources
+        .get(&plan.left.location.source)
+        .map_err(error)?;
+    let right = state
+        .sources
+        .get(&plan.right.location.source)
+        .map_err(error)?;
+    let prepared = blocking(move || {
+        core::comparison::prepare(plan, &choices, left.as_ref(), right.as_ref(), &task.cancel)
+    })
+    .await?;
+    state
+        .engine
+        .enqueue_synchronization(id, prepared)
+        .map_err(error)?;
+    state.comparisons.lock().unwrap().remove(&comparison);
+    Ok(())
+}
 
 #[tauri::command]
 async fn get_properties(
@@ -184,6 +285,7 @@ fn enqueue_job(state: State<AppState>, request: JobRequest) -> Reply<()> {
 }
 #[tauri::command]
 fn cancel_job(state: State<AppState>, id: String) {
+    state.searches.cancel(id.clone());
     state.engine.cancel(&id);
 }
 #[tauri::command]
@@ -856,6 +958,7 @@ pub fn run() {
                 engine,
                 terminals: Terminals::default(),
                 searches: core::tasks::Tasks::default(),
+                comparisons: Mutex::default(),
                 watchers: Mutex::default(),
             });
             #[cfg(windows)]
@@ -879,6 +982,9 @@ pub fn run() {
             list_directory,
             search_files,
             cancel_search,
+            compare_directories,
+            release_comparison,
+            enqueue_comparison,
             get_properties,
             apply_properties,
             calculate_size,
