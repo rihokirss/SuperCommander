@@ -269,7 +269,7 @@ try {
   await fs.unlink(path.join(folder, "cycle"));
   await openPath(left, root);
   await left.getByText("Assets", { exact: true }).click();
-  await page.locator(".menu-anchor>button").click();
+  await page.locator(".titlebar-tools .menu-anchor>button").click();
   await page.getByRole("menuitem", { name: /^Create ZIP\s*Alt\+F5$/ }).click();
   const zipDialog = page.getByRole("dialog");
   const archive = path.join(root, "Assets.zip");

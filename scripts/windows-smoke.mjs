@@ -326,7 +326,7 @@ try {
   console.log("PASS inert HTML, image and PDF previews");
 
   await left.getByText("renamed.txt", { exact: true }).click();
-  await page.locator(".menu-anchor>button").click();
+  await page.locator(".titlebar-tools .menu-anchor>button").click();
   await page.getByRole("menuitem", { name: /^Create ZIP/ }).click();
   await page
     .getByRole("dialog")
@@ -335,7 +335,7 @@ try {
   await finished(++completed);
   await expect(left.getByText("renamed.zip", { exact: true })).toBeVisible();
   await left.getByText("renamed.zip", { exact: true }).click();
-  await page.locator(".menu-anchor>button").click();
+  await page.locator(".titlebar-tools .menu-anchor>button").click();
   await page.getByRole("menuitem", { name: /^Extract ZIP/ }).click();
   await page
     .getByRole("dialog")
@@ -573,7 +573,7 @@ try {
     console.log(
       "PASS remote quick edit and the server's persistent interactive shell on the same SSH session",
     );
-    await page.locator(".menu-anchor>button").click();
+    await page.locator(".titlebar-tools .menu-anchor>button").click();
     await page
       .getByRole("menuitem", { name: "Port forwarding", exact: true })
       .click();
@@ -644,7 +644,7 @@ try {
     await fs.mkdir(docs, { recursive: true });
     await forward.screenshot({ path: path.join(docs, "port-forwarding.png") });
     await page.keyboard.press("Escape");
-    await page.locator(".menu-anchor>button").click();
+    await page.locator(".titlebar-tools .menu-anchor>button").click();
     await page
       .getByRole("menuitem", { name: "Disconnect", exact: true })
       .click();
@@ -719,7 +719,7 @@ try {
       await fs.readFile(path.join(src, "remote-only.txt"), "utf8"),
       "Edited through the existing SSH connection",
     );
-    await page.locator(".menu-anchor>button").click();
+    await page.locator(".titlebar-tools .menu-anchor>button").click();
     await page
       .getByRole("menuitem", { name: "Port forwarding", exact: true })
       .click();
@@ -742,7 +742,7 @@ try {
       }),
     );
     await page.keyboard.press("Escape");
-    await page.locator(".menu-anchor>button").click();
+    await page.locator(".titlebar-tools .menu-anchor>button").click();
     await page
       .getByRole("menuitem", { name: "Disconnect", exact: true })
       .click();
