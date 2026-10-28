@@ -187,6 +187,7 @@ export type JobEvent = {
   id: string;
   state:
     | "queued"
+    | "preparing"
     | "running"
     | "conflict"
     | "completed"

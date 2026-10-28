@@ -2,7 +2,7 @@
   "objectiveOriginal": "jätka niikaua kuni kõik mõistlik funktsionaalsus olemas, UI ühetaolisus ja sobivus kontrollitud, kõik mõistlikud shortcut keyd olemas",
   "status": "in_progress",
   "baselineRelease": "v0.2.0",
-  "lastVerifiedBatchId": "directoryComparisonBatch",
+  "lastVerifiedBatchId": "queueVersionsBatch",
   "lastVerifiedBatch": {
     "features": [
       "Keyboard-accessible command and context menus",
@@ -376,9 +376,42 @@
     ],
     "behavior": "Synchronization copies explicitly reviewed differences without automatic deletion. Replaced versions remain on disk until removed by the user. Known overlapping roots are rejected; unresolved cross-namespace overlap can fail after completed copies, with overwritten originals retained and reported.",
     "remaining": [
-      "Verify the matching public Windows CI run after pushing this batch; it includes native clipboard tests that are intentionally not run against the user's desktop clipboard.",
       "The broader navigation, clipboard, transfer, recovery, archive, viewer, lifecycle, UI and distribution audits retain their original scope; overall completion is unproven.",
       "ZIP view currently reports zero modified times; verify and improve archive timestamp handling during the archive audit."
+    ],
+    "ci": "Public Windows CI run 40615552916 passed on dba3695acdd55e564ab59cb9fd2e4c6b64e9a9b7, including native clipboard and comparison checks."
+  },
+  "queueVersionsBatch": {
+    "features": [
+      "Source content checksums, metadata, filesystem identities where available, and directory membership captured before a job waits",
+      "Disk-backed manifests reused by copy/move, with copied bytes bound to the captured checksums",
+      "Whole-selection checks before writes and repeated checks before destructive roots",
+      "Destination identity captured before long source inspection; canonical paths and available native directory IDs checked before execution",
+      "Queue positions reserved before inspection so shorter later jobs cannot overtake",
+      "Blocking inspection moved off the native UI thread; Checking source files remains cancellable, active and visible in Transfers",
+      "Action dialogs hand submitted file jobs to the queue immediately; cancelled inspections retain their source names",
+      "Special files can be inspected/deleted without reading them; unsupported copy entries remain blocked",
+      "Comparison smoke checks wait for the editor's Saved state before inspecting a file during its replacement transaction"
+    ],
+    "checks": {
+      "coreTests": "89 passed on Linux; eight queue tests cover replaced files, in-place same-size/same-time edits, changed later roots, late children, replaced destinations including during blocked inspection, queue ordering, cancellation and deleting a socket without reading it",
+      "realOpenSshIntegration": "Five passed on the final source, retaining session/alias, metadata, clipboard, comparison and tunnel coverage",
+      "largeDirectory": "100,000 files copied with the new checksum/manifest checks in 63.28 seconds on WSL; the warm test command reported 85,920 KiB maximum RSS. Earlier metadata-only optimization was rejected because the reproduced WSL timestamp collision bypassed it.",
+      "javascriptUnitTests": "26 passed",
+      "browserTests": "43 passed, including keyboard, themes, dialogs and comparison workflows",
+      "nativeWindows": "Final 32c333d0 executable passed windows-queue-smoke.mjs, windows-transfer-smoke.mjs, windows-comparison-smoke.mjs and the full windows-smoke.mjs. This includes queued copy/move/delete/recycle replacement guards, actual SSH equal-size/equal-time edits, UI cancellation while hashing a 128 MiB SSH file before output, UNC/SFTP aliases, source/destination metadata, reviewed synchronization, ZIP, image/PDF previews, editing, forwarding, PowerShell and Ctrl+O. User settings checksum remained unchanged.",
+      "windowsCompilation": "Workspace and all test targets checked; fmt and clippy passed; executable and NSIS installer built. Final executable SHA256 32c333d087f51323e9d09c83ce2ed794a544026a6930dd270e3bcdab295fbd67."
+    },
+    "visualEvidence": [
+      "artifacts/native-queue.png",
+      "artifacts/native-transfers.png"
+    ],
+    "remaining": [
+      "Verify the matching public Windows CI run after pushing; native clipboard tests remain confined to the dedicated CI desktop.",
+      "Clipboard object identity before paste remains to be audited; the new source snapshot begins when a file operation is submitted.",
+      "Continue live delete/rename/archive mutation and recovery audits. Permanent directory deletion still calls the backend's recursive removal after validation; this batch does not prove safety against a change in that final interval.",
+      "Implement discovery and reviewable restoration of interrupted-operation recovery records; current recovery remains manual.",
+      "Verify deletion independently of the other pane's disconnected destination, plus the remaining source/terminal/tunnel lifecycle and original-scope requirements."
     ]
   }
 }

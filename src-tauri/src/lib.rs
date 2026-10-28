@@ -280,8 +280,9 @@ async fn calculate_size(
 }
 
 #[tauri::command]
-fn enqueue_job(state: State<AppState>, request: JobRequest) -> Reply<()> {
-    state.engine.enqueue(request).map_err(error)
+async fn enqueue_job(state: State<'_, AppState>, request: JobRequest) -> Reply<()> {
+    let engine = state.engine.clone();
+    blocking(move || engine.enqueue(request)).await
 }
 #[tauri::command]
 fn cancel_job(state: State<AppState>, id: String) {

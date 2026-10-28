@@ -134,6 +134,8 @@ File clipboard shortcuts work across local, SFTP and read-only ZIP sources, with
 
 SSH selections and queued operations stay bound to the authenticated connection they were created for. After disconnecting or reconnecting, copy the remote files again; an earlier job cannot silently use the replacement connection. Transfer checks resolve server paths before comparing aliases and reject copying a directory into itself through a symbolic link or `..`.
 
+Transfers show **Checking source files** while recording the selected file versions and folder contents. This runs outside the UI thread and can be cancelled from Transfers. The queue keeps its original order during inspection. Before starting, it rechecks the selection's content, metadata and available filesystem identities; changed sources or replaced local destination folders require starting the operation again. Copy/move use the recorded file list, and copied bytes must match the recorded checksums. Large or remote selections require additional read time for these checks. Cancelling during inspection leaves destination files untouched.
+
 ### Search
 
 **Ctrl+F** searches the active location, including subfolders by default. Match part of a name, use semicolon-separated wildcard masks such as `*.rs;*.toml`, or choose a filename regular expression. Optional content search reads UTF-8 and BOM-marked UTF-16 text, with case and whole-word options and per-line regular expressions. Each matching file appears once, with its first matching line, column and highlighted excerpt.

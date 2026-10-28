@@ -633,7 +633,11 @@ async fn verifies_host_authenticates_and_transfers_over_real_sftp() {
             Conflict::Replace,
         );
         assert_eq!(descendant.state, "failed");
-        assert!(descendant.errors.join(" ").contains("into itself"));
+        assert!(
+            descendant.errors.join(" ").contains("into itself"),
+            "{:?}",
+            descendant.errors
+        );
         let parent_segment = run(
             Operation::Copy,
             &dir,

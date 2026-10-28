@@ -59,6 +59,15 @@ pub trait FileSystem: Send + Sync {
     fn connection_id(&self) -> Option<&str> {
         None
     }
+    /// Stable object identity and a precise change token, where the filesystem
+    /// exposes them. These complement the content checks for queued work.
+    fn fingerprint(&self, _path: &str) -> Result<Option<(String, String)>> {
+        Ok(None)
+    }
+    fn regular_file(&self, path: &str) -> Result<bool> {
+        let entry = self.stat(path)?;
+        Ok(!entry.is_dir && !entry.is_symlink)
+    }
     fn reader(&self, path: &str) -> Result<Box<dyn Read + Send>>;
     fn writer(&self, path: &str) -> Result<Box<dyn Write + Send>>;
     fn private_writer(&self, path: &str) -> Result<Box<dyn Write + Send>> {
@@ -154,6 +163,66 @@ impl LocalFs {
     }
 }
 impl FileSystem for LocalFs {
+    fn regular_file(&self, path: &str) -> Result<bool> {
+        Ok(fs::symlink_metadata(path)?.is_file())
+    }
+    fn fingerprint(&self, path: &str) -> Result<Option<(String, String)>> {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            let meta = fs::symlink_metadata(path)?;
+            let id = format!("{}:{}", meta.dev(), meta.ino());
+            let version = format!(
+                "{id}:{}:{}:{}:{}:{}",
+                meta.ctime(),
+                meta.ctime_nsec(),
+                meta.mtime(),
+                meta.mtime_nsec(),
+                meta.len()
+            );
+            return Ok(Some((id, version)));
+        }
+        #[cfg(windows)]
+        {
+            use std::os::windows::{fs::OpenOptionsExt, io::AsRawHandle};
+            use windows_sys::Win32::Storage::FileSystem::*;
+            let file = fs::OpenOptions::new()
+                .read(true)
+                .access_mode(0)
+                .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE)
+                .custom_flags(FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT)
+                .open(path)?;
+            let mut id = BY_HANDLE_FILE_INFORMATION::default();
+            let mut basic = FILE_BASIC_INFO::default();
+            let handle = file.as_raw_handle();
+            if unsafe { GetFileInformationByHandle(handle, &mut id) } == 0
+                || unsafe {
+                    GetFileInformationByHandleEx(
+                        handle,
+                        FileBasicInfo,
+                        (&mut basic as *mut FILE_BASIC_INFO).cast(),
+                        std::mem::size_of::<FILE_BASIC_INFO>() as u32,
+                    )
+                } == 0
+            {
+                return Ok(None);
+            }
+            if basic.ChangeTime == 0 || id.nFileIndexHigh == 0 && id.nFileIndexLow == 0 {
+                return Ok(None);
+            }
+            let identity = format!(
+                "{}:{}:{}",
+                id.dwVolumeSerialNumber, id.nFileIndexHigh, id.nFileIndexLow
+            );
+            let version = format!(
+                "{identity}:{}:{}:{}:{}",
+                basic.ChangeTime, basic.LastWriteTime, id.nFileSizeHigh, id.nFileSizeLow
+            );
+            return Ok(Some((identity, version)));
+        }
+        #[allow(unreachable_code)]
+        Ok(None)
+    }
     fn visit_entries(
         &self,
         path: &str,

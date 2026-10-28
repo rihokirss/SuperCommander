@@ -1,11 +1,14 @@
-use super::{choose_target, ContextJob};
+use super::{
+    choose_target,
+    snapshot::{Node, Snapshot},
+    ContextJob,
+};
 use crate::{filesystem::FileSystem, Entry};
 use anyhow::{bail, Context, Result};
 use sha2::{Digest, Sha256};
 use std::{
     fs::File,
-    io::{BufRead, BufReader, BufWriter, Read, Seek, SeekFrom, Write},
-    sync::atomic::{AtomicBool, Ordering},
+    io::{BufRead, BufReader, Read, Seek, SeekFrom, Write},
 };
 
 /// A private, disk-backed preorder manifest. No directory is enumerated after
@@ -22,19 +25,16 @@ impl Plan {
         ctx: &mut ContextJob,
         cross_source: bool,
     ) -> Result<Self> {
-        let mut output = BufWriter::new(tempfile::tempfile()?);
-        let mut roots = Vec::new();
-        for path in paths {
-            roots.push(output.stream_position()?);
-            snapshot(fs, path, &mut output, ctx, 0)?;
-        }
-        output.flush()?;
-        let file = output.into_inner()?;
-        Ok(Self {
-            input: BufReader::new(file),
-            roots,
+        let mut snapshot = Snapshot::capture(fs, paths, ctx)?;
+        snapshot.ensure_transferable()?;
+        Ok(Self::reviewed(snapshot, cross_source))
+    }
+    pub fn reviewed(snapshot: Snapshot, cross_source: bool) -> Self {
+        Self {
+            input: snapshot.input,
+            roots: snapshot.roots,
             cross_source,
-        })
+        }
     }
     pub fn run_root(
         &mut self,
@@ -46,7 +46,8 @@ impl Plan {
         ctx: &mut ContextJob,
     ) -> Result<bool> {
         self.input.seek(SeekFrom::Start(self.roots[index]))?;
-        let entry = next(&mut self.input)?.context("Missing transfer root")?;
+        let node = next(&mut self.input)?.context("Missing transfer root")?;
+        let entry = &node.entry;
         let target = if entry.is_dir && dst.exists(target)? && !dst.stat(target)?.is_dir {
             let Some(chosen) = choose_target(dst, target, ctx)? else {
                 return Ok(false);
@@ -59,59 +60,14 @@ impl Plan {
             target.into()
         };
         if moving && entry.is_dir && self.cross_source {
-            validate_move_directory(&mut self.input, src, dst, &entry, &target, ctx)?;
+            validate_move_directory(&mut self.input, src, dst, entry, &target, ctx)?;
             self.input.seek(SeekFrom::Start(self.roots[index]))?;
             next(&mut self.input)?;
         }
-        transfer_tree(&mut self.input, src, dst, entry, &target, moving, ctx)
+        transfer_tree(&mut self.input, src, dst, node, &target, moving, ctx)
     }
 }
-fn snapshot(
-    fs: &dyn FileSystem,
-    path: &str,
-    output: &mut BufWriter<File>,
-    ctx: &mut ContextJob,
-    depth: usize,
-) -> Result<()> {
-    ctx.check()?;
-    if depth > 256 {
-        bail!("Directory nesting exceeds 256 levels; possible filesystem alias cycle");
-    }
-    let entry = fs.stat(path)?;
-    if entry.is_symlink {
-        bail!("Symbolic links are not followed: {path}");
-    }
-    crate::filesystem::valid_name(&entry.name)?;
-    serde_json::to_writer(&mut *output, &Some(&entry))?;
-    output.write_all(b"\n")?;
-    if entry.is_dir {
-        let stop = AtomicBool::new(false);
-        let mut failure = None;
-        fs.visit_entries(path, &stop, &mut |child| {
-            if failure.is_some() {
-                return;
-            }
-            if let Err(error) =
-                child.and_then(|child| snapshot(fs, &child.path, output, ctx, depth + 1))
-            {
-                stop.store(true, Ordering::Relaxed);
-                failure = Some(error);
-            }
-        })?;
-        if let Some(error) = failure {
-            return Err(error);
-        }
-        output.write_all(b"null\n")?;
-    } else {
-        ctx.event.total = ctx
-            .event
-            .total
-            .checked_add(entry.size)
-            .context("Transfer size overflow")?;
-    }
-    Ok(())
-}
-fn next(input: &mut BufReader<File>) -> Result<Option<Entry>> {
+fn next(input: &mut BufReader<File>) -> Result<Option<Node>> {
     let mut line = String::new();
     if input.read_line(&mut line)? == 0 {
         bail!("Incomplete transfer manifest");
@@ -122,7 +78,7 @@ fn skip(input: &mut BufReader<File>, entry: &Entry, ctx: &ContextJob) -> Result<
     if entry.is_dir {
         while let Some(child) = next(input)? {
             ctx.check()?;
-            skip(input, &child, ctx)?;
+            skip(input, &child.entry, ctx)?;
         }
     }
     Ok(())
@@ -131,14 +87,16 @@ fn transfer_tree(
     input: &mut BufReader<File>,
     src: &dyn FileSystem,
     dst: &dyn FileSystem,
-    entry: Entry,
+    node: Node,
     target: &str,
     moving: bool,
     ctx: &mut ContextJob,
 ) -> Result<bool> {
     ctx.check()?;
+    node.validate(src, ctx, false)?;
+    let entry = &node.entry;
     if !entry.is_dir {
-        return transfer_file(src, dst, &entry, target, moving, ctx);
+        return transfer_file(src, dst, &node, target, moving, ctx);
     }
     let current = src.stat(&entry.path)?;
     if !current.is_dir || current.is_symlink {
@@ -147,7 +105,7 @@ fn transfer_tree(
     let metadata = src.properties(&entry.path)?;
     let target = if dst.exists(target)? && !dst.stat(target)?.is_dir {
         let Some(target) = choose_target(dst, target, ctx)? else {
-            skip(input, &entry, ctx)?;
+            skip(input, entry, ctx)?;
             return Ok(false);
         };
         // A file cannot be replaced by a directory via an unguarded mkdir.
@@ -168,7 +126,7 @@ fn transfer_tree(
     }
     let mut all = true;
     while let Some(child) = next(input)? {
-        let child_target = dst.join(&target, &child.name);
+        let child_target = dst.join(&target, &child.entry.name);
         all &= transfer_tree(input, src, dst, child, &child_target, moving, ctx)?;
     }
     if moving && all {
@@ -299,14 +257,16 @@ fn digest(fs: &dyn FileSystem, path: &str, ctx: &ContextJob) -> Result<String> {
 fn transfer_file(
     src: &dyn FileSystem,
     dst: &dyn FileSystem,
-    entry: &Entry,
+    node: &Node,
     target: &str,
     moving: bool,
     ctx: &mut ContextJob,
 ) -> Result<bool> {
+    let entry = &node.entry;
     let Some(target) = choose_target(dst, target, ctx)? else {
         return Ok(false);
     };
+    node.validate(src, ctx, false)?;
     let expected = target_stamp(dst, &target, ctx)?;
     if let Some(reviewed) = &ctx.expected_copy {
         if expected.as_ref().map(|value| value.content.as_str()) != reviewed.target.as_deref() {
@@ -366,6 +326,14 @@ fn transfer_file(
                 entry.path
             );
         }
+        if node
+            .digest
+            .as_ref()
+            .is_some_and(|expected| expected != &copied_digest)
+        {
+            bail!("Source contents changed after queuing: {}", entry.path);
+        }
+        node.validate(src, ctx, false)?;
         if written != entry.size || stamp(src, &entry.path)? != original {
             bail!("Source changed during copy; source preserved");
         }
@@ -377,6 +345,7 @@ fn transfer_file(
             dst.transfer_metadata(&temp, &metadata)?;
             return commit(dst, &temp, &target, expected.as_ref(), ctx, || {
                 ctx.check()?;
+                node.validate(src, ctx, false)?;
                 if stamp(src, &entry.path)? != original {
                     bail!("Source changed or aliases the destination; source preserved");
                 }
@@ -386,7 +355,10 @@ fn transfer_file(
         let claim = Claim::start(src, &entry.path, "move-source")?;
         let claimed = &claim.preserved;
         let publish = (|| -> Result<()> {
-            if stamp(src, claimed)? != original || digest(src, claimed, ctx)? != copied_digest {
+            if !node.same_object(src, claimed)?
+                || stamp(src, claimed)? != original
+                || digest(src, claimed, ctx)? != copied_digest
+            {
                 bail!("Source changed during move; source preserved");
             }
             dst.transfer_metadata(&temp, &metadata)?;
@@ -553,7 +525,15 @@ fn find_probe(
     }
     while let Some(child) = next(input)? {
         ctx.check()?;
-        if child.is_dir && find_probe(input, src, &src.join(directory, &child.name), name, ctx)? {
+        if child.entry.is_dir
+            && find_probe(
+                input,
+                src,
+                &src.join(directory, &child.entry.name),
+                name,
+                ctx,
+            )?
+        {
             return Ok(true);
         }
     }

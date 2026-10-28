@@ -1,3 +1,4 @@
+mod snapshot;
 mod synchronize;
 mod transfer;
 
@@ -34,17 +35,20 @@ impl Default for Control {
         }
     }
 }
+#[derive(Clone)]
 pub struct Engine {
     queue: mpsc::Sender<QueuedJob>,
     controls: Arc<Mutex<HashMap<String, Arc<Control>>>>,
     sources: Arc<Sources>,
     tasks: crate::tasks::Tasks,
+    sink: Sink,
 }
 struct QueuedJob {
     request: JobRequest,
     control: Arc<Control>,
     sources: Sources,
     synchronization: Option<crate::comparison::Prepared>,
+    preparation: mpsc::Receiver<std::result::Result<Option<snapshot::Snapshot>, String>>,
 }
 
 impl Engine {
@@ -52,19 +56,21 @@ impl Engine {
         let (tx, rx) = mpsc::channel::<QueuedJob>();
         let controls: Arc<Mutex<HashMap<String, Arc<Control>>>> = Arc::default();
         let registry = controls.clone();
+        let worker_sink = sink.clone();
         std::thread::spawn(move || {
             for QueuedJob {
                 request: req,
                 control,
                 sources,
                 synchronization,
+                preparation,
             } in rx
             {
                 let mut context = ContextJob {
                     event: JobEvent {
                         id: req.id.clone(),
                         state: "running".into(),
-                        current: String::new(),
+                        current: req.paths.first().cloned().unwrap_or_default(),
                         bytes: 0,
                         total: 0,
                         completed: 0,
@@ -74,17 +80,27 @@ impl Engine {
                         preserved: vec![],
                     },
                     control,
-                    sink: sink.clone(),
+                    sink: worker_sink.clone(),
                     policy: req.conflict.clone(),
                     keep_backups: synchronization.is_some(),
                     preserved: std::cell::RefCell::new(Vec::new()),
                     preserved_count: std::cell::Cell::new(0),
                     expected_copy: None,
                 };
-                context.emit();
-                let result = match synchronization {
-                    Some(plan) => synchronize::run(&sources, plan, &mut context),
-                    None => run(&sources, &req, &mut context),
+                let preparation = preparation
+                    .recv()
+                    .unwrap_or_else(|_| Err("Source inspection was interrupted".into()));
+                let result = match preparation {
+                    Err(error) => Err(anyhow::anyhow!(error)),
+                    Ok(snapshot) => match synchronization {
+                        Some(plan) => {
+                            context.emit();
+                            synchronize::run(&sources, plan, &mut context)
+                        }
+                        None => snapshot
+                            .context("Missing queued source snapshot")
+                            .and_then(|snapshot| run(&sources, &req, snapshot, &mut context)),
+                    },
                 };
                 context.event.conflict_path = None;
                 if let Err(error) = &result {
@@ -108,6 +124,7 @@ impl Engine {
             controls,
             sources,
             tasks: crate::tasks::Tasks::default(),
+            sink,
         }
     }
     pub fn enqueue(&self, request: JobRequest) -> Result<()> {
@@ -167,8 +184,8 @@ impl Engine {
             bail!("An SSH connection changed. Start the operation again.");
         }
         let sources = Sources::default();
-        sources.insert(request.source.clone(), source);
-        sources.insert(request.destination.source.clone(), destination);
+        sources.insert(request.source.clone(), source.clone());
+        sources.insert(request.destination.source.clone(), destination.clone());
         let mut controls = self.controls.lock().unwrap();
         if controls.contains_key(&request.id) {
             bail!("Duplicate job ID");
@@ -179,20 +196,96 @@ impl Engine {
             ..Default::default()
         });
         controls.insert(request.id.clone(), control.clone());
+        drop(controls);
         let id = request.id.clone();
+        let mut inspection = ContextJob {
+            event: JobEvent {
+                id: id.clone(),
+                state: "preparing".into(),
+                current: request.paths.first().cloned().unwrap_or_default(),
+                bytes: 0,
+                total: 0,
+                completed: 0,
+                errors: vec![],
+                conflict_path: None,
+                preserved_count: 0,
+                preserved: vec![],
+            },
+            control: control.clone(),
+            sink: self.sink.clone(),
+            policy: request.conflict.clone(),
+            keep_backups: false,
+            preserved: std::cell::RefCell::new(Vec::new()),
+            preserved_count: std::cell::Cell::new(0),
+            expected_copy: None,
+        };
+        let normal = synchronization.is_none();
+        let (prepared, preparation) = mpsc::channel();
         if self
             .queue
             .send(QueuedJob {
-                request,
+                request: request.clone(),
                 control,
                 sources,
                 synchronization,
+                preparation,
             })
             .is_err()
         {
-            controls.remove(&id);
+            self.controls.lock().unwrap().remove(&id);
             bail!("The file operation queue has stopped");
         }
+        // Reserve the queue position before inspecting, so a smaller later job
+        // cannot overtake a large selection. No registry lock is held during I/O.
+        let captured = if normal {
+            inspection.emit();
+            (|| -> Result<Option<snapshot::Snapshot>> {
+                inspection.check()?;
+                for path in &request.paths {
+                    if request.source == "local" {
+                        guard_destructive(path)?;
+                    }
+                    if path == "/" || path.trim_matches('/').is_empty() {
+                        bail!("Cannot operate on a filesystem root");
+                    }
+                }
+                let binding = if matches!(
+                    request.operation,
+                    Operation::Copy | Operation::Move | Operation::Extract
+                ) {
+                    Some(snapshot::Snapshot::destination(
+                        destination.as_ref(),
+                        &request.destination.path,
+                    )?)
+                } else if request.operation == Operation::Zip {
+                    let parent = Path::new(&request.destination.path)
+                        .parent()
+                        .context("Invalid archive destination")?;
+                    Some(snapshot::Snapshot::destination(
+                        destination.as_ref(),
+                        &parent.to_string_lossy(),
+                    )?)
+                } else {
+                    None
+                };
+                let mut snapshot =
+                    snapshot::Snapshot::capture(source.as_ref(), &request.paths, &mut inspection)?;
+                snapshot.destination = binding;
+                if matches!(request.operation, Operation::Copy | Operation::Move) {
+                    snapshot.ensure_transferable()?;
+                }
+                Ok(Some(snapshot))
+            })()
+            .map_err(|error| format!("{error:#}"))
+        } else {
+            Ok(None)
+        };
+        if captured.is_ok() {
+            inspection.event.state = "queued".into();
+            inspection.event.bytes = 0;
+            inspection.emit();
+        }
+        let _ = prepared.send(captured);
         Ok(())
     }
     pub fn cancel(&self, id: &str) {
@@ -290,13 +383,27 @@ fn validate_destination(source: &str, destination: &str) -> Result<()> {
     Ok(())
 }
 
-fn run(sources: &Sources, req: &JobRequest, ctx: &mut ContextJob) -> Result<()> {
+fn run(
+    sources: &Sources,
+    req: &JobRequest,
+    mut snapshot: snapshot::Snapshot,
+    ctx: &mut ContextJob,
+) -> Result<()> {
     ctx.check()?;
     let source = sources.get(&req.source)?;
+    ctx.event.state = "preparing".into();
+    ctx.emit();
+    snapshot.validate(source.as_ref(), ctx)?;
+    snapshot.validate_destination(sources.get(&req.destination.source)?.as_ref())?;
+    ctx.event.state = "running".into();
+    ctx.event.total = snapshot.total;
+    ctx.emit();
     if req.operation == Operation::Zip {
+        ctx.event.total = 0;
         return zip_job(req, ctx);
     }
     if req.operation == Operation::Extract {
+        ctx.event.total = 0;
         return extract_job(req, ctx);
     }
     let dest = sources.get(&req.destination.source)?;
@@ -339,13 +446,12 @@ fn run(sources: &Sources, req: &JobRequest, ctx: &mut ContextJob) -> Result<()> 
             }
         }
     }
+    let mut snapshot = Some(snapshot);
     let mut plan = if matches!(req.operation, Operation::Copy | Operation::Move) {
-        Some(transfer::Plan::build(
-            source.as_ref(),
-            &req.paths,
-            ctx,
+        Some(transfer::Plan::reviewed(
+            snapshot.take().unwrap(),
             req.source != req.destination.source,
-        )?)
+        ))
     } else {
         None
     };
@@ -354,8 +460,16 @@ fn run(sources: &Sources, req: &JobRequest, ctx: &mut ContextJob) -> Result<()> 
         ctx.event.current = path.clone();
         ctx.emit();
         let result = match req.operation {
-            Operation::Trash => trash::delete(path).map_err(anyhow::Error::from),
-            Operation::Delete => source.remove(path),
+            Operation::Trash => snapshot
+                .as_mut()
+                .unwrap()
+                .validate_root(source.as_ref(), index, ctx)
+                .and_then(|_| trash::delete(path).map_err(anyhow::Error::from)),
+            Operation::Delete => snapshot
+                .as_mut()
+                .unwrap()
+                .validate_root(source.as_ref(), index, ctx)
+                .and_then(|_| source.remove(path)),
             Operation::Copy | Operation::Move => {
                 let entry = source.stat(path)?;
                 crate::filesystem::valid_name(&entry.name)?;

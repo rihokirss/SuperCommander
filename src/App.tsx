@@ -1696,7 +1696,7 @@ export function App() {
       </div>
     );
   const running = jobs.filter((j) =>
-    ["queued", "running", "conflict"].includes(j.state),
+    ["preparing", "queued", "running", "conflict"].includes(j.state),
   ).length;
   const placeIcons: Record<string, typeof Home> = {
     home: Home,
@@ -2324,7 +2324,9 @@ export function App() {
               onClear={() =>
                 setJobs((j) =>
                   j.filter((x) =>
-                    ["running", "queued", "conflict"].includes(x.state),
+                    ["preparing", "running", "queued", "conflict"].includes(
+                      x.state,
+                    ),
                   ),
                 )
               }

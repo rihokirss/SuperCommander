@@ -414,6 +414,12 @@ impl Write for RemoteFile {
     }
 }
 impl FileSystem for RemoteFs {
+    fn regular_file(&self, path: &str) -> Result<bool> {
+        let meta = self.runtime.block_on(self.sftp.symlink_metadata(path))?;
+        Ok(meta
+            .permissions
+            .is_none_or(|mode| mode & 0o170000 == 0 || mode & 0o170000 == 0o100000))
+    }
     fn properties(&self, path: &str) -> Result<crate::properties::Properties> {
         let meta = self.runtime.block_on(self.sftp.symlink_metadata(path))?;
         let mut info = crate::properties::Properties::basic(

@@ -74,8 +74,8 @@ export function ActionDialog({
                 location: data.source,
                 name,
               });
-            else
-              await onSubmit({
+            else {
+              const submitted = onSubmit({
                 id: uid(),
                 operation: data.operation,
                 source: data.source.source,
@@ -86,6 +86,12 @@ export function ActionDialog({
                 },
                 conflict: "ask",
               });
+              // The queue owns the submitted operation, including inspection
+              // progress and cancellation while a large selection is checked.
+              onClose();
+              await submitted;
+              return;
+            }
             if (data.operation === "mkdir") onDone();
             onClose();
           } catch (e) {

@@ -72,7 +72,9 @@ function JobRow({
   onError: (error: string) => void;
 }) {
   const [all, setAll] = useState(false);
-  const pending = ["running", "queued", "conflict"].includes(job.state);
+  const pending = ["preparing", "running", "queued", "conflict"].includes(
+    job.state,
+  );
   const Icon =
     job.state === "completed"
       ? CheckCircle2
@@ -83,7 +85,10 @@ function JobRow({
           : LoaderCircle;
   return (
     <div className={`job-row ${job.state}`}>
-      <Icon size={14} className={job.state === "running" ? "spin" : ""} />
+      <Icon
+        size={14}
+        className={["running", "preparing"].includes(job.state) ? "spin" : ""}
+      />
       <div className="job-main">
         <div>
           <strong title={job.current}>

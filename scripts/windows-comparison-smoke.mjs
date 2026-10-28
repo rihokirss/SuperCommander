@@ -193,11 +193,12 @@ try {
   await expect(page.locator(".file-workbench textarea")).toBeFocused();
   await page.locator(".file-workbench textarea").fill("saved from comparison");
   await page.keyboard.press("Control+s");
-  await expect
-    .poll(() => fs.readFile(path.join(leftPath, "left-only.txt"), "utf8"))
-    .toBe("saved from comparison");
   await expect(page.locator(".file-workbench .text-toolbar")).toContainText(
     "Saved",
+  );
+  assert.equal(
+    await fs.readFile(path.join(leftPath, "left-only.txt"), "utf8"),
+    "saved from comparison",
   );
   await expect(page.locator(".file-workbench textarea")).toBeEditable();
   await page.keyboard.press("F10");
