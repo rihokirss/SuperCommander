@@ -625,7 +625,7 @@
     ]
   },
   "release030": {
-    "status": "published",
+    "status": "removed_at_user_request_after_v0.3.1_publication",
     "version": "0.3.0",
     "url": "https://github.com/rihokirss/SuperCommander/releases/tag/v0.3.0",
     "publishedAt": "2026-10-28T05:40:26Z",
@@ -673,8 +673,47 @@
         "artifacts/density-light.png",
         "artifacts/density-native-dark.png",
         "artifacts/density-native-light.png"
-      ]
+      ],
+      "ci": "Windows CI run 40729782864 passed on 8d0f318bd14332c4cbadd40635765399a4f2e822, including all native test steps. The preceding feature commit also passed run 40729396358."
     },
-    "distribution": "Committed source and local Windows build; published v0.3.0 remains pinned to its verified release commit."
+    "distribution": "Published in v0.3.1 with updated English README, dark/light screenshots, Windows installer, standalone executable, SHA256SUMS.txt and BUILDINFO.json. Public downloads verified; superseded GitHub releases removed at the user’s request."
+  },
+  "release031": {
+    "status": "published",
+    "version": "0.3.1",
+    "url": "https://github.com/rihokirss/SuperCommander/releases/tag/v0.3.1",
+    "publishedAt": "2026-10-28T17:00:26Z",
+    "sourceCommit": "8d0f318bd14332c4cbadd40635765399a4f2e822",
+    "windowsCI": {
+      "runId": 40729782864,
+      "url": "https://github.com/rihokirss/SuperCommander/actions/runs/40729782864",
+      "conclusion": "success"
+    },
+    "assets": {
+      "SuperCommander_0.3.1_x64-setup.exe": {
+        "sha256": "279e0fb5288aca38ebc2c3a49cc40a78825bf55742ffafca9af61f82a16dd58e",
+        "bytes": 5267984
+      },
+      "SuperCommander_0.3.1_x64.exe": {
+        "sha256": "3e48a9aa4f84df72bb104222e4bf928b6951e8baea4910dd1e58eb60ddc63a5e",
+        "bytes": 20628992
+      }
+    },
+    "additionalAssets": [
+      "SHA256SUMS.txt",
+      "BUILDINFO.json"
+    ],
+    "verification": [
+      "All release Windows CI checks passed",
+      "Downloaded CI executable passed isolated Windows Alt+S, Enter/Escape, independent pane, 26px virtual row, dark/light and version 0.3.1 checks",
+      "Uploaded GitHub asset digests and downloaded public checksums match prepared files",
+      "Installer payload matches standalone except for the single Tauri NSIS bundle marker",
+      "Public latest-release API and Git tag identify the expected release and source commit"
+    ],
+    "removedReleases": [
+      "v0.2.0",
+      "v0.3.0"
+    ],
+    "cleanupVerification": "Authenticated GitHub release listing contains only published v0.3.1."
   }
 }
