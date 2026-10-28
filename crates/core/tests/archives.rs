@@ -259,7 +259,7 @@ fn zip_view_prefers_utc_metadata_and_resolves_dos_local_time_and_implicit_folder
     let mut utc = vec![1];
     utc.extend(1_800_000_000u32.to_le_bytes());
     options
-        .add_extra_data(0x5455, utc.into_boxed_slice(), false)
+        .add_extra_field(0x5455, utc.into_boxed_slice(), false)
         .unwrap();
     writer.start_file("implicit/utc.txt", options).unwrap();
     writer.write_all(b"utc").unwrap();

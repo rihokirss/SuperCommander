@@ -74,7 +74,9 @@ impl Metadata {
     }
 }
 
-pub(crate) fn options(info: &crate::properties::Properties) -> Result<FullFileOptions<'static>> {
+pub(crate) fn options(
+    info: &crate::properties::Properties,
+) -> Result<FullFileOptions<'static, 'static>> {
     let mut options = FullFileOptions::default()
         .compression_method(zip::CompressionMethod::Deflated)
         .large_file(info.file.size >= u32::MAX as u64)
@@ -109,7 +111,7 @@ pub(crate) fn options(info: &crate::properties::Properties) -> Result<FullFileOp
         if let Ok(seconds) = u32::try_from(seconds) {
             let mut utc = vec![1];
             utc.extend(seconds.to_le_bytes());
-            options.add_extra_data(0x5455, utc.into_boxed_slice(), false)?;
+            options.add_extra_field(0x5455, utc.into_boxed_slice(), false)?;
         }
         if let Ok(ticks) = u64::try_from(nanos / 100 + WINDOWS_EPOCH as u128) {
             let mut ntfs = vec![0; 4];
@@ -118,7 +120,7 @@ pub(crate) fn options(info: &crate::properties::Properties) -> Result<FullFileOp
             ntfs.extend(ticks.to_le_bytes());
             ntfs.extend(ticks.to_le_bytes());
             ntfs.extend(ticks.to_le_bytes());
-            options.add_extra_data(0x000a, ntfs.into_boxed_slice(), false)?;
+            options.add_extra_field(0x000a, ntfs.into_boxed_slice(), false)?;
         }
     }
     Ok(options)

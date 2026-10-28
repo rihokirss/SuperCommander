@@ -17,4 +17,4 @@ open = "5"
 anyhow = "1"
 
 [target.'cfg(windows)'.dependencies]
-window-vibrancy = "0.6"
+window-vibrancy = "0.8"

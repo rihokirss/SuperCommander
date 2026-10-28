@@ -31,10 +31,11 @@ impl FileSystem for ZipFs {
         let mut entries: BTreeMap<String, (Entry, bool)> = BTreeMap::new();
         for i in 0..archive.len() {
             let f = archive.by_index(i)?;
-            if safe_zip_path(f.name()).is_err() {
+            let zip_name = f.name()?;
+            if safe_zip_path(&zip_name).is_err() {
                 continue;
             }
-            if let Some(rest) = f.name().strip_prefix(&prefix) {
+            if let Some(rest) = zip_name.strip_prefix(&prefix) {
                 let name = rest.split('/').next().unwrap_or("");
                 if name.is_empty() {
                     continue;
@@ -190,7 +191,7 @@ pub(crate) fn inspect_entries<R: Read + Seek>(
     for i in 0..archive.len() {
         check()?;
         let f = archive.by_index(i)?;
-        let p = safe_zip_path(f.name())?;
+        let p = safe_zip_path(&f.name()?)?;
         anyhow::ensure!(
             p.components().count() <= 256,
             "Archive directory nesting exceeds 256 levels"

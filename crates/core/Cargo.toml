@@ -10,16 +10,16 @@ serde_json = "1"
 uuid = { version = "1", features = ["v4"] }
 regex = "1"
 walkdir = "2"
-zip = { version = "2", default-features = false, features = ["deflate", "unreserved"] }
+zip = { version = "9.1", default-features = false, features = ["deflate", "unreserved"] }
 trash = "5"
-base64 = "0.22"
-dirs = "6"
+base64 = "0.23"
+dirs = "7"
 notify = "8"
 portable-pty = "0.9"
-russh = { version = "0.63", default-features = false, features = ["ring", "rsa"] }
+russh = { version = "0.65", default-features = false, features = ["ring", "rsa"] }
 russh-sftp = "3"
 tokio = { version = "1", features = ["full"] }
-keyring = { version = "3", features = ["windows-native"] }
+keyring = "4.2"
 sha2 = "0.11"
 glob = "0.3"
 same-file = "1"
@@ -30,4 +30,4 @@ chrono = { version = "0.4", default-features = false, features = ["clock"] }
 rustix = { version = "1", features = ["fs"] }
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_System_DataExchange", "Win32_System_Memory", "Win32_System_Ole", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security_Credentials", "Win32_Storage_FileSystem", "Win32_System_DataExchange", "Win32_System_Memory", "Win32_System_Ole", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }

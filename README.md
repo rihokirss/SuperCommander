@@ -71,6 +71,8 @@ npm run build:windows
 
 A successful cross-build does not replace testing the application on Windows.
 
+See the [dependency review](docs/dependencies.md) for the 0.3.0 updates and remaining upstream security advisories.
+
 ## Keyboard and navigation
 
 Each pane has independent tabs, history, sorting and filtering. Click its location bar to enter a local path, UNC path, SSH URL or SSH config alias. Click selects a file; Ctrl-click toggles a mark and Shift-click selects a range. Drag between panes to copy, or hold Shift to move. Dragging from Explorer copies into the destination pane.

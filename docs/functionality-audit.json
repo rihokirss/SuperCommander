@@ -83,19 +83,27 @@
       "id": "navigation",
       "status": "in_progress",
       "scope": "Independent panes, history, parent entries, roots, path editing, tabs, closed-tab restoration, refresh and keyboard access",
-      "evidence": ["tests/ui/workspace.spec.ts", "tests/ui/keyboard.spec.ts"]
+      "evidence": [
+        "tests/ui/workspace.spec.ts",
+        "tests/ui/keyboard.spec.ts"
+      ]
     },
     {
       "id": "selection",
       "status": "in_progress",
       "scope": "MC Insert behavior, ranges, all/none/inverse and wildcard masks, preserving marks and excluding the parent entry",
-      "evidence": ["src/selection.test.ts", "tests/ui/keyboard.spec.ts"]
+      "evidence": [
+        "src/selection.test.ts",
+        "tests/ui/keyboard.spec.ts"
+      ]
     },
     {
       "id": "context-actions-and-menus",
       "status": "in_progress",
       "scope": "Correct pane/selection targets, keyboard-accessible context and command menus, focus restoration, edge positioning and both themes",
-      "evidence": ["tests/ui/keyboard.spec.ts"]
+      "evidence": [
+        "tests/ui/keyboard.spec.ts"
+      ]
     },
     {
       "id": "file-clipboard",
@@ -138,7 +146,10 @@
       "id": "network",
       "status": "needs_current_audit",
       "scope": "Explorer network locations, custom UNC entries, mapped drives, server/share navigation and errors",
-      "evidence": ["scripts/windows-network-smoke.mjs", "src/network.test.ts"]
+      "evidence": [
+        "scripts/windows-network-smoke.mjs",
+        "src/network.test.ts"
+      ]
     },
     {
       "id": "ssh",
@@ -154,13 +165,19 @@
       "id": "port-forwarding",
       "status": "needs_current_audit",
       "scope": "Multiple tunnels, persistence, start/stop/remove, conflicts and connection lifecycle",
-      "evidence": ["crates/core/tests/sftp.rs", "scripts/windows-smoke.mjs"]
+      "evidence": [
+        "crates/core/tests/sftp.rs",
+        "scripts/windows-smoke.mjs"
+      ]
     },
     {
       "id": "terminal",
       "status": "needs_current_audit",
       "scope": "Local and remote interactive shells, Ctrl+O, docking, independent persistent sessions, resize and lifecycle",
-      "evidence": ["scripts/windows-smoke.mjs", "crates/core/tests/sftp.rs"]
+      "evidence": [
+        "scripts/windows-smoke.mjs",
+        "crates/core/tests/sftp.rs"
+      ]
     },
     {
       "id": "viewer",
@@ -198,7 +215,13 @@
       "id": "archives",
       "status": "in_progress",
       "scope": "Practical common archive workflows, safe browsing/creation/extraction, path and symlink protection, and explicit format limitations",
-      "evidence": ["crates/core/tests/files.rs", "crates/core/tests/archives.rs", "tests/ui/archives.spec.ts", "scripts/windows-archive-smoke.mjs", "scripts/windows-smoke.mjs"]
+      "evidence": [
+        "crates/core/tests/files.rs",
+        "crates/core/tests/archives.rs",
+        "tests/ui/archives.spec.ts",
+        "scripts/windows-archive-smoke.mjs",
+        "scripts/windows-smoke.mjs"
+      ]
     },
     {
       "id": "properties-and-attributes",
@@ -231,7 +254,10 @@
       "id": "shortcut-discoverability",
       "status": "in_progress",
       "scope": "Practical shortcuts for all implemented actions, searchable F1 help, accurate tooltips, no context collisions or accidental browser reloads",
-      "evidence": ["src/shortcuts.ts", "tests/ui/keyboard.spec.ts"]
+      "evidence": [
+        "src/shortcuts.ts",
+        "tests/ui/keyboard.spec.ts"
+      ]
     },
     {
       "id": "persistence-and-recovery",
@@ -322,7 +348,9 @@
       "nativeWindows": "windows-search-smoke.mjs passed on final 6f651d33 build with >4 MiB next/previous/wrap, exact Unicode selection, query/wrap persistence, nested help, real transport-delayed cancellation on query change before worker registration, pre-cancelled preview/find/search/size workers, and real SSH search/reconnect/F3-to-F4 binding. windows-properties-smoke.mjs also passed on this build, including native flags, directory size, SSH modes, persistent bookmarks and one collapsed workspace tooltip. The user's settings checksum remained unchanged.",
       "windowsCompilation": "Workspace and all test targets checked; x64 executable and NSIS installer built. Final executable SHA256 6f651d3361201b4df80a481fbf08e65f25f2ce1e0c2ee2c5d8334333fed7c9b6; cargo fmt and workspace clippy passed."
     },
-    "visualEvidence": ["artifacts/native-viewer-find.png"],
+    "visualEvidence": [
+      "artifacts/native-viewer-find.png"
+    ],
     "remaining": [
       "The confirmed cross-protocol alias defect is addressed by transferTransactionBatch; continue the remaining transfer lifecycle audit before overall completion.",
       "Directory comparison and other outstanding requirements remain in scope; this batch does not establish overall completion."
@@ -561,11 +589,37 @@
       "fixtureOwnership": "Full native smoke now creates and removes its own remote folder per run, so repeated runs do not edit the shared fixture's baseline file. A repeated-run failure correctly exposed that stale baseline rather than weakening the editor content assertion.",
       "ci": "Run 40636622188 on 57f3f25 passed compilation, core/unit/browser tests and native clipboard checks, then failed because the properties smoke test still expected the old Create ZIP menu label without its shortcut. The release preparation fixes this locator; matching release CI is pending. Clipboard UI tests remain dedicated-CI-only."
     },
-    "visualEvidence": ["docs/screenshots/archives.png", "artifacts/native-archive-dark.png", "artifacts/native-archive-light.png"],
+    "visualEvidence": [
+      "docs/screenshots/archives.png",
+      "artifacts/native-archive-dark.png",
+      "artifacts/native-archive-light.png"
+    ],
     "remaining": [
       "Verify matching public Windows CI and preserve the current working profile when updating its executable. The normal profile changed pane locations during this turn and contained no owned smoke paths; its new checksum is user state and must not be reset to the previous one.",
       "Stored/Deflate ZIP is the implemented archive format; encrypted ZIP and 7z/RAR remain explicitly unsupported. ZIP view/copy has a 128 MiB per-entry limit; Extract streams larger entries. Archive operations cap 200,000 file/folder paths and 256 path components.",
       "Continue original-scope navigation/selection/context, network/SSH/session/tunnel/terminal lifecycle, viewer/search/editor, UI/shortcut consistency, persistence/recovery and distribution audits. No overall completion is claimed."
+    ]
+  },
+  "dependencyBatch": {
+    "status": "implemented_awaiting_release_ci",
+    "date": "2026-10-28",
+    "review": "docs/dependencies.md",
+    "changes": [
+      "Current stable direct dependencies from npm and crates.io; Node 24 types intentionally track the build runtime",
+      "Migrated ZIP names, lifetimes and extra fields to ZIP 9 APIs",
+      "Native Windows regression for legacy credential targets and Unicode password blobs"
+    ],
+    "checks": {
+      "coreTests": "142 passed on Linux",
+      "realOpenSshIntegration": "7 passed with russh 0.65",
+      "javascriptUnitTests": "26 passed",
+      "browserTests": "50 passed",
+      "npmAudit": "0 known vulnerabilities",
+      "rustAudit": "1 unpatched RSA advisory; cross-platform-only warnings documented in docs/dependencies.md",
+      "nativeWindows": "Pending matching release build tests"
+    },
+    "remaining": [
+      "Release packaging and native checks remain pending; broader original objective is still in progress."
     ]
   }
 }
