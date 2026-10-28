@@ -314,6 +314,41 @@ test("collapsed workspace uses one tooltip owner for icons and labels", async ({
   await expect(page.getByRole("tooltip")).toHaveCount(0);
 });
 
+test("collapsed workspace yields to SVG titles and native hints added after hover", async ({
+  page,
+}) => {
+  await page
+    .getByRole("button", { name: "Collapse workspace", exact: true })
+    .click();
+  const item = page.locator(".sidebar-item").first();
+  const icon = item.locator("svg").first();
+  await icon.evaluate((el) => {
+    const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
+    title.textContent = "Native SVG hint";
+    el.prepend(title);
+  });
+  await icon.hover();
+  await item.focus();
+  await page.waitForTimeout(500);
+  await expect(page.getByRole("tooltip")).toHaveCount(0);
+
+  await icon.locator("title").evaluate((el) => el.remove());
+  await page.mouse.move(500, 500);
+  await icon.hover();
+  await expect(page.getByRole("tooltip")).toHaveCount(1);
+  // A title can arrive after the custom hint has already appeared.
+  await item.evaluate((el) => el.setAttribute("title", "Native button hint"));
+  await expect(page.getByRole("tooltip")).toHaveCount(0);
+  await item.evaluate((el) => el.removeAttribute("title"));
+  await page.mouse.move(500, 500);
+  await icon.hover();
+  await expect(page.getByRole("tooltip")).toHaveCount(1);
+  await page
+    .locator(".sidebar")
+    .evaluate((el) => el.setAttribute("title", "Native ancestor hint"));
+  await expect(page.getByRole("tooltip")).toHaveCount(0);
+});
+
 test("keyboard cursor has a filled row while Insert marks remain distinct", async ({
   page,
 }) => {

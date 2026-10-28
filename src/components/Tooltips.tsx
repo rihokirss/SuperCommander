@@ -13,14 +13,26 @@ export function Tooltips() {
   useEffect(() => {
     let target: HTMLElement | null = null;
     let timer: ReturnType<typeof setTimeout>;
+    let nativeHints: MutationObserver | undefined;
     const hide = () => {
       clearTimeout(timer);
+      nativeHints?.disconnect();
       setTip(undefined);
       target = null;
     };
     const hasNativeTip = (element: Element, node: HTMLElement) => {
-      const titled = (item: Element) =>
-        !!item.closest("[title]")?.getAttribute("title");
+      const titled = (item: Element) => {
+        if (item.closest("[title]")?.getAttribute("title")) return true;
+        // SVG uses a child <title>, independently of the HTML title attribute.
+        for (
+          let svg = item.closest("svg");
+          svg;
+          svg = svg.parentElement?.closest("svg") ?? null
+        )
+          if (svg.querySelector(":scope > title")?.textContent?.trim())
+            return true;
+        return false;
+      };
       // Focus events target the button even when its icon owns the pointer's
       // native hint. Check the deepest hovered descendant as well.
       const hovered = Array.from(node.querySelectorAll(":hover")).at(-1);
@@ -56,6 +68,27 @@ export function Tooltips() {
         node.getAttribute("aria-label") ||
         node.textContent?.trim();
       if (!text) return;
+      // A native hint may be added while our hint is pending or already visible.
+      // Observe just this control's subtree and its ancestors' title attributes.
+      nativeHints = new MutationObserver(() => {
+        if (hasNativeTip(element, node)) hide();
+      });
+      nativeHints.observe(node, {
+        attributes: true,
+        attributeFilter: ["title"],
+        childList: true,
+        characterData: true,
+        subtree: true,
+      });
+      for (
+        let parent = node.parentElement;
+        parent;
+        parent = parent.parentElement
+      )
+        nativeHints.observe(parent, {
+          attributes: true,
+          attributeFilter: ["title"],
+        });
       timer = setTimeout(() => {
         if (!node.isConnected || hasNativeTip(element, node)) return;
         const rect = node.getBoundingClientRect();
@@ -87,6 +120,7 @@ export function Tooltips() {
     window.addEventListener("scroll", hide, true);
     return () => {
       clearTimeout(timer);
+      nativeHints?.disconnect();
       document.removeEventListener("pointerover", show);
       document.removeEventListener("focusin", show);
       document.removeEventListener("pointerout", leave);
