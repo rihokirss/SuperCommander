@@ -52,7 +52,7 @@ import {
 } from "lucide-react";
 import * as api from "./api";
 import { dictionary } from "./i18n";
-import { basename, parent, pane, tab, uid } from "./utils";
+import { basename, parent, pane, size, tab, uid } from "./utils";
 import {
   FilePane,
   type PaneHandle,
@@ -92,6 +92,7 @@ import type {
   Job,
   JobRequest,
   FileClipboard,
+  ClipboardProgress,
   ClipboardPaste,
   Location,
   Operation,
@@ -153,6 +154,15 @@ export function App() {
   );
   const clipboardRevision = useRef(-1);
   const clipboardBusy = useRef(false);
+  const clipboardTask = useRef<string | undefined>(undefined);
+  const clipboardCancelled = useRef<string | undefined>(undefined);
+  const clipboardPlanning = useRef<string | undefined>(undefined);
+  const [clipboardProgress, setClipboardProgress] =
+    useState<ClipboardProgress>();
+  const clipboardFinishing = useRef(new Set<Promise<unknown>>());
+  const deferredCuts = useRef<{ clipboard: FileClipboard; invalid: boolean }[]>(
+    [],
+  );
   const clipboardMoves = useRef(new Map<string, FileClipboard>());
   const [terminals, setTerminals] = useState<
     Record<string, Location & { label: string }>
@@ -351,15 +361,11 @@ export function App() {
         const pending = clipboardMoves.current.get(event.id);
         if (pending) {
           clipboardMoves.current.delete(event.id);
-          void api
-            .command<FileClipboard | null>("finish_file_paste", {
-              clipboard: pending,
-            })
-            .then((value) => {
-              setFileClipboard(value);
-              clipboardRevision.current = value?.revision ?? -1;
-            })
-            .catch((e) => notify(String(e)));
+          finishClipboardMove(
+            pending,
+            event.state === "failed" &&
+              event.errors.some((error) => error.includes("clipboard source")),
+          );
         }
       }
     });
@@ -638,7 +644,7 @@ export function App() {
       operation: request.operation,
       count: request.paths.length,
       state: "queued",
-      current: "",
+      current: request.paths[0] || "",
       bytes: 0,
       total: 0,
       completed: 0,
@@ -683,7 +689,12 @@ export function App() {
     }
     if (clipboardBusy.current) return;
     clipboardBusy.current = true;
+    const id = uid();
+    clipboardTask.current = id;
+    setClipboardProgress({ current: entries[0].path, files: 0, bytes: 0 });
     try {
+      await Promise.allSettled([...clipboardFinishing.current]);
+      if (clipboardCancelled.current === id) throw new Error(t.cancelled);
       const value: FileClipboard = {
         source: source.source,
         paths: entries.map((e) => e.path),
@@ -691,7 +702,9 @@ export function App() {
         revision: 0,
       };
       const saved = api.desktop
-        ? await api.command<FileClipboard>("write_file_clipboard", { value })
+        ? await api.captureClipboard(id, value, (progress) => {
+            if (clipboardTask.current === id) setClipboardProgress(progress);
+          })
         : { ...value, revision: Math.max(0, clipboardRevision.current + 1) };
       setFileClipboard(saved);
       clipboardRevision.current = saved.revision;
@@ -700,8 +713,61 @@ export function App() {
       notify(String(e));
     } finally {
       clipboardBusy.current = false;
+      if (clipboardTask.current === id) {
+        clipboardTask.current = undefined;
+        if (clipboardCancelled.current === id)
+          clipboardCancelled.current = undefined;
+        setClipboardProgress(undefined);
+        for (const pending of deferredCuts.current.splice(0))
+          finishClipboardMove(pending.clipboard, pending.invalid);
+      }
     }
   }
+  function finishClipboardMove(clipboard: FileClipboard, invalid = false) {
+    if (clipboardTask.current) {
+      deferredCuts.current.push({ clipboard, invalid });
+      return;
+    }
+    const finishing = api
+      .command<FileClipboard | null>(
+        invalid ? "cancel_file_cut" : "finish_file_paste",
+        { clipboard },
+      )
+      .then((value) => {
+        setFileClipboard(value);
+        clipboardRevision.current = value?.revision ?? -1;
+      })
+      .catch((error) => notify(String(error)))
+      .finally(() => {
+        clipboardFinishing.current.delete(finishing);
+      });
+    clipboardFinishing.current.add(finishing);
+  }
+  function cancelClipboardCheck() {
+    clipboardCancelled.current = clipboardTask.current;
+    if (clipboardTask.current && api.desktop)
+      void api
+        .command("cancel_search", { id: clipboardTask.current })
+        .catch(() => {});
+  }
+  useEffect(() => {
+    const cancel = (event: KeyboardEvent) => {
+      if (
+        event.key === "Escape" &&
+        clipboardTask.current &&
+        !document.querySelector('[role="dialog"]')
+      ) {
+        event.preventDefault();
+        event.stopPropagation();
+        cancelClipboardCheck();
+      }
+    };
+    document.addEventListener("keydown", cancel, true);
+    return () => {
+      document.removeEventListener("keydown", cancel, true);
+      cancelClipboardCheck();
+    };
+  }, []);
   async function pasteFiles(index = active, destination = locationAt(index)) {
     if (!destination || clipboardBusy.current) return;
     if (destination.source.startsWith("zip:")) {
@@ -709,11 +775,13 @@ export function App() {
       return;
     }
     clipboardBusy.current = true;
+    const planId = uid();
+    clipboardPlanning.current = planId;
     try {
       const plan = api.desktop
         ? await api.command<ClipboardPaste>("plan_file_paste", {
             destination,
-            id: uid(),
+            id: planId,
           })
         : fileClipboard
           ? {
@@ -747,7 +815,10 @@ export function App() {
       if (plan.clipboard.cut)
         clipboardMoves.current.set(plan.request.id, plan.clipboard);
       try {
-        await enqueue(plan.request);
+        const completion = enqueue(plan.request);
+        clipboardPlanning.current = undefined;
+        clipboardBusy.current = false;
+        await completion;
       } catch (e) {
         clipboardMoves.current.delete(plan.request.id);
         throw e;
@@ -755,7 +826,10 @@ export function App() {
     } catch (e) {
       notify(String(e));
     } finally {
-      clipboardBusy.current = false;
+      if (clipboardPlanning.current === planId) {
+        clipboardPlanning.current = undefined;
+        if (!clipboardTask.current) clipboardBusy.current = false;
+      }
     }
   }
   async function copyPaths(
@@ -2384,10 +2458,28 @@ export function App() {
         </main>
       </div>
       <footer className="statusbar">
-        <span>
-          <span className="status-led" />
-          {api.desktop ? t.ready : t.demoHint}
-        </span>
+        {clipboardProgress ? (
+          <div className="clipboard-check" role="status">
+            <LoaderCircle size={12} className="spin" />
+            <span>
+              {t.checkingClipboard} {basename(clipboardProgress.current)}
+              {clipboardProgress.bytes > 0 &&
+                ` · ${size(clipboardProgress.bytes)}`}
+            </span>
+            <IconButton
+              title={t.cancelClipboardCheck}
+              shortcut="Esc"
+              onClick={cancelClipboardCheck}
+            >
+              <X size={12} />
+            </IconButton>
+          </div>
+        ) : (
+          <span>
+            <span className="status-led" />
+            {api.desktop ? t.ready : t.demoHint}
+          </span>
+        )}
         <div>
           <button onClick={() => setQueueOpen((v) => !v)}>
             <ArrowDownUp size={12} />

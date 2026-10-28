@@ -1,5 +1,7 @@
 import type { Language } from "./types";
 const en = {
+  checkingClipboard: "Checking clipboard selection…",
+  cancelClipboardCheck: "Cancel clipboard selection check",
   recovery: "Recovery & previous versions",
   restore: "Restore",
   recoveryHint:
@@ -465,6 +467,8 @@ const en = {
 };
 type Dictionary = { [K in keyof typeof en]: string };
 const et: Dictionary = {
+  checkingClipboard: "Kontrollin lõikelaua valikut…",
+  cancelClipboardCheck: "Katkesta lõikelaua valiku kontroll",
   recovery: "Taastamine ja eelmised versioonid",
   restore: "Taasta",
   recoveryHint:

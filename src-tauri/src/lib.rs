@@ -543,16 +543,43 @@ async fn read_file_clipboard(
 async fn write_file_clipboard(
     state: State<'_, AppState>,
     window: tauri::Window,
+    webview: tauri::Webview,
     mut value: core::clipboard::Files,
+    id: Option<String>,
+    channel: Option<tauri::ipc::JavaScriptChannelId>,
 ) -> Reply<core::clipboard::Files> {
     value.validate().map_err(error)?;
     let fs = state.sources.get(&value.source).map_err(error)?;
     if value.cut && !fs.writable() {
         return Err("Source is read-only".into());
     }
-    value.connection = fs.connection_id().map(str::to_owned);
+    let task = id
+        .map(|id| state.searches.start(id))
+        .transpose()
+        .map_err(error)?;
+    let cancel = task
+        .as_ref()
+        .map(|task| task.cancel.clone())
+        .unwrap_or_default();
+    let channel = channel.map(|channel| channel.channel_on(webview));
+    let revision = core::clipboard::revision();
     let owner = clipboard_owner(&window)?;
-    blocking(move || core::clipboard::write(owner, &value)).await
+    blocking(move || {
+        let _task = task;
+        value.capture_selection(fs.as_ref(), &cancel, &|progress| {
+            if channel
+                .as_ref()
+                .is_some_and(|channel| channel.send(progress).is_err())
+            {
+                cancel.store(true, Ordering::Relaxed);
+            }
+        })?;
+        if cancel.load(Ordering::Relaxed) {
+            anyhow::bail!("Cancelled");
+        }
+        core::clipboard::write_captured(owner, &value, revision, &cancel)
+    })
+    .await
 }
 #[tauri::command]
 async fn write_clipboard_text(window: tauri::Window, text: String) -> Reply<()> {
@@ -624,6 +651,7 @@ async fn plan_file_paste(
                 },
                 source_connection: source.connection_id().map(str::to_owned),
                 destination_connection: dest.connection_id().map(str::to_owned),
+                source_bindings: value.bindings.clone(),
             },
             clipboard: value,
         })

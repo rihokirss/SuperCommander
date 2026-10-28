@@ -222,6 +222,20 @@ export type JobRequest = {
   conflict: Conflict;
   sourceConnection?: string | null;
   destinationConnection?: string | null;
+  sourceBindings?: ClipboardBinding[] | null;
+};
+export type ClipboardBinding = {
+  canonical: string | null;
+  identity: string | null;
+  revision: string;
+  digest: string | null;
+  directory: boolean;
+  link: boolean;
+};
+export type ClipboardProgress = {
+  current: string;
+  files: number;
+  bytes: number;
 };
 export type FileClipboard = {
   source: string;
@@ -229,6 +243,7 @@ export type FileClipboard = {
   cut: boolean;
   revision: number;
   connection?: string;
+  bindings?: ClipboardBinding[];
 };
 export type ClipboardPaste = { clipboard: FileClipboard; request: JobRequest };
 export type JobEvent = {

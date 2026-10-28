@@ -589,6 +589,23 @@ input[type="checkbox"]:not([role="switch"]):indeterminate::after {
 .network-available .icon-button {
   margin-left: auto;
 }
+.clipboard-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 60%;
+}
+.clipboard-check > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.clipboard-check .icon-button {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
 .sidebar-empty {
   color: var(--muted);
   font-size: 10px;

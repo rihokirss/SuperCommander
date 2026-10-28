@@ -136,6 +136,7 @@ fn run(sources: Arc<Sources>, source: &str, path: &Path, destination: &str) -> J
             conflict: Conflict::Replace,
             source_connection: None,
             destination_connection: None,
+            source_bindings: None,
         })
         .unwrap();
     loop {

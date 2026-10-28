@@ -409,7 +409,7 @@
       "artifacts/native-transfers.png"
     ],
     "remaining": [
-      "Clipboard object identity before paste remains to be audited; the new source snapshot begins when a file operation is submitted.",
+      "Clipboard selections are now covered by clipboardSelectionBatch; continue its pending native UI verification and lifecycle audit.",
       "Continue rename/archive mutation and the remaining source/terminal/tunnel lifecycle and original-scope requirements. Delete boundaries, disconnected destinations and recovery UI are covered by recoveryBatch."
     ],
     "ci": "Public Windows CI run 40618564714 passed on d8db43f3368d37ed0e0f37f9e3c0c83851b49f43."
@@ -445,10 +445,37 @@
       "artifacts/native-recovery-review.png"
     ],
     "remaining": [
-      "Verify the new public Windows CI run after pushing. Prior tooltip run 40621753566 reached the native app's bootstrap screen but failed its 5-second readiness wait before clipboard assertions; native startup/settings readiness now allows 30 seconds without restarting the owned process. Clipboard UI tests remain CI-only.",
+      "Recovery Windows CI passed in run 40624797882 on 73a16dd93f2f9d044b037918c1b1d9a4b60bda6b. Run 40624485605 exposed a test's literal Windows short/long path comparison; the test now compares canonical paths. Earlier bootstrap readiness waits were also corrected. Clipboard UI tests remain CI-only.",
       "Continue clipboard identity before paste, live rename/archive mutation, source/terminal/tunnel lifecycle, navigation/selection, UI consistency and distribution audits against the original requirements. Overall completion remains unproven.",
-      "Audit allocation bounds for unusually large recovery trees: discovery is bounded, but restoration planning currently materializes a directory listing before applying its 200,000-node limit.",
+      "Recovery allocation bounds are covered by clipboardSelectionBatch: restoration now streams enumeration and reserves a shared budget before retaining entries.",
       "Permanent deletion is irreversible for already removed entries; recovery restores remaining saved data, not an undelete history. Process-local active guards do not claim interprocess locking."
+    ]
+  },
+  "clipboardSelectionBatch": {
+    "features": [
+      "Copy/cut captures serialized root bindings: canonical paths, native object IDs where available, or conservative metadata/file SHA-256/folder membership checks",
+      "Native identities include exposed creation timestamps, complementing volume/file or device/inode IDs",
+      "Root bindings are carried into queue inspection and checked before destination output; the existing queued version manifest still protects changes after paste",
+      "Native roots allow in-place file edits and live folder children before paste, while replacing a selected root is rejected",
+      "Clipboard checks expose compact status/progress and Esc cancellation; publishing checks cancellation and clipboard revision before replacing existing data",
+      "Partial cut cleanup preserves the binding for each remaining path; stale cut receipts are cleared conditionally without deleting replacements",
+      "Ctrl+C becomes available after paste is handed to Transfers; earlier cut cleanup waits for a pending capture and cannot consume its newer clipboard",
+      "Recovery planning streams directory entries, stops during enumeration and shares a 200,000-entry budget across pending siblings and descendants",
+      "README documents clipboard binding semantics, external CF_HDROP limitations, stricter fallback checks and large-tree limits"
+    ],
+    "checks": {
+      "coreTests": "112 passed on Linux, including 6 clipboard selection cases and 3 streaming recovery limit/cancellation cases; clipboard receipt/subset checks are included in the clipboard suite.",
+      "realOpenSshIntegration": "6 passed, including same-size/same-time replacement before paste, fresh remote copying, and cancelling remote selection capture.",
+      "javascriptUnitTests": "26 passed",
+      "browserTests": "47 passed; the 3 clipboard cases were rerun after local capture-cancellation tracking, then all 10 clipboard/keyboard cases passed after the queued-name and help changes.",
+      "nativeWindowsCore": "Windows x64 Rust test executables ran successfully on the user's Windows host: 6 clipboard selection tests, 3 recovery limits tests and 7 editor tests. They use their own temporary files and do not access the desktop clipboard.",
+      "nativeWindows": "Candidate 1c9a2660 passed transfer, recovery, queue and comparison smoke checks with the owned loopback SSH fixture, including actual UNC/SFTP aliases, same-size/same-time edits, cancellation, metadata, reviewed copies and restoration. Its source predates only the final frontend pre-capture-cancellation flag, queued filename and F1 row changes.",
+      "windowsClipboard": "Pending dedicated Windows CI. The expanded core/UI suites cover binding serialization/subset cleanup, conditional/cancelled publication, rejected file/folder replacement, live native folder children, stale cut receipts, a newer Ctrl+C during delayed paste enqueue, and Escape during delayed capture. They must not run on the user's desktop."
+    },
+    "remaining": [
+      "Compile the final frontend and verify the matching public Windows CI run, including the actual desktop clipboard cases.",
+      "Complete original-scope navigation/selection, context actions, rename/archive mutations, source/terminal/tunnel lifecycle, UI consistency and distribution audits before marking the overall goal complete.",
+      "Fallback metadata/checksum/membership checks do not provide native object IDs. External CF_HDROP selections carry paths and become checked from paste, not from an unobservable external copy event."
     ]
   }
 }

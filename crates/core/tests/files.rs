@@ -28,6 +28,7 @@ fn request(operation: Operation, source: &std::path::Path, dest: &std::path::Pat
         conflict: Conflict::Replace,
         source_connection: None,
         destination_connection: None,
+        source_bindings: None,
     }
 }
 fn run(req: JobRequest) -> JobEvent {

@@ -8,6 +8,7 @@ fn rejects_invalid_clipboard_payloads_and_cutting_archives() {
         cut: false,
         revision: 0,
         connection: None,
+        bindings: None,
     };
     assert!(value.validate().is_ok());
     assert!(Files {
@@ -40,6 +41,7 @@ fn clipboard_revisions_prevent_old_jobs_from_overwriting_new_copies() {
         cut: true,
         revision: 0,
         connection: None,
+        bindings: None,
     };
     let first = clipboard::write(0, &value).unwrap();
     let remaining = clipboard::replace_if_unchanged(0, &first, vec!["/tmp/b".into()])
@@ -62,6 +64,52 @@ fn clipboard_revisions_prevent_old_jobs_from_overwriting_new_copies() {
     );
     clipboard::text(0, "a new text selection").unwrap();
     assert_eq!(clipboard::read(0).unwrap(), None);
+    assert!(clipboard::write_captured(
+        0,
+        &remaining,
+        clipboard::revision(),
+        &std::sync::atomic::AtomicBool::new(true)
+    )
+    .is_err());
+    assert!(clipboard::write_at_revision(0, &remaining, Some(remaining.revision)).is_err());
+    assert_eq!(clipboard::read(0).unwrap(), None);
+    // Partial moves retain the binding belonging to each remaining path.
+    let root = tempfile::TempDir::new().unwrap();
+    let paths: Vec<String> = ["one.txt", "two.txt"]
+        .iter()
+        .map(|name| {
+            let path = root.path().join(name);
+            std::fs::write(&path, name).unwrap();
+            path.to_string_lossy().into()
+        })
+        .collect();
+    let mut bound = Files {
+        source: "local".into(),
+        paths,
+        cut: true,
+        revision: 0,
+        connection: None,
+        bindings: None,
+    };
+    bound
+        .capture_selection(
+            &commander_core::filesystem::LocalFs,
+            &std::sync::atomic::AtomicBool::new(false),
+            &|_| {},
+        )
+        .unwrap();
+    let written = clipboard::write(0, &bound).unwrap();
+    let partial = clipboard::replace_if_unchanged(0, &written, vec![bound.paths[1].clone()])
+        .unwrap()
+        .unwrap();
+    assert_eq!(partial.bindings.as_ref().unwrap().len(), 1);
+    partial
+        .validate_selection(
+            &commander_core::filesystem::LocalFs,
+            &std::sync::atomic::AtomicBool::new(false),
+            &|_| {},
+        )
+        .unwrap();
 }
 
 #[cfg(windows)]
@@ -111,6 +159,7 @@ fn windows_file_clipboard_interoperates_with_shell_formats() {
         cut: true,
         revision: 0,
         connection: None,
+        bindings: None,
     };
     let copied = clipboard::write(owner, &data).unwrap();
     assert_eq!(clipboard::read(owner).unwrap(), Some(copied.clone()));
@@ -219,12 +268,60 @@ fn windows_file_clipboard_interoperates_with_shell_formats() {
         cut: false,
         revision: 0,
         connection: None,
+        bindings: None,
     };
     clipboard::write(owner, &remote).unwrap();
     assert_eq!(unsafe { IsClipboardFormatAvailable(CF_HDROP as u32) }, 0);
     assert_eq!(clipboard::read(owner).unwrap().unwrap().paths, remote.paths);
     clipboard::text(owner, "plain text replaces file selection").unwrap();
     assert_eq!(clipboard::read(owner).unwrap(), None);
+    assert!(clipboard::write_captured(
+        owner,
+        &remote,
+        clipboard::revision(),
+        &std::sync::atomic::AtomicBool::new(true)
+    )
+    .is_err());
+    let revision = clipboard::revision();
+    clipboard::text(owner, "a newer clipboard selection").unwrap();
+    assert!(clipboard::write_at_revision(owner, &remote, Some(revision)).is_err());
+    assert_eq!(clipboard::read(owner).unwrap(), None);
+    let root = tempfile::TempDir::new().unwrap();
+    let paths: Vec<String> = ["one.txt", "two.txt"]
+        .iter()
+        .map(|name| {
+            let path = root.path().join(name);
+            std::fs::write(&path, name).unwrap();
+            path.to_string_lossy().into()
+        })
+        .collect();
+    let mut bound = Files {
+        source: "local".into(),
+        paths,
+        cut: true,
+        revision: 0,
+        connection: None,
+        bindings: None,
+    };
+    bound
+        .capture_selection(
+            &commander_core::filesystem::LocalFs,
+            &std::sync::atomic::AtomicBool::new(false),
+            &|_| {},
+        )
+        .unwrap();
+    let written = clipboard::write(owner, &bound).unwrap();
+    let partial = clipboard::replace_if_unchanged(owner, &written, vec![bound.paths[1].clone()])
+        .unwrap()
+        .unwrap();
+    assert_eq!(partial.bindings.as_ref().unwrap().len(), 1);
+    partial
+        .validate_selection(
+            &commander_core::filesystem::LocalFs,
+            &std::sync::atomic::AtomicBool::new(false),
+            &|_| {},
+        )
+        .unwrap();
     unsafe {
         DestroyWindow(window);
     }

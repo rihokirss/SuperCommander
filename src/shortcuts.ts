@@ -19,6 +19,7 @@ export function shortcutGroups(t: Text) {
         ["Ctrl+X", t.cutClipboard],
         ["Ctrl+V / Shift+Insert", t.paste],
         ["Ctrl+Shift+C", t.copyPath],
+        ["Esc", t.cancelClipboardCheck],
       ],
     },
     {

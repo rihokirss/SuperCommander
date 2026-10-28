@@ -3,6 +3,8 @@
 //! https://learn.microsoft.com/windows/win32/dataxchg/clipboard-operations
 use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
+mod selection;
+pub use selection::{Binding, Progress};
 
 const MAX_BYTES: usize = 64 * 1024 * 1024;
 const MAX_PATHS: usize = 100_000;
@@ -17,8 +19,36 @@ pub struct Files {
     pub revision: u32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub connection: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bindings: Option<Vec<Binding>>,
 }
 impl Files {
+    fn retaining(&self, paths: Vec<String>) -> Result<Self> {
+        let bindings = if let Some(bindings) = &self.bindings {
+            let by_path: std::collections::HashMap<_, _> =
+                self.paths.iter().zip(bindings).collect();
+            Some(
+                paths
+                    .iter()
+                    .map(|path| {
+                        by_path
+                            .get(path)
+                            .map(|binding| (*binding).clone())
+                            .ok_or_else(|| {
+                                anyhow::anyhow!("Clipboard cleanup changed the selection")
+                            })
+                    })
+                    .collect::<Result<Vec<_>>>()?,
+            )
+        } else {
+            None
+        };
+        Ok(Self {
+            paths,
+            bindings,
+            ..self.clone()
+        })
+    }
     pub fn validate_source(&self, source: &dyn crate::filesystem::FileSystem) -> Result<()> {
         if self.source.starts_with("sftp:")
             && (self.connection.is_none() || self.connection.as_deref() != source.connection_id())
@@ -43,6 +73,13 @@ impl Files {
         }
         if self.cut && self.source.starts_with("zip:") {
             bail!("An archive is read-only");
+        }
+        if self
+            .bindings
+            .as_ref()
+            .is_some_and(|bindings| bindings.len() != self.paths.len())
+        {
+            bail!("Invalid file clipboard selection bindings");
         }
         #[cfg(windows)]
         if self.source == "local"
@@ -238,11 +275,18 @@ mod platform {
             cut: effect & 2 != 0,
             revision: revision(),
             connection: None,
+            bindings: None,
         };
         value.validate()?;
         Ok(Some(value))
     }
     fn write_open(value: &Files) -> Result<()> {
+        write_open_checked(value, None)
+    }
+    fn write_open_checked(
+        value: &Files,
+        cancel: Option<&std::sync::atomic::AtomicBool>,
+    ) -> Result<()> {
         value.validate()?;
         let private = format("SuperCommander.Files.v1")?;
         let effect = format("Preferred DropEffect")?;
@@ -275,6 +319,9 @@ mod platform {
             .collect();
         formats.push((CF_UNICODETEXT as u32, Memory::new(&text)?));
         // Allocate and validate all formats before replacing the user's previous clipboard.
+        if cancel.is_some_and(|cancel| cancel.load(std::sync::atomic::Ordering::Relaxed)) {
+            bail!("Cancelled");
+        }
         if unsafe { EmptyClipboard() } == 0 {
             bail!("Cannot empty the clipboard");
         }
@@ -292,17 +339,48 @@ mod platform {
         read_open()
     }
     pub fn write(owner: usize, value: &Files) -> Result<Files> {
+        write_at_revision(owner, value, None)
+    }
+    pub fn write_at_revision(owner: usize, value: &Files, expected: Option<u32>) -> Result<Files> {
+        write_checked(owner, value, expected, None)
+    }
+    pub fn write_captured(
+        owner: usize,
+        value: &Files,
+        expected: u32,
+        cancel: &std::sync::atomic::AtomicBool,
+    ) -> Result<Files> {
+        write_checked(owner, value, Some(expected), Some(cancel))
+    }
+    fn write_checked(
+        owner: usize,
+        value: &Files,
+        expected: Option<u32>,
+        cancel: Option<&std::sync::atomic::AtomicBool>,
+    ) -> Result<Files> {
         let _lock = ACCESS.lock().unwrap();
         {
             let _open = Open::new(owner)?;
-            write_open(value)?;
+            if expected.is_some_and(|expected| revision() != expected) {
+                bail!("The clipboard changed while checking the selection. Copy the files again.");
+            }
+            write_open_checked(value, cancel)?;
         }
         // Closing a Unicode-text clipboard adds synthesized text formats and
         // advances its sequence number. Reopen and read the actual clipboard:
         // sampling the sequence before CloseClipboard produces a stale receipt,
         // while sampling afterwards alone could claim another application's data.
         let _open = Open::new(owner)?;
-        read_open()?.context("The clipboard changed while copying files")
+        let current = read_open()?.context("The clipboard changed while copying files")?;
+        if current.source != value.source
+            || current.paths != value.paths
+            || current.cut != value.cut
+            || current.connection != value.connection
+            || current.bindings != value.bindings
+        {
+            bail!("The clipboard changed while copying files");
+        }
+        Ok(current)
     }
     pub fn text(owner: usize, value: &str) -> Result<()> {
         if value.contains('\0') {
@@ -341,10 +419,7 @@ mod platform {
             }
             return Ok(None);
         }
-        write_open(&Files {
-            paths: remaining,
-            ..expected.clone()
-        })?;
+        write_open(&expected.retaining(remaining)?)?;
         drop(open);
         let _open = Open::new(owner)?;
         read_open()
@@ -363,8 +438,32 @@ mod platform {
         Ok(MEMORY.lock().unwrap().1.clone())
     }
     pub fn write(_: usize, value: &Files) -> Result<Files> {
+        write_at_revision(0, value, None)
+    }
+    pub fn write_at_revision(_: usize, value: &Files, expected: Option<u32>) -> Result<Files> {
+        write_checked(value, expected, None)
+    }
+    pub fn write_captured(
+        _: usize,
+        value: &Files,
+        expected: u32,
+        cancel: &std::sync::atomic::AtomicBool,
+    ) -> Result<Files> {
+        write_checked(value, Some(expected), Some(cancel))
+    }
+    fn write_checked(
+        value: &Files,
+        expected: Option<u32>,
+        cancel: Option<&std::sync::atomic::AtomicBool>,
+    ) -> Result<Files> {
         value.validate()?;
         let mut data = MEMORY.lock().unwrap();
+        if cancel.is_some_and(|cancel| cancel.load(std::sync::atomic::Ordering::Relaxed)) {
+            bail!("Cancelled");
+        }
+        if expected.is_some_and(|expected| data.0 != expected) {
+            bail!("The clipboard changed while checking the selection. Copy the files again.");
+        }
         data.0 = data.0.wrapping_add(1);
         let result = Files {
             revision: data.0,
@@ -393,13 +492,14 @@ mod platform {
             None
         } else {
             Some(Files {
-                paths: remaining,
                 revision: data.0,
-                ..expected.clone()
+                ..expected.retaining(remaining)?
             })
         };
         let _ = owner;
         Ok(data.1.clone())
     }
 }
-pub use platform::{read, replace_if_unchanged, revision, text, write};
+pub use platform::{
+    read, replace_if_unchanged, revision, text, write, write_at_revision, write_captured,
+};

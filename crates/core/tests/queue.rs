@@ -22,6 +22,7 @@ fn request(id: &str, operation: Operation, path: &Path, dest: &Path) -> JobReque
         conflict: Conflict::Replace,
         source_connection: None,
         destination_connection: None,
+        source_bindings: None,
     }
 }
 fn wait(rx: &mpsc::Receiver<JobEvent>, id: &str, states: &[&str]) -> JobEvent {

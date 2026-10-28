@@ -9,6 +9,8 @@ import type {
   RecoveryBatch,
   RecoveryOptions,
   RecoveryReview,
+  ClipboardProgress,
+  FileClipboard,
 } from "./types";
 import type {
   Bootstrap,
@@ -149,6 +151,15 @@ export function subscribe<T>(event: string, callback: (data: T) => void) {
 }
 export const onJob = (callback: (job: JobEvent) => void) =>
   subscribe("job-progress", callback);
+export function captureClipboard(
+  id: string,
+  value: FileClipboard,
+  receive: (progress: ClipboardProgress) => void,
+): Promise<FileClipboard> {
+  const channel = new Channel<ClipboardProgress>();
+  channel.onmessage = receive;
+  return command("write_file_clipboard", { id, value, channel });
+}
 
 export async function scanRecovery(
   id: string,

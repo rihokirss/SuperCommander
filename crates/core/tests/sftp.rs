@@ -242,6 +242,7 @@ async fn cross_protocol_moves_and_copies_preserve_aliases_and_transfer_metadata(
                     conflict: Conflict::Replace,
                     source_connection: None,
                     destination_connection: None,
+                    source_bindings: None,
                 })
                 .unwrap();
             loop {
@@ -451,6 +452,7 @@ async fn queued_ssh_jobs_and_clipboards_do_not_rebind_to_replacement_connections
             cut: true,
             revision: 0,
             connection: first.connection_id().map(str::to_owned),
+            bindings: None,
         };
         assert!(clipboard.validate_source(first.as_ref()).is_ok());
         assert!(clipboard.validate_source(second.as_ref()).is_err());
@@ -487,6 +489,7 @@ async fn queued_ssh_jobs_and_clipboards_do_not_rebind_to_replacement_connections
             conflict: Conflict::Ask,
             source_connection: None,
             destination_connection: None,
+            source_bindings: None,
         };
         engine.enqueue(blocking.clone()).unwrap();
         loop {
@@ -536,6 +539,119 @@ async fn queued_ssh_jobs_and_clipboards_do_not_rebind_to_replacement_connections
             "replacement connection remains usable"
         );
         FileSystem::close(second.as_ref()).unwrap();
+    })
+    .await
+    .unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "Requires local OpenSSH server and ssh-keygen"]
+async fn clipboard_selection_checks_remote_contents_before_paste_and_can_be_cancelled() {
+    use commander_core::{
+        clipboard::Files,
+        engine::Engine,
+        filesystem::{LocalFs, Sources},
+        Conflict, JobRequest, Location, Operation,
+    };
+    use std::sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc, Arc,
+    };
+    let server = start();
+    let (probe, _) = remote::connect(&server.profile, "", None).await.unwrap();
+    let (_, connection) = remote::connect(&server.profile, "", Some(probe.fingerprint))
+        .await
+        .unwrap();
+    let connection = connection.unwrap();
+    let root = server._directory.path().to_path_buf();
+    tokio::task::spawn_blocking(move || {
+        let source = root.join("selected.txt");
+        let target = root.join("Target");
+        fs::create_dir(&target).unwrap();
+        fs::write(&source, "before").unwrap();
+        let mut value = Files {
+            source: "sftp:clipboard".into(),
+            paths: vec![source.to_string_lossy().into()],
+            cut: true,
+            revision: 0,
+            connection: None,
+            bindings: None,
+        };
+        value
+            .capture_selection(connection.as_ref(), &AtomicBool::new(false), &|_| {})
+            .unwrap();
+        let props = LocalFs.properties(source.to_str().unwrap()).unwrap();
+        fs::rename(&source, root.join("Kept.txt")).unwrap();
+        fs::write(&source, "edited").unwrap();
+        LocalFs
+            .transfer_metadata(source.to_str().unwrap(), &props)
+            .unwrap();
+        let sources = Arc::new(Sources::default());
+        sources.insert(value.source.clone(), connection.clone());
+        let (tx, rx) = mpsc::channel();
+        let engine = Engine::new(
+            sources,
+            Arc::new(move |event| {
+                let _ = tx.send(event);
+            }),
+        );
+        for (id, operation, expected) in [
+            ("stale", Operation::Move, "failed"),
+            ("fresh", Operation::Copy, "completed"),
+        ] {
+            if id == "fresh" {
+                value
+                    .capture_selection(connection.as_ref(), &AtomicBool::new(false), &|_| {})
+                    .unwrap();
+            }
+            engine
+                .enqueue(JobRequest {
+                    id: id.into(),
+                    operation,
+                    source: value.source.clone(),
+                    paths: value.paths.clone(),
+                    destination: Location {
+                        source: "local".into(),
+                        path: target.to_string_lossy().into(),
+                    },
+                    conflict: Conflict::Replace,
+                    source_connection: value.connection.clone(),
+                    destination_connection: None,
+                    source_bindings: value.bindings.clone(),
+                })
+                .unwrap();
+            loop {
+                let event = rx.recv_timeout(Duration::from_secs(15)).unwrap();
+                if event.id == id
+                    && ["completed", "failed", "cancelled"].contains(&event.state.as_str())
+                {
+                    assert_eq!(event.state, expected, "{:?}", event.errors);
+                    if id == "stale" {
+                        assert!(event
+                            .errors
+                            .iter()
+                            .any(|error| error.contains("clipboard source")));
+                        assert_eq!(fs::read_dir(&target).unwrap().count(), 0);
+                    }
+                    break;
+                }
+            }
+        }
+        assert_eq!(fs::read_to_string(&source).unwrap(), "edited");
+        assert_eq!(
+            fs::read_to_string(target.join("selected.txt")).unwrap(),
+            "edited"
+        );
+        let cancel = AtomicBool::new(false);
+        let error = value
+            .capture_selection(connection.as_ref(), &cancel, &|progress| {
+                if progress.bytes > 0 {
+                    cancel.store(true, Ordering::Relaxed);
+                }
+            })
+            .unwrap_err();
+        assert!(error.to_string().contains("Cancelled"));
+        assert!(value.bindings.is_none());
     })
     .await
     .unwrap();
@@ -616,6 +732,7 @@ async fn verifies_host_authenticates_and_transfers_over_real_sftp() {
                     conflict,
                     source_connection: None,
                     destination_connection: None,
+                    source_bindings: None,
                 })
                 .unwrap();
             loop {

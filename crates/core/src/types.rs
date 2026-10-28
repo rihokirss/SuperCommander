@@ -80,6 +80,8 @@ pub struct JobRequest {
     pub source_connection: Option<String>,
     #[serde(default)]
     pub destination_connection: Option<String>,
+    #[serde(default)]
+    pub source_bindings: Option<Vec<crate::clipboard::Binding>>,
 }
 
 #[derive(Clone, Debug, Serialize)]

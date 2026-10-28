@@ -171,7 +171,13 @@ impl FileSystem for LocalFs {
         {
             use std::os::unix::fs::MetadataExt;
             let meta = fs::symlink_metadata(path)?;
-            let id = format!("{}:{}", meta.dev(), meta.ino());
+            let birth = meta
+                .created()
+                .ok()
+                .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
+                .map(|time| time.as_nanos())
+                .unwrap_or(0);
+            let id = format!("{}:{}:{birth}", meta.dev(), meta.ino());
             let version = format!(
                 "{id}:{}:{}:{}:{}:{}",
                 meta.ctime(),
@@ -211,8 +217,8 @@ impl FileSystem for LocalFs {
                 return Ok(None);
             }
             let identity = format!(
-                "{}:{}:{}",
-                id.dwVolumeSerialNumber, id.nFileIndexHigh, id.nFileIndexLow
+                "{}:{}:{}:{}",
+                id.dwVolumeSerialNumber, id.nFileIndexHigh, id.nFileIndexLow, basic.CreationTime
             );
             let version = format!(
                 "{identity}:{}:{}:{}:{}",

@@ -477,6 +477,7 @@ pub fn prepare(
         rows: Vec<comparison::Row>,
         actions: Vec<Action>,
         summary: RestoreSummary,
+        discovered: usize,
     }
     impl Build<'_> {
         fn visit(&mut self, path: &str, relative: &str, depth: usize) -> Result<()> {
@@ -493,7 +494,39 @@ pub fn prepare(
             let canonical = self.fs.canonical_path(path)?;
             let mut children = Vec::new();
             if info.file.is_dir {
-                children = self.fs.list(path)?;
+                let stop = std::sync::atomic::AtomicBool::new(false);
+                let mut failure = None;
+                self.fs.visit_entries(path, &stop, &mut |entry| {
+                    if failure.is_some() {
+                        return;
+                    }
+                    if self.cancel.load(Ordering::Relaxed) {
+                        failure = Some(anyhow::anyhow!("Cancelled"));
+                    } else if self.discovered >= 200_000 {
+                        failure = Some(anyhow::anyhow!(
+                            "Recovery tree exceeds the supported size or depth"
+                        ));
+                    } else {
+                        match entry {
+                            Ok(entry) => {
+                                // Reserve space for every discovered entry, including
+                                // siblings still waiting in ancestor traversal lists.
+                                self.discovered += 1;
+                                children.push(entry);
+                            }
+                            Err(error) => failure = Some(error),
+                        }
+                    }
+                    if failure.is_some() {
+                        stop.store(true, Ordering::Relaxed);
+                    }
+                })?;
+                if let Some(error) = failure {
+                    return Err(error);
+                }
+                if self.cancel.load(Ordering::Relaxed) {
+                    bail!("Cancelled");
+                }
             } else if !self.fs.regular_file(path)? {
                 bail!("Special files cannot be recovered by copying: {path}");
             }
@@ -618,6 +651,7 @@ pub fn prepare(
         right: BTreeMap::new(),
         rows: Vec::new(),
         actions: Vec::new(),
+        discovered: 1,
         summary: RestoreSummary {
             destination: options.destination.clone(),
             files: 0,

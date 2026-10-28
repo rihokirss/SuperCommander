@@ -170,6 +170,7 @@ impl Engine {
             conflict: Conflict::Replace,
             source_connection: plan.left.connection.clone(),
             destination_connection: plan.right.connection.clone(),
+            source_bindings: None,
         };
         self.enqueue_inner(request, Some(prepared), false, lease)
     }
@@ -217,6 +218,7 @@ impl Engine {
                 conflict: Conflict::Replace,
                 source_connection: item.connection,
                 destination_connection: None,
+                source_bindings: None,
             },
             None,
             true,
@@ -343,8 +345,12 @@ impl Engine {
                 } else {
                     None
                 };
-                let mut snapshot =
-                    snapshot::Snapshot::capture(source.as_ref(), &request.paths, &mut inspection)?;
+                let mut snapshot = snapshot::Snapshot::capture_bound(
+                    source.as_ref(),
+                    &request.paths,
+                    &mut inspection,
+                    request.source_bindings.as_deref(),
+                )?;
                 snapshot.destination = binding;
                 if matches!(request.operation, Operation::Copy | Operation::Move) {
                     snapshot.ensure_transferable()?;

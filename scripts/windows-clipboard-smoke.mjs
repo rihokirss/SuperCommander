@@ -6,6 +6,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
+import { randomUUID } from "node:crypto";
 
 assert.equal(process.platform, "win32");
 assert.equal(
@@ -241,6 +242,198 @@ try {
     .toBe(path.join(dst, "external.txt"));
   assert.equal(await rpc("read_file_clipboard"), null);
   console.log("PASS copy full path as native Unicode text");
+  for (const cut of [false, true]) {
+    const name = cut ? "guarded-cut.txt" : "guarded-copy.txt";
+    const selected = path.join(src, name);
+    await fs.writeFile(selected, "before");
+    await left.getByRole("grid").focus();
+    await page.keyboard.press("Control+r");
+    await left.getByText(name, { exact: true }).click();
+    await page.keyboard.press(cut ? "Control+x" : "Control+c");
+    await expect
+      .poll(async () => (await rpc("read_file_clipboard"))?.paths?.[0])
+      .toBe(selected);
+    const selection = await rpc("read_file_clipboard");
+    assert.equal(selection.bindings.length, 1);
+    const props = await fs.stat(selected);
+    await fs.rename(selected, selected + ".kept");
+    await fs.writeFile(selected, "edited");
+    await fs.utimes(selected, props.atime, props.mtime);
+    const failures = await page.locator(".job-row.failed").count();
+    await right.getByRole("grid").focus();
+    await page.keyboard.press("Control+v");
+    await expect(page.locator(".job-row.failed")).toHaveCount(failures + 1);
+    await assert.rejects(fs.access(path.join(dst, name)));
+    assert.equal(await fs.readFile(selected, "utf8"), "edited");
+    assert.equal(await fs.readFile(selected + ".kept", "utf8"), "before");
+    if (cut) await expect.poll(() => rpc("read_file_clipboard")).toBe(null);
+  }
+  console.log(
+    "PASS clipboard object bindings reject same-size/same-time replacements before copy/cut output and clear only the stale cut receipt",
+  );
+
+  const directory = path.join(src, "Guarded folder");
+  await fs.mkdir(directory);
+  await fs.writeFile(path.join(directory, "original.txt"), "original child");
+  await left.getByRole("grid").focus();
+  await page.keyboard.press("Control+r");
+  await left.getByText("Guarded folder", { exact: true }).click();
+  await page.keyboard.press("Control+x");
+  await expect
+    .poll(async () => (await rpc("read_file_clipboard"))?.paths?.[0])
+    .toBe(directory);
+  await fs.rename(directory, directory + ".kept");
+  await fs.mkdir(directory);
+  await fs.writeFile(path.join(directory, "foreign.txt"), "keep foreign child");
+  const failures = await page.locator(".job-row.failed").count();
+  await right.getByRole("grid").focus();
+  await page.keyboard.press("Control+v");
+  await expect(page.locator(".job-row.failed")).toHaveCount(failures + 1);
+  await assert.rejects(fs.access(path.join(dst, "Guarded folder")));
+  assert.equal(
+    await fs.readFile(path.join(directory, "foreign.txt"), "utf8"),
+    "keep foreign child",
+  );
+  await expect.poll(() => rpc("read_file_clipboard")).toBe(null);
+
+  await left.getByRole("grid").focus();
+  await left.getByText("Guarded folder", { exact: true }).click();
+  await page.keyboard.press("Control+c");
+  await expect
+    .poll(async () => (await rpc("read_file_clipboard"))?.paths?.[0])
+    .toBe(directory);
+  await fs.writeFile(
+    path.join(directory, "added.txt"),
+    "live child added before paste",
+  );
+  await right.getByRole("grid").focus();
+  await page.keyboard.press("Control+v");
+  await expect
+    .poll(() =>
+      fs
+        .readFile(path.join(dst, "Guarded folder", "added.txt"), "utf8")
+        .catch(() => ""),
+    )
+    .toBe("live child added before paste");
+  const current = await rpc("read_file_clipboard");
+  const cancelled = randomUUID();
+  await rpc("cancel_search", { id: cancelled });
+  await assert.rejects(
+    rpc("write_file_clipboard", {
+      id: cancelled,
+      value: { source: "local", paths: [directory], cut: false, revision: 0 },
+    }),
+    /Cancelled/,
+  );
+  assert.deepEqual(await rpc("read_file_clipboard"), current);
+  console.log(
+    "PASS replaced directory guards, live native folder children and cancellation before clipboard capture registration",
+  );
+
+  for (const name of ["queued-cut.txt", "latest-copy.txt"])
+    await fs.writeFile(path.join(src, name), name);
+  await left.getByRole("grid").focus();
+  await page.keyboard.press("Control+r");
+  await left.getByText("queued-cut.txt", { exact: true }).click();
+  await page.keyboard.press("Control+x");
+  await expect
+    .poll(async () => (await rpc("read_file_clipboard"))?.paths?.[0])
+    .toBe(path.join(src, "queued-cut.txt"));
+  await page.evaluate(() => {
+    const bridge = window.__TAURI_INTERNALS__,
+      original = bridge.invoke;
+    let resume;
+    const gate = new Promise((resolve) => {
+      resume = resolve;
+    });
+    bridge.invoke = async (command, args) => {
+      if (command === "enqueue_job") await gate;
+      return original(command, args);
+    };
+    window.__resumeClipboardPaste = () => {
+      resume();
+    };
+    window.__finishedClipboardCuts = [];
+    const gated = bridge.invoke;
+    bridge.invoke = async (command, args) => {
+      const result = await gated(command, args);
+      if (command === "finish_file_paste")
+        window.__finishedClipboardCuts.push(args.clipboard.paths);
+      return result;
+    };
+  });
+  await right.getByRole("grid").focus();
+  await page.keyboard.press("Control+v");
+  await expect(page.locator(".job-row.queued").first()).toContainText(
+    "queued-cut.txt",
+  );
+  await left.getByText("latest-copy.txt", { exact: true }).click();
+  await page.keyboard.press("Control+c");
+  await expect
+    .poll(async () => (await rpc("read_file_clipboard"))?.paths?.[0])
+    .toBe(path.join(src, "latest-copy.txt"));
+  await page.evaluate(() => window.__resumeClipboardPaste());
+  await expect
+    .poll(() =>
+      fs.readFile(path.join(dst, "queued-cut.txt"), "utf8").catch(() => ""),
+    )
+    .toBe("queued-cut.txt");
+  await expect
+    .poll(() =>
+      fs.access(path.join(src, "queued-cut.txt")).then(
+        () => true,
+        () => false,
+      ),
+    )
+    .toBe(false);
+  await expect
+    .poll(async () => (await rpc("read_file_clipboard"))?.paths?.[0])
+    .toBe(path.join(src, "latest-copy.txt"));
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        window.__finishedClipboardCuts.some((paths) =>
+          paths.some((path) => path.endsWith("queued-cut.txt")),
+        ),
+      ),
+    )
+    .toBe(true);
+  console.log(
+    "PASS a new Ctrl+C remains available while a previous paste is preparing; late cut completion retains the newer clipboard",
+  );
+  const previous = await rpc("read_file_clipboard");
+  await page.evaluate(() => {
+    const bridge = window.__TAURI_INTERNALS__,
+      original = bridge.invoke;
+    let resume;
+    const gate = new Promise((resolve) => {
+      resume = resolve;
+    });
+    bridge.invoke = async (command, args) => {
+      if (command === "write_file_clipboard") await gate;
+      return original(command, args);
+    };
+    window.__resumeClipboardCapture = () => {
+      bridge.invoke = original;
+      resume();
+    };
+  });
+  await left.getByText("guarded-copy.txt", { exact: true }).click();
+  await page.keyboard.press("Control+c");
+  await expect(page.locator(".clipboard-check")).toBeVisible();
+  const check = await page.locator(".clipboard-check").boundingBox(),
+    footer = await page.locator(".statusbar").boundingBox();
+  assert.ok(check.height <= footer.height);
+  await page.screenshot({ path: "artifacts/native-clipboard-check.png" });
+  await page.keyboard.press("Escape");
+  await expect(left.locator(".file-row.selected")).toHaveCount(1);
+  await page.evaluate(() => window.__resumeClipboardCapture());
+  await expect(page.locator(".clipboard-check")).toHaveCount(0);
+  await expect(page.locator(".toast")).toContainText("Cancelled");
+  assert.deepEqual(await rpc("read_file_clipboard"), previous);
+  console.log(
+    "PASS clipboard-check status and Escape cancellation preserve marks and the prior native clipboard",
+  );
 } catch (error) {
   console.error(`Native startup output: ${startupOutput || "(none)"}`);
   console.error(`Last CDP connection error: ${connectionError}`);

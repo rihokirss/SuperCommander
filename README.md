@@ -131,7 +131,11 @@ Right-click a file to act on that file or its existing multi-selection. Context 
 
 Refreshing the same directory preserves the filter, marked files and cursor when those files still exist. In the filter field, Enter or Arrow Down returns to the matching file list; Esc clears the filter and returns focus to the list.
 
-File clipboard shortcuts work across local, SFTP and read-only ZIP sources, with writable destinations. Local files use the Windows shell file-drop format for interoperability with Explorer; remote and archive selections can be pasted within SuperCommander. Pasting a copy into its original folder creates a numbered duplicate. A cut is consumed after a successful queued move; failed or skipped sources remain available. Esc cancels a pending cut without changing files. Text inputs and the terminal keep their own clipboard shortcuts.
+File clipboard shortcuts work across local, SFTP and read-only ZIP sources, with writable destinations. Local files use the Windows shell file-drop format for interoperability with Explorer; remote and archive selections can be pasted within SuperCommander. Pasting a copy into its original folder creates a numbered duplicate. A cut is consumed after a successful queued move; skipped or partially processed sources remain available. A cut whose selected objects were replaced is cleared without removing those replacements. Esc cancels a pending cut without changing files. Text inputs and the terminal keep their own clipboard shortcuts.
+
+SuperCommander records the selected roots when copying or cutting. Where the filesystem supplies stable IDs, replacing a selected file or folder before paste rejects the operation; in-place file edits and changes to a selected folder's children remain live until paste. Sources without IDs use stricter metadata checks, file checksums and folder membership checks, so changes may require copying the selection again. These bindings travel with the private clipboard format and are checked during queue inspection before any destination output. An incoming Explorer file-drop contains paths only and is checked from the time it is pasted.
+
+Long clipboard checks show progress in the status bar and can be cancelled with **Esc** or the cancel button. Cancelling keeps the previous clipboard, and a newer clipboard selection prevents a slow check from publishing over it. A new Ctrl+C is available once an earlier paste has been handed to Transfers; late cut completion does not consume that newer copy. For unusually large folders on sources without IDs, use F5/F6 instead of the clipboard's bounded membership check.
 
 SSH selections and queued operations stay bound to the authenticated connection they were created for. After disconnecting or reconnecting, copy the remote files again; an earlier job cannot silently use the replacement connection. Transfer checks resolve server paths before comparing aliases and reject copying a directory into itself through a symbolic link or `..`.
 
@@ -166,6 +170,8 @@ Select a saved copy with the arrows, Home/End or Page Up/Down. **Ctrl+F** filter
 Expand **Previous versions** in Transfers to open recovery at the corresponding destination. **F5 / Ctrl+R** rescans after a transfer finishes. Copies being used by a current operation cannot be restored or removed. A changed file, record, destination or SSH session requires a new review. A checksum mismatch can be copied under a new name without replacement. Temporary files without records may contain only partial data; inspect their contents first.
 
 **Delete** asks before permanently removing the selected saved copy and its record. If removal fails, the record remains available. An interrupted directory operation may leave nested recovery records inside the remaining tree: restore the folder, then scan that restored folder to recover individual names. Permanent deletion cannot recover files already removed before cancellation or a process exit.
+
+Restoration planning streams directory entries and reserves one shared budget across pending siblings and descendants. Trees larger than 200,000 entries require restoring smaller subfolders separately; cancellation also stops directory enumeration before the entire listing is collected.
 
 Recovery view with fictional sample data (restoration is enabled in the desktop app):
 

@@ -144,13 +144,32 @@ pub(super) struct Snapshot {
 }
 impl Snapshot {
     pub fn capture(fs: &dyn FileSystem, paths: &[String], ctx: &mut ContextJob) -> Result<Self> {
+        Self::capture_bound(fs, paths, ctx, None)
+    }
+    pub fn capture_bound(
+        fs: &dyn FileSystem,
+        paths: &[String],
+        ctx: &mut ContextJob,
+        bindings: Option<&[crate::clipboard::Binding]>,
+    ) -> Result<Self> {
+        if bindings.is_some_and(|bindings| bindings.len() != paths.len()) {
+            bail!("Invalid clipboard source bindings");
+        }
         let mut output = BufWriter::new(tempfile::tempfile()?);
         let mut roots = Vec::new();
         let mut last = Instant::now();
-        for path in paths {
+        for (index, path) in paths.iter().enumerate() {
             ctx.check()?;
             roots.push(output.stream_position()?);
-            capture(fs, path, &mut output, ctx, &mut last, 0)?;
+            capture(
+                fs,
+                path,
+                &mut output,
+                ctx,
+                &mut last,
+                0,
+                bindings.and_then(|bindings| bindings.get(index)),
+            )?;
         }
         output.flush()?;
         let file = output.into_inner()?;
@@ -250,6 +269,7 @@ fn capture(
     ctx: &mut ContextJob,
     last: &mut Instant,
     depth: usize,
+    binding: Option<&crate::clipboard::Binding>,
 ) -> Result<()> {
     ctx.check()?;
     if depth > 256 {
@@ -277,6 +297,14 @@ fn capture(
         digest: None,
     };
     ctx.event.current = path.into();
+    if let Some(binding) = binding {
+        binding.check_metadata(
+            &node.entry,
+            node.canonical.as_deref(),
+            node.fingerprint.as_ref().map(|(id, _)| id.as_str()),
+            &node.revision,
+        )?;
+    }
     if node.regular {
         ctx.event.total = ctx
             .event
@@ -304,6 +332,16 @@ fn capture(
         }
     }
     node.validate(fs, ctx, false)?;
+    if let Some(binding) = binding {
+        binding.check_digest(
+            if node.entry.is_dir {
+                node.children.as_deref()
+            } else {
+                node.digest.as_deref()
+            },
+            path,
+        )?;
+    }
     serde_json::to_writer(&mut *output, &Some(&node))?;
     output.write_all(b"\n")?;
     if last.elapsed().as_millis() >= 100 {
@@ -312,7 +350,7 @@ fn capture(
     }
     if let Some(entries) = entries {
         for entry in entries {
-            capture(fs, &entry.path, output, ctx, last, depth + 1)?;
+            capture(fs, &entry.path, output, ctx, last, depth + 1, None)?;
         }
         output.write_all(b"null\n")?;
     }
