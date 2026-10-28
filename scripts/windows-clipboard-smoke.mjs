@@ -7,6 +7,7 @@ import os from "node:os";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { randomUUID } from "node:crypto";
+import { holdNativeCommand } from "./native-test-instance.mjs";
 
 assert.equal(process.platform, "win32");
 assert.equal(
@@ -340,30 +341,26 @@ try {
     .poll(async () => (await rpc("read_file_clipboard"))?.paths?.[0])
     .toBe(path.join(src, "queued-cut.txt"));
   await page.evaluate(() => {
-    const bridge = window.__TAURI_INTERNALS__,
-      original = bridge.invoke;
-    let resume;
-    const gate = new Promise((resolve) => {
-      resume = resolve;
-    });
-    bridge.invoke = async (command, args) => {
-      if (command === "enqueue_job") await gate;
-      return original(command, args);
-    };
-    window.__resumeClipboardPaste = () => {
-      resume();
-    };
+    const original = window.fetch;
     window.__finishedClipboardCuts = [];
-    const gated = bridge.invoke;
-    bridge.invoke = async (command, args) => {
-      const result = await gated(command, args);
-      if (command === "finish_file_paste")
-        window.__finishedClipboardCuts.push(args.clipboard.paths);
+    window.fetch = async (input, init) => {
+      const result = await original.call(window, input, init);
+      const url = new URL(typeof input === "string" ? input : input.url);
+      if (
+        url.hostname === "ipc.localhost" &&
+        url.pathname === "/finish_file_paste"
+      ) {
+        window.__finishedClipboardCuts.push(
+          JSON.parse(init.body).clipboard.paths,
+        );
+      }
       return result;
     };
   });
+  const pasteGate = await holdNativeCommand(page, "enqueue_job");
   await right.getByRole("grid").focus();
   await page.keyboard.press("Control+v");
+  await pasteGate.entered();
   await expect(page.locator(".job-row.queued").first()).toContainText(
     "queued-cut.txt",
   );
@@ -372,7 +369,7 @@ try {
   await expect
     .poll(async () => (await rpc("read_file_clipboard"))?.paths?.[0])
     .toBe(path.join(src, "latest-copy.txt"));
-  await page.evaluate(() => window.__resumeClipboardPaste());
+  await pasteGate.release();
   await expect
     .poll(() =>
       fs.readFile(path.join(dst, "queued-cut.txt"), "utf8").catch(() => ""),
@@ -402,24 +399,10 @@ try {
     "PASS a new Ctrl+C remains available while a previous paste is preparing; late cut completion retains the newer clipboard",
   );
   const previous = await rpc("read_file_clipboard");
-  await page.evaluate(() => {
-    const bridge = window.__TAURI_INTERNALS__,
-      original = bridge.invoke;
-    let resume;
-    const gate = new Promise((resolve) => {
-      resume = resolve;
-    });
-    bridge.invoke = async (command, args) => {
-      if (command === "write_file_clipboard") await gate;
-      return original(command, args);
-    };
-    window.__resumeClipboardCapture = () => {
-      bridge.invoke = original;
-      resume();
-    };
-  });
+  const captureGate = await holdNativeCommand(page, "write_file_clipboard");
   await left.getByText("guarded-copy.txt", { exact: true }).click();
   await page.keyboard.press("Control+c");
+  await captureGate.entered();
   await expect(page.locator(".clipboard-check")).toBeVisible();
   const check = await page.locator(".clipboard-check").boundingBox(),
     footer = await page.locator(".statusbar").boundingBox();
@@ -427,7 +410,7 @@ try {
   await page.screenshot({ path: "artifacts/native-clipboard-check.png" });
   await page.keyboard.press("Escape");
   await expect(left.locator(".file-row.selected")).toHaveCount(1);
-  await page.evaluate(() => window.__resumeClipboardCapture());
+  await captureGate.release();
   await expect(page.locator(".clipboard-check")).toHaveCount(0);
   await expect(page.locator(".toast")).toContainText("Cancelled");
   assert.deepEqual(await rpc("read_file_clipboard"), previous);

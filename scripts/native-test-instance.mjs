@@ -2,11 +2,67 @@
 import { chromium, expect } from "@playwright/test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
+
+// Tauri's invoke/ipc properties are non-writable. Delay the real custom-protocol
+// fetch, and require evidence that the chosen command actually entered the gate.
+export async function holdNativeCommand(page, command) {
+  const key = `__scNativeGate_${randomUUID().replaceAll("-", "")}`;
+  await page.evaluate(
+    ({ key, command }) => {
+      const original = window.fetch;
+      let resume;
+      const waiting = new Promise((resolve) => {
+        resume = resolve;
+      });
+      const state = {
+        seen: 0,
+        release: () => {
+          window.fetch = original;
+          resume();
+        },
+      };
+      const wrapped = async (input, init) => {
+        const url = new URL(
+          typeof input === "string"
+            ? input
+            : input instanceof URL
+              ? input.href
+              : input.url,
+        );
+        if (
+          url.hostname === "ipc.localhost" &&
+          decodeURIComponent(url.pathname.slice(1)) === command
+        ) {
+          state.seen++;
+          await waiting;
+        }
+        return original.call(window, input, init);
+      };
+      window[key] = state;
+      window.fetch = wrapped;
+      if (window.fetch !== wrapped)
+        throw Error("The native IPC fetch gate was not installed");
+    },
+    { key, command },
+  );
+  return {
+    entered: () =>
+      expect
+        .poll(() => page.evaluate((key) => window[key].seen, key))
+        .toBeGreaterThan(0),
+    release: () =>
+      page.evaluate((key) => {
+        window[key].release();
+        delete window[key];
+      }, key),
+  };
+}
 
 export async function startNativeTest(name, executable) {
   assert.equal(process.platform, "win32");

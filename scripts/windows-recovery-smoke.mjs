@@ -5,7 +5,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
-import { startNativeTest } from "./native-test-instance.mjs";
+import { holdNativeCommand, startNativeTest } from "./native-test-instance.mjs";
 
 const instance = await startNativeTest("recovery", process.argv[2]);
 const { page, root } = instance;
@@ -290,33 +290,20 @@ try {
     dialog.getByRole("button", { name: "Review restoration", exact: true }),
   ).toBeDisabled();
   await page.keyboard.press("Delete");
-  await page.evaluate(() => {
-    const bridge = window.__TAURI_INTERNALS__,
-      original = bridge.invoke;
-    let resume;
-    const gate = new Promise((resolve) => {
-      resume = resolve;
-    });
-    bridge.invoke = async (command, args) => {
-      if (command === "remove_recovery") await gate;
-      return original(command, args);
-    };
-    window.__resumeRecovery = () => {
-      bridge.invoke = original;
-      resume();
-    };
-  });
+  const removalGate = await holdNativeCommand(page, "remove_recovery");
   await page
     .getByRole("dialog", { name: "Remove saved copy", exact: true })
     .getByRole("button", { name: "Delete", exact: true })
     .click();
+  await removalGate.entered();
+  await fs.access(missing.journal);
   await expect(
     page.getByRole("dialog", { name: "Remove saved copy", exact: true }),
   ).toHaveCount(0);
   await expect(
     dialog.getByRole("button", { name: "Scan for saved copies", exact: true }),
   ).toBeEnabled();
-  await page.evaluate(() => window.__resumeRecovery());
+  await removalGate.release();
   await expect
     .poll(() =>
       fs.access(missing.journal).then(

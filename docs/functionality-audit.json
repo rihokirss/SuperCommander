@@ -426,7 +426,7 @@
       "Shared write-ahead claims cover transfer, editor and permanent deletion; private remaining data can be found after interruption",
       "Permanent deletion claims and validates each manifest entry, unlinks only checked leaves and removes only empty directories; late children and disconnected other panes are handled",
       "Restoration checks physical directory aliases with a temporary destination probe before copying, including same-source unresolved aliases and UNC/SFTP namespaces",
-      "Confirmed actions hand ownership to Transfers immediately; delayed enqueue/inspection does not lock the recovery dialog",
+      "Confirmed actions hand ownership to Transfers immediately; delayed removal does not lock the recovery dialog",
       "English README recovery instructions and sample screenshot; native recovery checks added to Windows CI"
     ],
     "checks": {
@@ -445,7 +445,7 @@
       "artifacts/native-recovery-review.png"
     ],
     "remaining": [
-      "Recovery Windows CI passed in run 40624797882 on 73a16dd93f2f9d044b037918c1b1d9a4b60bda6b. Run 40624485605 exposed a test's literal Windows short/long path comparison; the test now compares canonical paths. Earlier bootstrap readiness waits were also corrected. Clipboard UI tests remain CI-only.",
+      "Recovery Windows CI passed in run 40624797882 on 73a16dd93f2f9d044b037918c1b1d9a4b60bda6b. Run 40624485605 exposed a test's literal Windows short/long path comparison; the test now compares canonical paths. Earlier bootstrap readiness waits were also corrected. Its original delayed-removal injection tried to assign Tauri's non-writable invoke property and did not establish a delay. The replacement holds the actual IPC fetch, requires evidence that the request entered the gate and that its record still exists, then checks dialog usability. This corrected native test passed on final clipboard executable e4e70486; dedicated CI verification is pending. Clipboard UI tests remain CI-only.",
       "Continue clipboard identity before paste, live rename/archive mutation, source/terminal/tunnel lifecycle, navigation/selection, UI consistency and distribution audits against the original requirements. Overall completion remains unproven.",
       "Recovery allocation bounds are covered by clipboardSelectionBatch: restoration now streams enumeration and reserves a shared budget before retaining entries.",
       "Permanent deletion is irreversible for already removed entries; recovery restores remaining saved data, not an undelete history. Process-local active guards do not claim interprocess locking."
@@ -470,10 +470,10 @@
       "browserTests": "47 passed; the 3 clipboard cases were rerun after local capture-cancellation tracking, then all 10 clipboard/keyboard cases passed after the queued-name and help changes.",
       "nativeWindowsCore": "Windows x64 Rust test executables ran successfully on the user's Windows host: 6 clipboard selection tests, 3 recovery limits tests and 7 editor tests. They use their own temporary files and do not access the desktop clipboard.",
       "nativeWindows": "Candidate 1c9a2660 passed transfer, recovery, queue and comparison smoke checks with the owned loopback SSH fixture, including actual UNC/SFTP aliases, same-size/same-time edits, cancellation, metadata, reviewed copies and restoration. Its source predates only the final frontend pre-capture-cancellation flag, queued filename and F1 row changes.",
-      "windowsClipboard": "Pending dedicated Windows CI. The expanded core/UI suites cover binding serialization/subset cleanup, conditional/cancelled publication, rejected file/folder replacement, live native folder children, stale cut receipts, a newer Ctrl+C during delayed paste enqueue, and Escape during delayed capture. They must not run on the user's desktop."
+      "windowsClipboard": "Run 40629003815 passed the core, browser and native clipboard binding/replacement/live-folder cases, then failed because its delayed-enqueue injection assigned Tauri's non-writable invoke property. The corrected test holds actual IPC fetch and explicitly observes gate entry. Newer Ctrl+C during delayed paste and Escape during delayed capture still require dedicated CI proof. These tests must not run on the user's desktop."
     },
     "remaining": [
-      "Compile the final frontend and verify the matching public Windows CI run, including the actual desktop clipboard cases.",
+      "Final frontend, Windows executable and NSIS installer built; executable SHA256 e4e70486d05cba350941d56aee20abeb3fc49b09e1e8835ba3aa14113c04a54b. Verify corrected native delay scenarios in the next matching public Windows CI run, including actual desktop clipboard cases.",
       "Complete original-scope navigation/selection, context actions, rename/archive mutations, source/terminal/tunnel lifecycle, UI consistency and distribution audits before marking the overall goal complete.",
       "Fallback metadata/checksum/membership checks do not provide native object IDs. External CF_HDROP selections carry paths and become checked from paste, not from an unobservable external copy event."
     ]
