@@ -2,7 +2,7 @@
   "objectiveOriginal": "jätka niikaua kuni kõik mõistlik funktsionaalsus olemas, UI ühetaolisus ja sobivus kontrollitud, kõik mõistlikud shortcut keyd olemas",
   "status": "in_progress",
   "baselineRelease": "v0.2.0",
-  "lastVerifiedBatchId": "clipboardSelectionBatch",
+  "lastVerifiedBatchId": "renameBatch",
   "lastVerifiedBatch": {
     "features": [
       "Keyboard-accessible command and context menus",
@@ -196,7 +196,7 @@
     },
     {
       "id": "archives",
-      "status": "needs_current_audit",
+      "status": "in_progress",
       "scope": "Practical common archive workflows, safe browsing/creation/extraction, path and symlink protection, and explicit format limitations",
       "evidence": ["crates/core/tests/files.rs"]
     },
@@ -502,7 +502,8 @@
       "browserTests": "47 passed in the regression; all 7 keyboard/menu/help tests passed again after the final dialog shortcut changes.",
       "nativeWindows": "windows-rename-smoke.mjs passed on final aec0682a, including file replacement after preview, F5 refresh after a failed submit, Ctrl+Enter, case-only spelling, observed delayed-preview Enter protection, observed delayed-apply Esc cancellation, pre-registration cancellation, complete 203-file virtualized review, all names applied, real SSH and 960x640 dark/light layout with title and actions visible simultaneously. Full windows-smoke.mjs also passed on this executable, covering ordinary renaming, copy/move/recycle, ZIP round-trip, editor, previews, real SSH config/catalog/aliases, transfers, multiple forwards, remote shell, PowerShell/ConPTY and Ctrl+O. User settings checksum remained unchanged.",
       "windowsCompilation": "fmt, workspace/all-target clippy and Windows all-target checks passed; x64 executable and NSIS installer built. Final executable SHA256 aec0682ae4b95176f2bf1c5436d460c8e1866d1e331728618a2ed210daea7325.",
-      "ci": "Pending push and matching public Windows CI verification. The preceding clipboard/recovery batch passed run 40630076762."
+      "ci": "Public Windows CI run 40631391227 completed successfully on 77273ebf9b1f4afdb11ba37668f0bb6d28b8ed1b, including native Windows core tests, 26 JavaScript tests, 47 browser cases, executable/installer builds and clipboard, properties, search, transfer, queue, comparison, tooltip, recovery and rename smoke checks. The preceding clipboard/recovery batch passed run 40630076762.",
+      "developmentInstance": "The idle working Windows instance was updated to aec0682a (PID 5880), preserving 3afa7979 as supercommander-before-rename.exe. Startup verified the application shell, two panes, dark theme, no dialogs and no boot errors. Settings SHA256 remained 7d0951ca6c7378bd14f1134a5a5bcb550882b995c3d81bf4d955d0cffe8bc326."
     },
     "visualEvidence": [
       "docs/screenshots/rename.png",
@@ -510,9 +511,24 @@
       "artifacts/native-rename-light.png"
     ],
     "remaining": [
-      "Matching full native regression passed; finish public Windows CI verification before updating the working development instance.",
       "Archive mutation/timestamps, source/terminal/tunnel lifecycle, navigation/selection, UI consistency and distribution retain their original scope; overall completion remains unproven.",
       "Native IDs are not universally available; fallback checks do not claim native object identity or interprocess locking. Cancellation is best effort after a name has already been published, with safe rollback attempted for earlier completed names."
+    ]
+  },
+  "archiveAuditPending": {
+    "status": "in_progress",
+    "confirmedOnSource": "77273ebf9b1f4afdb11ba37668f0bb6d28b8ed1b",
+    "runtimeEvidence": "artifacts/archive-timestamp-audit.json; standalone Rust probe linked the built core, used only an owned temporary directory and removed its probe files afterward",
+    "confirmedFindings": [
+      "A ZIP entry carrying DOS and Extended Timestamp metadata for Unix second 1704164646 is listed with modified=0.",
+      "Creating a ZIP from a file with modified=1704164646 produces the default DOS timestamp 1980-01-01 00:00:00 instead of preserving that source time.",
+      "A real Engine ZIP job was queued with source contents 'before'. Its job-progress sink replaced that source at the first running event, retaining the same size and modification time. The job completed and the resulting archive contained 'edited', so archive creation is not bound to the queued source manifest during reading."
+    ],
+    "nextWork": [
+      "Drive ZIP creation from the frozen manifest, verify copied bytes against its checksums and revalidate before publishing the archive.",
+      "Keep extraction validation and reads on the same frozen ZIP container; the current extraction code opens the path separately for enumeration and by-index reads.",
+      "Preserve and display archive timestamps and supported attributes, accounting for UTC extra fields and local DOS timestamps.",
+      "Cover mutation, cancellation, partial failures, path/symlink protection, archive limits and common-format behavior in the original archive audit. Do not treat ordinary round-trip tests as proof of those boundaries."
     ]
   }
 }
