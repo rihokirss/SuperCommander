@@ -140,9 +140,10 @@ Each pane has independent tabs, history, sorting and filtering. Click its locati
 | Ctrl+, | Settings |
 | F1 | Searchable shortcut reference |
 | F9 | Actions menu |
+| F10 | Quit SuperCommander |
 | Shift+F10 / Menu key | File context menu |
 
-The `..` row opens the parent folder; at a ZIP root it returns to the archive's local parent. ZIP creation and extraction are available in the Actions menu. Double-click a ZIP to browse its read-only contents. Buttons expose tooltips with their shortcuts.
+The `..` row opens the parent folder; at a ZIP root it returns to the archive's local parent. ZIP creation and extraction are available in the Actions menu. Double-click a ZIP to browse its read-only contents. Buttons expose tooltips with their shortcuts. In the viewer and editor, F10 closes that tool; an editor with unsaved changes asks what to do first.
 
 Right-click a file to act on that file or its existing multi-selection. Context menus use the clicked pane as their source. Menus support arrows, Home/End, type-ahead, Enter and Esc, and return focus to the originating control. Selection masks support `*` and `?`, work on the visible file list, and can include or exclude folders.
 

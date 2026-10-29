@@ -262,6 +262,10 @@ export function App() {
     return () => media.removeEventListener("change", changed);
   }, []);
   const notify = useCallback((message: string) => setToast(message), []);
+  function quit() {
+    if (api.desktop) void getCurrentWindow().close().catch((e) => notify(String(e)));
+    else notify(t.desktopOnly);
+  }
   const closeDialog = useCallback(() => setDialog(undefined), []);
   const update = useCallback(
     (patch: Partial<Settings>) =>
@@ -1739,6 +1743,11 @@ export function App() {
         setDialog({ kind: "shortcuts" });
         return;
       }
+      if (e.key === "F10" && !ctrl && !e.altKey && !e.shiftKey) {
+        e.preventDefault();
+        quit();
+        return;
+      }
       if (e.altKey && e.key === "ArrowUp") {
         e.preventDefault();
         paneControls.current[active]?.up();
@@ -2128,7 +2137,7 @@ export function App() {
           <button
             aria-label={t.close}
             className="window-close"
-            onClick={() => api.desktop && getCurrentWindow().close()}
+            onClick={quit}
           >
             <X size={15} />
           </button>
@@ -2661,6 +2670,10 @@ export function App() {
             </button>
           ))}
           <ActionsMenuButton t={t} actions={actions} footer />
+          <button data-tooltip={t.quit} data-shortcut="F10" onClick={quit}>
+            <kbd>F10</kbd>
+            <span>{t.quit}</span>
+          </button>
         </div>
         <div className="status-controls">
           <button onClick={() => setQueueOpen((v) => !v)}>

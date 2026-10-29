@@ -133,7 +133,7 @@ test("footer F1 and F9 buttons open help and actions above the bar", async ({
     await page.setViewportSize({ width, height: 700 });
     const bar = page.locator(".shortcut-bar");
     const buttons = bar.locator("button");
-    await expect(buttons).toHaveCount(9);
+    await expect(buttons).toHaveCount(10);
     const left = (await bar.boundingBox())!.x;
     const right = left + (await bar.boundingBox())!.width;
     const sidebar = (await page.locator(".sidebar").boundingBox())!;
@@ -176,9 +176,22 @@ test("footer F1 and F9 buttons open help and actions above the bar", async ({
   await page.getByRole("option", { name: "Eesti", exact: true }).click();
   await page.keyboard.press("Escape");
   for (const label of await page.locator(".shortcut-bar button > span").all())
-    expect(await label.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(
-      true,
-    );
+    expect(
+      await label.evaluate((el) => el.scrollWidth <= el.clientWidth),
+      `Footer label fits: ${await label.textContent()}`,
+    ).toBe(true);
+});
+
+test("F10 and its footer button quit from the file panes", async ({ page }) => {
+  const grid = page.locator('[data-pane="0"]').getByRole("grid");
+  const quit = page.locator(".shortcut-bar").getByRole("button", { name: /Quit/ });
+  await expect(quit).toHaveAttribute("data-shortcut", "F10");
+  await grid.focus();
+  await page.keyboard.press("F10");
+  await expect(page.getByRole("status").filter({ hasText: "This action is available in the desktop app." })).toBeVisible();
+  await page.locator(".toast button").click();
+  await quit.click();
+  await expect(page.getByRole("status").filter({ hasText: "This action is available in the desktop app." })).toBeVisible();
 });
 
 test("F9 exposes comparison and recovery with their shortcuts", async ({

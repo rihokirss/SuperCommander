@@ -2422,12 +2422,16 @@ p {
   }
   .shortcut-bar > button,
   .shortcut-bar .shortcut-action {
-    padding: 3px 2px;
-    gap: 3px;
+    padding: 3px 1px;
+    gap: 2px;
+  }
+  .shortcut-bar {
+    gap: 0;
   }
   .shortcut-bar kbd {
     font-size: 8px;
-    padding: 3px;
+    min-width: 20px;
+    padding: 3px 1px;
   }
   .pane-context {
     padding-left: 11px;

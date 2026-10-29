@@ -70,6 +70,7 @@ export function shortcutGroups(t: Text) {
         ["Ctrl+,", t.settings],
         ["F1", t.keyboard],
         ["F9", t.actions],
+        ["F10", t.quit],
         ["Ctrl+`", t.terminal],
         ["Ctrl+O", t.fullTerminal],
       ],
