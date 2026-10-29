@@ -115,7 +115,7 @@ export function directoryCommand(path: string, local: boolean, marker?: string):
     const encoded = btoa(Array.from(new TextEncoder().encode(path), (byte) => String.fromCharCode(byte)).join(""));
     // The widget consumes and clears this data before the empty line is
     // submitted. No shell command, expansion, or history entry is created.
-    return `SC${marker}:${encoded}\x18\x07`;
+    return `SC${marker}:${encoded}${local ? "\x18\x07" : `\x1b[633;${marker}~`}`;
   }
   const command = local
     ? `Set-Location -LiteralPath '${path.replace(/'/g, "''")}'`

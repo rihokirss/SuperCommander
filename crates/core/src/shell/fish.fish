@@ -20,5 +20,5 @@ function __sc_change
     __sc_prompt
     commandline -f repaint
 end
-bind \cx\cg __sc_change
-bind -M insert \cx\cg __sc_change
+bind \e'[633;__SC_MARKER__~' __sc_change
+bind -M insert \e'[633;__SC_MARKER__~' __sc_change

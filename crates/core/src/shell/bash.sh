@@ -18,10 +18,10 @@ __sc_change() {
         printf '\033]633;SC:__SC_MARKER__:FAIL\007'
     fi
 }
-bind -m emacs-standard -x '"\e[633;__SC_MARKER__~":__sc_change'
-bind -m vi-insertion -x '"\e[633;__SC_MARKER__~":__sc_change'
-bind -m emacs-standard '"\C-x\C-g":"\e[633;__SC_MARKER__~\C-m"'
-bind -m vi-insertion '"\C-x\C-g":"\e[633;__SC_MARKER__~\C-m"'
+bind -m emacs-standard -x '"\e[634;__SC_MARKER__~":__sc_change'
+bind -m vi-insertion -x '"\e[634;__SC_MARKER__~":__sc_change'
+bind -m emacs-standard '"\e[633;__SC_MARKER__~":"\e[634;__SC_MARKER__~\C-m"'
+bind -m vi-insertion '"\e[633;__SC_MARKER__~":"\e[634;__SC_MARKER__~\C-m"'
 if [[ $(declare -p PROMPT_COMMAND 2>/dev/null) == "declare -a"* ]]; then
     PROMPT_COMMAND+=(__sc_prompt)
 else

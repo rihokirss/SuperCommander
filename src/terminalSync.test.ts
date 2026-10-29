@@ -101,8 +101,8 @@ describe("terminal directory following", () => {
   it("sends path data to a widget instead of a history-producing command", () => {
     const marker = "1234567890abcdef1234567890abcdef";
     const data = directoryCommand("/tmp/O'Brien õ", false, marker);
-    expect(data).toMatch(/^SC[a-f0-9]{32}:[A-Za-z0-9+/=]+\x18\x07$/);
-    expect(new TextDecoder().decode(Uint8Array.from(atob(data.slice(35, -2)), c => c.charCodeAt(0)))).toBe("/tmp/O'Brien õ");
+    expect(data).toMatch(/^SC[a-f0-9]{32}:[A-Za-z0-9+/=]+\x1b\[633;[a-f0-9]{32}~$/);
+    expect(new TextDecoder().decode(Uint8Array.from(atob(data.slice(35).split("\x1b")[0]), c => c.charCodeAt(0)))).toBe("/tmp/O'Brien õ");
     expect(data).not.toContain("cd -- ");
   });
 });

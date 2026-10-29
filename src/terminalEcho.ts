@@ -15,7 +15,7 @@ export class TerminalEcho {
 
   begin(command: string) {
     this.previousCommand = this.command;
-    this.command = command.replace(/\x18\x07\r?$/, "").replace(/[\r\n]+$/, "");
+    this.command = command.replace(/(?:\x18\x07|\x1b\[633;[a-f\d]{32}~)\r?$/, "").replace(/[\r\n]+$/, "");
     this.buffer = [];
   }
 

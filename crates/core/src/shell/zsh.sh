@@ -25,7 +25,7 @@ __sc_change() {
     zle reset-prompt
 }
 zle -N __sc_change
-bindkey -M emacs '^X^G' __sc_change
-bindkey -M viins '^X^G' __sc_change
+bindkey -M emacs '\e[633;__SC_MARKER__~' __sc_change
+bindkey -M viins '\e[633;__SC_MARKER__~' __sc_change
 typeset -ga precmd_functions
 precmd_functions=(${precmd_functions:#__sc_prompt} __sc_prompt)

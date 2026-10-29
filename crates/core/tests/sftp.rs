@@ -803,9 +803,12 @@ async fn remote_terminal_prompt_markers_follow_the_real_shell() {
     .unwrap();
     tokio::time::sleep(Duration::from_millis(200)).await;
     let encoded = base64::engine::general_purpose::STANDARD.encode(target.as_bytes());
-    fs.write_terminal(&shell, format!("SC{marker}:{encoded}\x18\x07").into_bytes())
-        .await
-        .unwrap();
+    fs.write_terminal(
+        &shell,
+        format!("SC{marker}:{encoded}\x1b[633;{marker}~").into_bytes(),
+    )
+    .await
+    .unwrap();
     tokio::time::timeout(Duration::from_secs(5), async {
         while !String::from_utf8_lossy(&output.lock().unwrap())
             .contains(&format!("{prefix}{encoded}\x07"))
