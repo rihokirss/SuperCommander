@@ -17,7 +17,10 @@ Set-PSReadLineKeyHandler -Chord 'Ctrl+x,Ctrl+g' -ScriptBlock {
         Write-Error $_
         [Console]::Write(([char]27).ToString() + ']633;SC:__SC_MARKER__:FAIL' + [char]7)
     }
-    [Microsoft.PowerShell.PSConsoleReadLine]::InvokePrompt()
+    # Return an empty input line through the normal shell loop. It creates no
+    # history entry and lets PSReadLine finish its current handler before the
+    # next user command is read.
+    [Microsoft.PowerShell.PSConsoleReadLine]::AcceptLine()
 }
 $global:__sc_original_prompt = (Get-Item function:prompt).ScriptBlock
 function global:prompt {
