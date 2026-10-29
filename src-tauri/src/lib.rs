@@ -260,7 +260,7 @@ fn set_window_appearance(
             (false, Some("softGraphite")) => (25, 33, 46, alpha),
             (false, Some("midnightClassic")) => (16, 35, 65, alpha),
             (false, Some("graphiteBlue")) => (24, 27, 32, alpha),
-            (false, _) => (17, 23, 34, alpha),
+            (false, _) => (16, 35, 65, alpha),
         };
         window_vibrancy::apply_acrylic(&window, Some(color)).map_err(error)?;
     }
@@ -1083,7 +1083,13 @@ async fn terminal_open(
     path: String,
     source: String,
     channel: Channel<Vec<u8>>,
+    marker: Option<String>,
 ) -> Reply<String> {
+    if marker.as_ref().is_some_and(|value| {
+        value.len() != 32 || !value.bytes().all(|byte| byte.is_ascii_hexdigit())
+    }) {
+        return Err("Invalid terminal integration marker".into());
+    }
     let output: Arc<dyn Fn(Vec<u8>) + Send + Sync> = Arc::new(move |data| {
         let _ = channel.send(data);
     });
@@ -1095,9 +1101,15 @@ async fn terminal_open(
             .get(&source)
             .cloned()
             .ok_or("SSH connection is not active")?;
-        return connection.open_terminal(output).await.map_err(error);
+        return connection
+            .open_terminal_with_marker(output, marker.as_deref())
+            .await
+            .map_err(error);
     }
-    state.terminals.open(&path, output).map_err(error)
+    state
+        .terminals
+        .open_with_marker(&path, output, marker.as_deref())
+        .map_err(error)
 }
 #[tauri::command]
 async fn terminal_write(

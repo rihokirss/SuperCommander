@@ -17,6 +17,20 @@ pub struct Terminals {
 }
 impl Terminals {
     pub fn open(&self, path: &str, output: Arc<dyn Fn(Vec<u8>) + Send + Sync>) -> Result<String> {
+        self.open_with_marker(path, output, None)
+    }
+
+    pub fn open_with_marker(
+        &self,
+        path: &str,
+        output: Arc<dyn Fn(Vec<u8>) + Send + Sync>,
+        marker: Option<&str>,
+    ) -> Result<String> {
+        if marker.is_some_and(|value| {
+            value.len() != 32 || !value.bytes().all(|byte| byte.is_ascii_hexdigit())
+        }) {
+            anyhow::bail!("Invalid terminal integration marker");
+        }
         if !std::path::Path::new(path).is_dir() {
             anyhow::bail!("Terminal needs a local directory");
         }
@@ -39,6 +53,17 @@ impl Terminals {
         #[cfg(not(windows))]
         let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".into());
         let mut command = CommandBuilder::new(shell);
+        #[cfg(windows)]
+        if let Some(marker) = marker {
+            // Install the hook in this shell only, after the user's profile has
+            // loaded. Preserve the existing prompt rather than replacing it.
+            let script = format!(
+                r#"$global:__sc_original_prompt = (Get-Item function:prompt).ScriptBlock; function global:prompt {{ $sc_result = & $global:__sc_original_prompt; $sc_path = [string](Get-Location).ProviderPath; $sc_encoded = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($sc_path)); [Console]::Write(([char]27).ToString() + ']633;SC:{marker}:' + $sc_encoded + [char]7); $sc_result }}"#
+            );
+            command.args(["-NoExit", "-Command", &script]);
+        }
+        #[cfg(not(windows))]
+        let _ = marker;
         command.cwd(path);
         command.env("TERM", "xterm-256color");
         let child = pair.slave.spawn_command(command)?;

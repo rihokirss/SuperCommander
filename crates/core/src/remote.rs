@@ -211,6 +211,32 @@ impl RemoteFs {
         &self,
         output: Arc<dyn Fn(Vec<u8>) + Send + Sync>,
     ) -> Result<String> {
+        self.open_terminal_with_marker(output, None).await
+    }
+
+    pub async fn open_terminal_with_marker(
+        &self,
+        output: Arc<dyn Fn(Vec<u8>) + Send + Sync>,
+        marker: Option<&str>,
+    ) -> Result<String> {
+        let integration = match marker {
+            Some(marker) if marker.len() == 32 && marker.bytes().all(|b| b.is_ascii_hexdigit()) => {
+                match self.login_shell().await.as_deref() {
+                    Some("bash") => Some(format!(
+                        r#"__sc_prompt() {{ local __sc_status=$?; printf '\033]633;SC:{marker}:%s\007' "$(printf %s "$PWD" | base64 | tr -d '\n')"; return "$__sc_status"; }}; if [[ $(declare -p PROMPT_COMMAND 2>/dev/null) == "declare -a"* ]]; then PROMPT_COMMAND+=(__sc_prompt); else PROMPT_COMMAND="${{PROMPT_COMMAND:+$PROMPT_COMMAND; }}__sc_prompt"; fi"#
+                    )),
+                    Some("zsh") => Some(format!(
+                        r#"__sc_prompt() {{ local __sc_status=$?; printf '\033]633;SC:{marker}:%s\007' "$(printf %s "$PWD" | base64 | tr -d '\n')"; return "$__sc_status"; }}; typeset -ga precmd_functions; precmd_functions+=(__sc_prompt)"#
+                    )),
+                    Some("fish") => Some(format!(
+                        r#"function __sc_prompt --on-event fish_prompt; printf '\033]633;SC:{marker}:%s\007' (printf %s "$PWD" | base64 | tr -d '\n'); end"#
+                    )),
+                    _ => None,
+                }
+            }
+            Some(_) => bail!("Invalid terminal integration marker"),
+            None => None,
+        };
         let mut channel = self._ssh.channel_open_session().await?;
         // Wait for the replies: sending a request alone does not mean the server accepted it.
         channel
@@ -242,6 +268,13 @@ impl RemoteFs {
         }
         let (mut reader, writer) = channel.split();
         let writer = Arc::new(writer);
+        if let Some(script) = integration {
+            // This is a newly opened shell; user keystrokes cannot be sent until
+            // the open request returns. No existing terminal is modified.
+            writer
+                .data_bytes(format!("{script}\r").into_bytes())
+                .await?;
+        }
         let close_writer = writer.clone();
         let task = tokio::spawn(async move {
             while let Some(message) = reader.wait().await {
@@ -263,6 +296,34 @@ impl RemoteFs {
             .unwrap()
             .insert(id.clone(), RemoteTerminal { writer, task });
         Ok(id)
+    }
+
+    async fn login_shell(&self) -> Option<String> {
+        let mut channel = self._ssh.channel_open_session().await.ok()?;
+        channel.exec(true, "printf '%s' \"$SHELL\"").await.ok()?;
+        let bytes = tokio::time::timeout(Duration::from_secs(5), async {
+            let mut output = Vec::new();
+            while let Some(message) = channel.wait().await {
+                match message {
+                    russh::ChannelMsg::Data { data } => {
+                        output.extend_from_slice(&data);
+                        if output.len() > 4096 {
+                            return None;
+                        }
+                    }
+                    russh::ChannelMsg::ExitStatus { exit_status } if exit_status != 0 => {
+                        return None
+                    }
+                    russh::ChannelMsg::Close => break,
+                    _ => {}
+                }
+            }
+            Some(output)
+        })
+        .await
+        .ok()??;
+        let shell = std::str::from_utf8(&bytes).ok()?.trim();
+        Some(shell.rsplit('/').next()?.to_string())
     }
     fn terminal_writer(&self, id: &str) -> Result<Arc<russh::ChannelWriteHalf<client::Msg>>> {
         self.terminals

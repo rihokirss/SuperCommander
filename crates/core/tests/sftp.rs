@@ -732,6 +732,71 @@ async fn clipboard_selection_checks_remote_contents_before_paste_and_can_be_canc
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[ignore = "Requires local OpenSSH server and ssh-keygen"]
+async fn remote_terminal_prompt_markers_follow_the_real_shell() {
+    let server = start();
+    let (probe, _) = remote::connect(&server.profile, "", None).await.unwrap();
+    let (_, fs) = remote::connect(&server.profile, "", Some(probe.fingerprint))
+        .await
+        .unwrap();
+    let fs = fs.unwrap();
+    let output = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let received = output.clone();
+    let marker = "1234567890abcdef1234567890abcdef";
+    let shell = fs
+        .open_terminal_with_marker(
+            std::sync::Arc::new(move |data| received.lock().unwrap().extend(data)),
+            Some(marker),
+        )
+        .await
+        .unwrap();
+    let prefix = format!("\x1b]633;SC:{marker}:");
+    let count = || {
+        String::from_utf8_lossy(&output.lock().unwrap())
+            .matches(&prefix)
+            .count()
+    };
+    tokio::time::timeout(Duration::from_secs(15), async {
+        while count() == 0 {
+            tokio::time::sleep(Duration::from_millis(30)).await;
+        }
+    })
+    .await
+    .expect("interactive shell did not emit its prompt marker");
+    let initial = count();
+    fs.write_terminal(
+        &shell,
+        b"printf 'SC_BUSY_BEGIN\\n'; sleep 2; printf 'SC_BUSY_END\\n'\r".to_vec(),
+    )
+    .await
+    .unwrap();
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            if String::from_utf8_lossy(&output.lock().unwrap()).contains("SC_BUSY_BEGIN\r\n") {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(30)).await;
+        }
+    })
+    .await
+    .unwrap();
+    assert_eq!(
+        count(),
+        initial,
+        "running command must not be mistaken for a prompt"
+    );
+    tokio::time::timeout(Duration::from_secs(8), async {
+        while count() == initial {
+            tokio::time::sleep(Duration::from_millis(30)).await;
+        }
+    })
+    .await
+    .expect("shell did not report its next prompt");
+    fs.close_terminal(&shell).await.unwrap();
+    fs.close().await.unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "Requires local OpenSSH server and ssh-keygen"]
 async fn verifies_host_authenticates_and_transfers_over_real_sftp() {
     let server = start();
     let (probe, fs) = remote::connect(&server.profile, "", None).await.unwrap();

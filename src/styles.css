@@ -193,6 +193,55 @@ p {
   display: flex;
   align-items: center;
   gap: 4px;
+  flex: none;
+}
+.terminal-tabbar {
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.terminal-tabs {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.terminal-tab {
+  display: flex;
+  flex: none;
+  align-items: center;
+  border-bottom: 2px solid transparent;
+}
+.terminal-tab.active {
+  border-bottom-color: var(--accent);
+}
+.terminal-tab > button[role="tab"] {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 165px;
+  padding: 5px 4px;
+  color: var(--muted);
+}
+.terminal-tab.active > button[role="tab"] {
+  color: var(--text);
+}
+.terminal-tab > button[role="tab"] span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.terminal-tab > .icon-button {
+  width: 19px;
+  height: 20px;
+}
+.terminal-current-label {
+  max-width: 180px;
+}
+.terminal-sync-status {
+  max-width: 120px !important;
 }
 .terminal-panel.terminal-fullscreen {
   flex: 1;

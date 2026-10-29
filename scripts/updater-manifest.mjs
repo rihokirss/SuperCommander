@@ -7,7 +7,7 @@ const { version } = JSON.parse(await readFile("package.json", "utf8"));
 if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error("Expected a stable release version");
 for (const [manifestName, name] of [
   ["latest.json", `SuperCommander_${version}_x64-setup.exe`],
-  ["portable.json", `SuperCommander_${version}_x64.exe`],
+  ["portable.json", `SuperCommander_${version}_x64_portable.exe`],
 ]) {
   const signature = (await readFile(join(bundleDir, `${name}.sig`), "utf8")).trim();
   if (!signature) throw new Error(`Missing updater signature for ${name}`);

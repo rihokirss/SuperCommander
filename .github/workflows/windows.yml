@@ -38,7 +38,7 @@ jobs:
             npm run tauri build -- --config src-tauri/tauri.updater.conf.json
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
-            $portable = "target/release/bundle/nsis/SuperCommander_${version}_x64.exe"
+            $portable = "target/release/bundle/nsis/SuperCommander_${version}_x64_portable.exe"
             Copy-Item target/release/supercommander.exe $portable
             npx tauri signer sign $portable --app-version $version
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -54,6 +54,7 @@ jobs:
       - run: node scripts/windows-window-state-smoke.mjs
       - run: node scripts/windows-theme-smoke.mjs
       - run: node scripts/windows-terminal-resize-smoke.mjs
+      - run: node scripts/windows-terminal-tabs-smoke.mjs
       - run: node scripts/windows-folder-size-smoke.mjs
       - run: node scripts/windows-properties-smoke.mjs
       - run: node scripts/windows-search-smoke.mjs
@@ -99,7 +100,7 @@ jobs:
             target/release/bundle/nsis/*-setup.exe.sig
             target/release/bundle/nsis/latest.json
             target/release/bundle/nsis/portable.json
-            target/release/bundle/nsis/*_x64.exe
-            target/release/bundle/nsis/*_x64.exe.sig
+            target/release/bundle/nsis/*_x64_portable.exe
+            target/release/bundle/nsis/*_x64_portable.exe.sig
             target/release/supercommander.exe
           if-no-files-found: error

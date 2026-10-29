@@ -674,7 +674,7 @@ export function SettingsDialog({
             <span>{t.darkPalette}</span>
             <Select
               label={t.darkPalette}
-              value={settings.darkPalette || "midnight"}
+              value={settings.darkPalette || "midnightClassic"}
               onChange={(value) =>
                 update({ darkPalette: value as Settings["darkPalette"] })
               }

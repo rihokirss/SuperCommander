@@ -449,7 +449,7 @@ test("titlebar theme toggle remembers each palette and persists", async ({
 }) => {
   const shell = page.locator(".app-shell");
   await expect(shell).toHaveAttribute("data-theme", "dark");
-  await expect(shell).toHaveAttribute("data-palette", "midnight");
+  await expect(shell).toHaveAttribute("data-palette", "midnightClassic");
   const light = page.getByRole("button", { name: "Switch to light theme" });
   await expect(light).toHaveAttribute("data-tooltip", "Switch to light theme");
   await light.click();
@@ -468,10 +468,10 @@ test("titlebar theme toggle remembers each palette and persists", async ({
   await expect(shell).toHaveAttribute("data-theme", "light");
   await page.getByRole("button", { name: "Switch to dark theme" }).click();
   await expect(shell).toHaveAttribute("data-theme", "dark");
-  await expect(shell).toHaveAttribute("data-palette", "midnight");
+  await expect(shell).toHaveAttribute("data-palette", "midnightClassic");
 });
 
-test("legacy dark palette falls back to Midnight without losing other settings", async ({
+test("legacy dark palette falls back to classic blue without losing other settings", async ({
   page,
 }) => {
   await expect
@@ -489,7 +489,7 @@ test("legacy dark palette falls back to Midnight without losing other settings",
   await page.reload();
   await expect(page.locator(".app-shell")).toHaveAttribute(
     "data-palette",
-    "midnight",
+    "midnightClassic",
   );
   await expect
     .poll(() =>
@@ -500,7 +500,7 @@ test("legacy dark palette falls back to Midnight without losing other settings",
         return [saved.darkPalette, saved.lightPalette, saved.transparency];
       }),
     )
-    .toEqual(["midnight", "azure", 33]);
+    .toEqual(["midnightClassic", "azure", 33]);
 });
 
 test("F1 categories navigate with the keyboard and Settings contains only preferences", async ({

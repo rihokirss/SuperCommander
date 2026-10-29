@@ -72,6 +72,7 @@ export function shortcutGroups(t: Text) {
         ["F9", t.actions],
         ["F10", t.quit],
         ["Ctrl+`", t.terminal],
+        ["Ctrl+Shift+`", t.newTerminalTab],
         ["Ctrl+O", t.fullTerminal],
       ],
     },

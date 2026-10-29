@@ -75,7 +75,7 @@ import { RecoveryDialog } from "./components/RecoveryDialog";
 import { SearchDialog } from "./components/SearchDialog";
 import { TextWorkbench } from "./components/TextWorkbench";
 import { QueuePanel } from "./components/QueuePanel";
-import { TerminalPanel } from "./components/TerminalPanel";
+import { TerminalPanel, type TerminalTab } from "./components/TerminalPanel";
 import { ActionsMenuButton, WorkspaceTools } from "./components/WorkspaceTools";
 import { formatRemoteAddress, parseRemoteAddress } from "./address";
 import { ForwardDialog, SshCatalogDialog } from "./components/SshTools";
@@ -171,10 +171,12 @@ export function App() {
     [],
   );
   const clipboardMoves = useRef(new Map<string, FileClipboard>());
-  const [terminals, setTerminals] = useState<
-    Record<string, Location & { label: string }>
-  >({});
-  const [terminalSource, setTerminalSource] = useState("local");
+  const [terminals, setTerminals] = useState<TerminalTab[]>([]);
+  const terminalsRef = useRef(terminals);
+  terminalsRef.current = terminals;
+  const [terminalActive, setTerminalActive] = useState<string>();
+  const terminalActiveRef = useRef(terminalActive);
+  terminalActiveRef.current = terminalActive;
   const [terminalView, setTerminalView] = useState<
     "hidden" | "docked" | "full"
   >("hidden");
@@ -233,7 +235,7 @@ export function App() {
   const resolvedPalette =
     resolvedTheme === "light"
       ? settings?.lightPalette || "sky"
-      : settings?.darkPalette || "midnight";
+      : settings?.darkPalette || "midnightClassic";
   useEffect(() => {
     document.documentElement.dataset.theme = resolvedTheme;
     document.documentElement.dataset.palette = resolvedPalette;
@@ -275,6 +277,9 @@ export function App() {
   const current = settings?.panes[active].tabs.find(
     (x) => x.id === settings.panes[active].activeTab,
   )?.location;
+  const terminalLocation = current?.source.startsWith("zip:")
+    ? { source: "local", path: parent(current.source.slice(4)) }
+    : current;
   async function initialize() {
     setBootError("");
     try {
@@ -332,7 +337,7 @@ export function App() {
           ] as string[]
         ).includes(saved?.darkPalette || "")
           ? saved?.darkPalette
-          : "midnight",
+          : "midnightClassic",
         bookmarks: normalizeBookmarks(saved?.bookmarks),
         language:
           saved?.language === "et"
@@ -1225,17 +1230,15 @@ export function App() {
     });
   }
   function toggleTerminal() {
-    const source = ensureTerminal();
-    if (!source) return;
+    const selected = ensureTerminal();
+    if (!selected) return;
     setTerminalView((v) =>
-      v === "docked" && source === terminalSource ? "hidden" : "docked",
+      v === "docked" && selected === terminalActive ? "hidden" : "docked",
     );
   }
-  function ensureTerminal() {
-    if (!current) return;
-    const location = current.source.startsWith("zip:")
-      ? { source: "local", path: parent(current.source.slice(4)) }
-      : current;
+  function ensureTerminal(createNew = false) {
+    if (!terminalLocation) return;
+    const location = terminalLocation;
     const profile = [
       ...(catalog?.hosts.map((h) => h.profile) || []),
       ...sessions,
@@ -1247,13 +1250,35 @@ export function App() {
         : profile
           ? `${profile.username}@${profile.host}:${profile.port}`
           : location.source;
-    setTerminals((old) =>
-      old[location.source]
-        ? old
-        : { ...old, [location.source]: { ...location, label } },
-    );
-    setTerminalSource(location.source);
-    return location.source;
+    const old = terminalsRef.current;
+    let selected = !createNew
+      ? old.find(
+          (tab) =>
+            tab.id === terminalActiveRef.current && tab.source === location.source,
+        ) || old.find((tab) => tab.source === location.source)
+      : undefined;
+    if (!selected) {
+      selected = { ...location, label, id: uid() };
+      terminalsRef.current = [...old, selected];
+      setTerminals(terminalsRef.current);
+    }
+    terminalActiveRef.current = selected.id;
+    setTerminalActive(selected.id);
+    return selected.id;
+  }
+  function closeTerminal(id: string) {
+    const old = terminalsRef.current;
+    const index = old.findIndex((tab) => tab.id === id);
+    if (index < 0) return;
+    const next = old.filter((tab) => tab.id !== id);
+    terminalsRef.current = next;
+    setTerminals(next);
+    if (terminalActiveRef.current === id) {
+      const nextId = next[Math.min(index, next.length - 1)]?.id;
+      terminalActiveRef.current = nextId;
+      setTerminalActive(nextId);
+      if (!nextId) setTerminalView("hidden");
+    }
   }
   function toggleFullTerminal() {
     if (terminalView === "full") {
@@ -1270,6 +1295,13 @@ export function App() {
     terminalReturnView.current = terminalView;
     setTerminalView("full");
   }
+  useEffect(() => {
+    if (terminalView === "hidden" || !terminalLocation) return;
+    const selected = terminalsRef.current.find(
+      (tab) => tab.id === terminalActiveRef.current,
+    );
+    if (selected?.source !== terminalLocation.source) ensureTerminal();
+  }, [terminalLocation?.source, terminalView]);
   function bookmarkFor(index = active): Bookmark | null {
     const location = locationAt(index);
     if (!location) return null;
@@ -1367,12 +1399,16 @@ export function App() {
         closedTabs.current = closedTabs.current.map((tabs) =>
           tabs.filter((tab) => tab.location.source !== source),
         );
-        setTerminals((old) => {
-          const next = { ...old };
-          delete next[source];
-          return next;
-        });
-        if (terminalSource === source) setTerminalView("hidden");
+        const remaining = terminalsRef.current.filter(
+          (tab) => tab.source !== source,
+        );
+        terminalsRef.current = remaining;
+        setTerminals(remaining);
+        if (!remaining.some((tab) => tab.id === terminalActiveRef.current)) {
+          terminalActiveRef.current = remaining[0]?.id;
+          setTerminalActive(remaining[0]?.id);
+          if (!remaining.length) setTerminalView("hidden");
+        }
         setSettings((s) =>
           s && boot
             ? {
@@ -1660,7 +1696,10 @@ export function App() {
       }
       if (!dialog && ctrl && (e.key === "`" || e.code === "Backquote")) {
         e.preventDefault();
-        toggleTerminal();
+        if (e.shiftKey) {
+          if (ensureTerminal(true))
+            setTerminalView((view) => (view === "full" ? view : "docked"));
+        } else toggleTerminal();
         return;
       }
       if ((e.target as HTMLElement).closest(".terminal-panel")) return;
@@ -2572,30 +2611,37 @@ export function App() {
                   : [element],
               )}
           </div>
-          {Object.values(terminals).map((terminal) => (
+          {terminals.map((terminal) => (
             <TerminalPanel
-              key={terminal.source}
+              key={terminal.id}
               path={terminal.path}
               source={terminal.source}
               label={terminal.label}
+              syncPath={
+                terminal.id === terminalActive &&
+                terminalLocation?.source === terminal.source
+                  ? terminalLocation.path
+                  : null
+              }
+              tabs={terminals}
+              activeTab={terminal.id}
+              onSelectTab={(id) => {
+                terminalActiveRef.current = id;
+                setTerminalActive(id);
+              }}
+              onNewTab={() => ensureTerminal(true)}
+              onCloseTab={closeTerminal}
               t={t}
               theme={resolvedTheme}
               palette={resolvedPalette}
               hidden={
-                terminalView === "hidden" || terminalSource !== terminal.source
+                terminalView === "hidden" || terminalActive !== terminal.id
               }
               fullscreen={terminalView === "full"}
               height={settings.terminalHeight ?? 242}
               onResize={(terminalHeight) => update({ terminalHeight })}
               onToggleFullscreen={toggleFullTerminal}
-              onClose={() => {
-                setTerminals((old) => {
-                  const next = { ...old };
-                  delete next[terminal.source];
-                  return next;
-                });
-                setTerminalView("hidden");
-              }}
+              onClose={() => closeTerminal(terminal.id)}
             />
           ))}
           {queueOpen && terminalView !== "full" && (

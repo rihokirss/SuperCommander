@@ -100,6 +100,29 @@ test("Ctrl+O swaps full terminal and panels while preserving the session element
   await page.keyboard.press("Control+o");
   await expect(page.locator(".terminal-fullscreen")).toBeVisible();
 });
+test("terminal tabs keep independent sessions when switching or closing", async ({ page }) => {
+  await page.keyboard.press("Control+Backquote");
+  let panel = page.locator(".terminal-panel:visible");
+  await expect(panel).toHaveCount(1);
+  const firstId = await panel.getAttribute("data-terminal-id");
+  await panel.getByRole("button", { name: "New terminal tab" }).click();
+  await expect(page.locator(".terminal-panel")).toHaveCount(2);
+  panel = page.locator(".terminal-panel:visible");
+  const secondId = await panel.getAttribute("data-terminal-id");
+  expect(secondId).not.toBe(firstId);
+  await expect(panel.getByRole("tab")).toHaveCount(2);
+  await panel.getByRole("tab").last().focus();
+  await page.keyboard.press("ArrowLeft");
+  await expect(page.locator(".terminal-panel:visible")).toHaveAttribute("data-terminal-id", firstId!);
+  await expect(page.locator(".terminal-panel:visible").getByRole("tab").first()).toBeFocused();
+  await page.locator(".terminal-panel:visible").getByRole("tab").last().click();
+  await expect(page.locator(".terminal-panel:visible")).toHaveAttribute("data-terminal-id", secondId!);
+  await page.locator(".terminal-panel:visible").getByRole("button", { name: /Close terminal tab/ }).last().click();
+  await expect(page.locator(".terminal-panel")).toHaveCount(1);
+  await expect(page.locator(".terminal-panel:visible")).toHaveAttribute("data-terminal-id", firstId!);
+  await page.keyboard.press("Control+Shift+Backquote");
+  await expect(page.locator(".terminal-panel")).toHaveCount(2);
+});
 test("docked terminal can be resized and keeps its height", async ({
   page,
 }) => {

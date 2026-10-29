@@ -2,15 +2,28 @@ import { useEffect, useRef, useState } from "react";
 import { Channel } from "@tauri-apps/api/core";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
-import { TerminalSquare, X, Maximize2, Minimize2 } from "lucide-react";
+import { TerminalSquare, X, Plus, Maximize2, Minimize2 } from "lucide-react";
 import { command, desktop } from "../api";
 import { IconButton } from "./Primitives";
+import { TerminalSync, type TerminalSyncStatus } from "../terminalSync";
 import type { Text } from "../i18n";
 import "@xterm/xterm/css/xterm.css";
+export type TerminalTab = {
+  id: string;
+  source: string;
+  path: string;
+  label: string;
+};
 export function TerminalPanel({
   path,
   source,
   label,
+  syncPath,
+  tabs,
+  activeTab,
+  onSelectTab,
+  onNewTab,
+  onCloseTab,
   t,
   onClose,
   theme,
@@ -24,6 +37,12 @@ export function TerminalPanel({
   path: string;
   source: string;
   label: string;
+  syncPath: string | null;
+  tabs: TerminalTab[];
+  activeTab: string;
+  onSelectTab: (id: string) => void;
+  onNewTab: () => void;
+  onCloseTab: (id: string) => void;
   t: Text;
   onClose: () => void;
   theme: "dark" | "light";
@@ -38,7 +57,13 @@ export function TerminalPanel({
   const panel = useRef<HTMLElement>(null);
   const resizeStart = useRef<{ y: number; height: number } | null>(null);
   const [error, setError] = useState("");
+  const [syncStatus, setSyncStatus] = useState<TerminalSyncStatus>("waiting");
   const instance = useRef<Terminal | null>(null);
+  const sync = useRef<TerminalSync | null>(null);
+  const target = useRef(syncPath);
+  target.current = syncPath;
+  const visible = useRef(!hidden);
+  visible.current = !hidden;
   function resize(height: number) {
     const section = panel.current;
     const pane =
@@ -76,6 +101,21 @@ export function TerminalPanel({
     let id: string | undefined;
     let disposed = false;
     let pendingInput = "";
+    let writeQueue = Promise.resolve();
+    const marker = crypto.randomUUID().replaceAll("-", "");
+    function send(data: string) {
+      if (!id) {
+        pendingInput += data;
+        return;
+      }
+      const session = id;
+      writeQueue = writeQueue
+        .then(() => command("terminal_write", { source, id: session, data }))
+        .then(() => {})
+        .catch((e) => {
+          if (!disposed) setError(String(e));
+        });
+    }
     const term = new Terminal({
       fontFamily: "Cascadia Code, Consolas, monospace",
       fontSize: 12,
@@ -86,6 +126,28 @@ export function TerminalPanel({
     });
     const fit = new FitAddon();
     instance.current = term;
+    const follow = new TerminalSync(source === "local", send, setSyncStatus);
+    sync.current = follow;
+    follow.setTarget(target.current);
+    let seenPrompt = false;
+    const promptMarker = term.parser.registerOscHandler(633, (data) => {
+      const prefix = `SC:${marker}:`;
+      if (!data.startsWith(prefix)) return false;
+      try {
+        const bytes = Uint8Array.from(atob(data.slice(prefix.length)), (value) =>
+          value.charCodeAt(0),
+        );
+        const cwd = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+        seenPrompt = true;
+        follow.prompt(cwd);
+      } catch {
+        /* Ignore malformed shell markers. */
+      }
+      return true;
+    });
+    const markerTimeout = window.setTimeout(() => {
+      if (!disposed && !seenPrompt) follow.unsupported();
+    }, 12000);
     term.attachCustomKeyEventHandler(
       (event) =>
         !(
@@ -102,7 +164,7 @@ export function TerminalPanel({
     channel.onmessage = (data) => {
       if (!disposed) term.write(Uint8Array.from(data));
     };
-    command<string>("terminal_open", { source, path, channel })
+    command<string>("terminal_open", { source, path, channel, marker })
       .then((session) => {
         if (disposed) {
           command("terminal_close", { source, id: session }).catch(() => {});
@@ -116,22 +178,25 @@ export function TerminalPanel({
           cols: term.cols,
         }).catch((e) => setError(String(e)));
         if (pendingInput) {
-          command("terminal_write", { source, id, data: pendingInput }).catch(
-            (e) => setError(String(e)),
-          );
+          send(pendingInput);
           pendingInput = "";
         }
-        term.focus();
+        if (visible.current) term.focus();
       })
       .catch((e) => {
         if (!disposed) setError(String(e));
       });
+    const keyInput = term.onKey(({ key }) => follow.input(key));
+    // xterm's onData also contains terminal protocol replies, which are not
+    // typed commands. Track keyboard, paste and composition separately.
+    const mount = element.current;
+    const markPaste = (event: ClipboardEvent) =>
+      follow.input(event.clipboardData?.getData("text/plain") || "input");
+    const markComposition = () => follow.input("input");
+    mount.addEventListener("paste", markPaste, true);
+    mount.addEventListener("compositionstart", markComposition, true);
     const input = term.onData((data) => {
-      if (id)
-        command("terminal_write", { source, id, data }).catch((e) =>
-          setError(String(e)),
-        );
-      else pendingInput += data;
+      send(data);
     });
     const observer = new ResizeObserver(() => {
       if (!element.current?.offsetHeight) return;
@@ -147,13 +212,22 @@ export function TerminalPanel({
     observer.observe(element.current);
     return () => {
       disposed = true;
+      window.clearTimeout(markerTimeout);
+      promptMarker.dispose();
       observer.disconnect();
+      mount.removeEventListener("paste", markPaste, true);
+      mount.removeEventListener("compositionstart", markComposition, true);
+      keyInput.dispose();
       input.dispose();
       term.dispose();
       instance.current = null;
+      sync.current = null;
       if (id) command("terminal_close", { source, id }).catch(() => {});
     };
   }, [path, source]);
+  useEffect(() => {
+    sync.current?.setTarget(syncPath);
+  }, [syncPath]);
   useEffect(() => {
     if (!hidden) requestAnimationFrame(() => instance.current?.focus());
   }, [hidden, fullscreen]);
@@ -168,6 +242,7 @@ export function TerminalPanel({
       }
       hidden={hidden}
       data-terminal-source={source}
+      data-terminal-id={activeTab}
     >
       {!fullscreen && (
         <div
@@ -219,12 +294,86 @@ export function TerminalPanel({
         </div>
       )}
       <header>
-        <span>
-          <TerminalSquare size={14} />
-          {t.terminal}
-          <small>{label}</small>
-        </span>
+        <div className="terminal-tabbar">
+          <div className="terminal-tabs" role="tablist" aria-label={t.terminalTabs}>
+            {tabs.map((tab, index) => (
+              <div
+                className={`terminal-tab ${activeTab === tab.id ? "active" : ""}`}
+                key={tab.id}
+              >
+                <button
+                  role="tab"
+                  aria-selected={activeTab === tab.id}
+                  tabIndex={activeTab === tab.id ? 0 : -1}
+                  data-terminal-tab-id={tab.id}
+                  data-tooltip={tab.label}
+                  onClick={() => onSelectTab(tab.id)}
+                  onKeyDown={(event) => {
+                    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key))
+                      return;
+                    event.preventDefault();
+                    const next =
+                      event.key === "Home"
+                        ? 0
+                        : event.key === "End"
+                          ? tabs.length - 1
+                          : (index + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) %
+                            tabs.length;
+                    const id = tabs[next].id;
+                    onSelectTab(id);
+                    requestAnimationFrame(() =>
+                      requestAnimationFrame(() =>
+                        document
+                          .querySelector<HTMLElement>(
+                            `.terminal-panel:not([hidden]) [data-terminal-tab-id="${id}"]`,
+                          )
+                          ?.focus(),
+                      ),
+                    );
+                  }}
+                >
+                  <TerminalSquare size={13} />
+                  <span>{tab.source === "local" ? t.local : tab.label}</span>
+                  <small>{index + 1}</small>
+                </button>
+                <IconButton
+                  title={`${t.closeTerminalTab}: ${tab.label}`}
+                  onClick={() => onCloseTab(tab.id)}
+                >
+                  <X size={11} />
+                </IconButton>
+              </div>
+            ))}
+          </div>
+          <IconButton title={t.newTerminalTab} shortcut="Ctrl+Shift+`" onClick={onNewTab}>
+            <Plus size={14} />
+          </IconButton>
+        </div>
         <div className="terminal-controls">
+          {desktop && !syncPath && (
+            <small className="terminal-sync-status" data-tooltip={t.terminalDifferentSource}>
+              {t.terminalDifferentSource}
+            </small>
+          )}
+          {desktop && syncPath && syncStatus !== "synced" && (
+            <small
+              className="terminal-sync-status"
+              data-tooltip={
+                syncStatus === "failed"
+                  ? t.terminalSyncFailed
+                  : syncStatus === "unsupported"
+                    ? t.terminalSyncUnsupported
+                    : t.terminalSyncWaiting
+              }
+            >
+              {syncStatus === "failed"
+                ? t.terminalSyncFailed
+                : syncStatus === "unsupported"
+                  ? t.terminalSyncUnsupported
+                  : t.terminalSyncWaiting}
+            </small>
+          )}
+          <small className="terminal-current-label">{syncPath || label}</small>
           <small>Ctrl+O</small>
           <IconButton
             title={fullscreen ? t.restorePanels : t.fullTerminal}

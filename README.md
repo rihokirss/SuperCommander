@@ -6,13 +6,13 @@ Browse local drives, UNC paths, ZIP archives and SSH/SFTP servers. Work with fam
 
 ## Download
 
-The latest release is **[SuperCommander 0.4.2](https://github.com/rihokirss/SuperCommander/releases/tag/v0.4.2)**.
+The latest release is **[SuperCommander 0.4.3](https://github.com/rihokirss/SuperCommander/releases/tag/v0.4.3)**.
 
-Version 0.4.2 adds signed automatic updates for installed and portable builds and lets `*` select all visible entries. Version 0.4.1 remembers window position, size and maximized state, uses a slimmer titlebar, fixes clipped terminal rows and puts compact F-key buttons on the status bar. Version 0.4.0 adds faster startup, selectable blue and dark red palettes, a category-based F1 reference, next-match quick finding and folder sizes in the file list. It includes keyboard-accessible menus, bookmarks, file properties, native file clipboard support, quick editing, content search, reviewed folder synchronization, recovery of saved copies and safe ZIP operations.
+Version 0.4.3 adds independent terminal tabs, prompt-aware directory following for local and SSH shells, F10 to quit, and Midnight classic blue as the default dark palette. Version 0.4.2 adds signed automatic updates for installed and portable builds and lets `*` select all visible entries. Version 0.4.1 remembers window position, size and maximized state, uses a slimmer titlebar, fixes clipped terminal rows and puts compact F-key buttons on the status bar. Version 0.4.0 adds faster startup, selectable blue and dark red palettes, a category-based F1 reference, next-match quick finding and folder sizes in the file list. It includes keyboard-accessible menus, bookmarks, file properties, native file clipboard support, quick editing, content search, reviewed folder synchronization, recovery of saved copies and safe ZIP operations.
 
-- [Windows x64 installer](https://github.com/rihokirss/SuperCommander/releases/download/v0.4.2/SuperCommander_0.4.2_x64-setup.exe) — recommended.
-- [Standalone Windows x64 executable](https://github.com/rihokirss/SuperCommander/releases/download/v0.4.2/SuperCommander_0.4.2_x64.exe) — requires WebView2.
-- [SHA-256 checksums](https://github.com/rihokirss/SuperCommander/releases/download/v0.4.2/SHA256SUMS.txt).
+- [Windows x64 installer](https://github.com/rihokirss/SuperCommander/releases/download/v0.4.3/SuperCommander_0.4.3_x64-setup.exe) — recommended.
+- [Portable Windows x64 executable](https://github.com/rihokirss/SuperCommander/releases/download/v0.4.3/SuperCommander_0.4.3_x64_portable.exe) — requires WebView2.
+- [SHA-256 checksums](https://github.com/rihokirss/SuperCommander/releases/download/v0.4.3/SHA256SUMS.txt).
 
 ## Screenshots
 
@@ -67,7 +67,7 @@ npm run build:windows
 `cargo-xwin` downloads the Windows SDK and CRT. Outputs:
 
 - `target/x86_64-pc-windows-msvc/release/supercommander.exe`
-- `target/x86_64-pc-windows-msvc/release/bundle/nsis/SuperCommander_0.4.2_x64-setup.exe`
+- `target/x86_64-pc-windows-msvc/release/bundle/nsis/SuperCommander_0.4.3_x64-setup.exe`
 
 A successful cross-build does not replace testing the application on Windows.
 
@@ -77,7 +77,7 @@ Builds containing the updater check GitHub at startup and every 12 hours while r
 
 Version 0.4.1 and earlier predate this feature and cannot update themselves. They must first be replaced with a build that includes the updater. Releases need both `latest.json` and `portable.json` together with the matching signed installer and portable EXE; without those files the corresponding automatic update is unavailable.
 
-For release maintainers, keep the updater signing private key safe and backed up outside the repository. Configure `TAURI_SIGNING_PRIVATE_KEY` as a GitHub Actions secret. On main, the Windows workflow creates the signed installer, a version-bound signature for the portable EXE, and both manifests as build artifacts; pull requests and builds without the secret remain unsigned. Upload the manifests, `SuperCommander_<version>_x64-setup.exe` and `SuperCommander_<version>_x64.exe` to the GitHub release whose tag is `v<version>`. The embedded public key verifies updates and rejects a signature for a different version. Never commit the private key. Publishing a release remains a separate step.
+For release maintainers, keep the updater signing private key safe and backed up outside the repository. Configure `TAURI_SIGNING_PRIVATE_KEY` as a GitHub Actions secret. On main, the Windows workflow creates the signed installer, a version-bound signature for the portable EXE, and both manifests as build artifacts; pull requests and builds without the secret remain unsigned. Upload the manifests, `SuperCommander_<version>_x64-setup.exe` and `SuperCommander_<version>_x64_portable.exe` to the GitHub release whose tag is `v<version>`. The embedded public key verifies updates and rejects a signature for a different version. Never commit the private key. Publishing a release remains a separate step.
 
 See the [dependency review](docs/dependencies.md) for the 0.3.0 updates and remaining upstream security advisories.
 
@@ -137,6 +137,7 @@ Each pane has independent tabs, history, sorting and filtering. Click its locati
 | Ctrl+B | Collapse / expand Workspace |
 | Ctrl+O | Full terminal / file panes, preserving the shell session |
 | Ctrl+backtick | Show / hide the docked terminal |
+| Ctrl+Shift+backtick | Open another terminal tab |
 | Ctrl+, | Settings |
 | F1 | Searchable shortcut reference |
 | F9 | Actions menu |
@@ -270,7 +271,7 @@ Folder sizes are calculated on request, with progress, cancellation and partial-
 
 Workspace collapses into an icon rail. Each section can also be collapsed independently; these choices persist. **Network** includes network folders and servers from Explorer Quick Access, mapped drives and saved Windows network shortcuts. Its refresh button reloads them. Use **+** to add a UNC location, rename a listed entry, remove it from SuperCommander or restore a removed Explorer entry. These customizations are saved in SuperCommander and leave Explorer's pins unchanged. Opening a server such as `\\server` lists its shared folders through the Windows shell; the `..` row at a share root returns to the server. UNC paths can also be entered directly; the app does not scan the network for devices.
 
-Settings offer dark, light or Windows-following modes and separate palette choices: Midnight blue, Midnight with classic blue (#173E76), graphite with blue panels, and corresponding three dark red palettes for dark mode, and Sky blue, Ice blue and Azure for light mode. Choices preview immediately, persist independently and apply to menus, dialogs and native glass. The titlebar sun/moon button switches modes while keeping each palette; using it replaces the Windows-following mode with an explicit choice. Settings offer a glass toggle and a transparency slider. Compact mode uses 26 px rows for both files and Workspace; Comfortable uses 34 px. Transfers use dense rows, expanding details only when needed. Select menus, checkboxes and switches follow the app's theme.
+Settings offer dark, light or Windows-following modes and separate palette choices: Midnight blue, Midnight with classic blue (#173E76), graphite with blue panels, and corresponding three dark red palettes for dark mode, and Sky blue, Ice blue and Azure for light mode. Midnight with classic blue is the default for new settings; existing palette choices are preserved. Choices preview immediately, persist independently and apply to menus, dialogs and native glass. The titlebar sun/moon button switches modes while keeping each palette; using it replaces the Windows-following mode with an explicit choice. Settings offer a glass toggle and a transparency slider. Compact mode uses 26 px rows for both files and Workspace; Comfortable uses 34 px. Transfers use dense rows, expanding details only when needed. Select menus, checkboxes and switches follow the app's theme.
 
 ## SSH connections and port forwarding
 
@@ -295,9 +296,11 @@ The catalog resolves concrete aliases, Host patterns, first-value-wins defaults,
 
 ### Server shells
 
-The terminal follows the active pane when opened. Local panes use PowerShell 7, falling back to Windows PowerShell. SSH panes open the server's interactive shell with a PTY through the existing authenticated SSH connection. Local and per-server shell sessions remain separate and survive Ctrl+O toggling. Drag the docked terminal’s top edge or use the focused separator’s Up/Down keys to change its height; the choice is remembered. Closing a shell leaves SFTP connected; disconnecting SSH closes its shells and tunnels.
+The terminal has independent tabs; **+** or **Ctrl+Shift+backtick** opens another shell in the active pane's folder, and each tab has its own close button. Local panes use PowerShell 7, falling back to Windows PowerShell. SSH panes open the server's interactive shell with a PTY through the existing authenticated SSH connection. Switching between local and SSH panes selects a matching shell or opens one when needed. Shell sessions survive Ctrl+O toggling.
 
-A remote shell starts in the server's default home directory. Pane navigation does not inject commands into an existing shell. If a server denies a shell or PTY, the error is shown.
+The active shell follows the active file pane's folder. When a command is running or text has already been typed, the folder change waits until the next empty prompt so it does not interrupt the command or alter the typed input. PowerShell and SSH Bash, Zsh and Fish provide prompt integration; other remote shells remain usable and show when automatic following is unavailable. Drag the docked terminal’s top edge or use the focused separator’s Up/Down keys to change its height; the choice is remembered. Closing a shell leaves SFTP connected; disconnecting SSH closes its shells and tunnels.
+
+A remote shell follows its matching pane through prompt-aware directory changes. If a server denies a shell or PTY, the error is shown.
 
 ### Remembered port forwards
 
