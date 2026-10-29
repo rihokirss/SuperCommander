@@ -206,17 +206,24 @@ export function TerminalPanel({
       .catch((e) => {
         if (!disposed) setError(String(e));
       });
-    const keyInput = term.onKey(({ key }) => follow.input(key));
+    const keyInput = term.onKey(({ key }) => {
+      showBufferedOutput();
+      follow.input(key);
+    });
     // xterm's onData also contains terminal protocol replies, which are not
     // typed commands. Track keyboard, paste and composition separately.
     const mount = element.current;
-    const markPaste = (event: ClipboardEvent) =>
+    const markPaste = (event: ClipboardEvent) => {
+      showBufferedOutput();
       follow.input(event.clipboardData?.getData("text/plain") || "input");
-    const markComposition = () => follow.input("input");
+    };
+    const markComposition = () => {
+      showBufferedOutput();
+      follow.input("input");
+    };
     mount.addEventListener("paste", markPaste, true);
     mount.addEventListener("compositionstart", markComposition, true);
     const input = term.onData((data) => {
-      showBufferedOutput();
       send(data);
     });
     const observer = new ResizeObserver(() => {
