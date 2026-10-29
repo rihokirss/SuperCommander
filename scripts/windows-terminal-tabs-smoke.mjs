@@ -41,9 +41,13 @@ try {
   await expect(visible().locator(".terminal-sync-status")).toHaveCount(0, { timeout: 30000 });
   await expectCwd(root, "SC_INITIAL");
 
+  // A shell with an unfamiliar initial redraw may safely fall back to showing
+  // that command. Check that the subsequent navigation adds no visible echo.
+  const echoCount = async () => ((await visible().locator(".xterm-rows").textContent())?.match(/Set-Location -LiteralPath/g) || []).length;
+  const previousEchoes = await echoCount();
   await left.getByText("First folder", { exact: true }).dblclick();
   await expect(visible().locator(".terminal-sync-status")).toHaveCount(0, { timeout: 30000 });
-  await expect(visible().locator(".xterm-rows")).not.toContainText("Set-Location -LiteralPath");
+  await expect.poll(echoCount).toBe(previousEchoes);
   await expectCwd(first, "SC_FOLLOW");
   await run("$sc_tab = 'FIRST_TAB'");
   await visible().getByRole("button", { name: "New terminal tab" }).click();
