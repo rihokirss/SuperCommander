@@ -53,6 +53,20 @@ describe("terminal directory following", () => {
     expect(statuses.at(-1)).toBe("failed");
   });
 
+  it("accepts the shell's successful change when Windows reports a long-name alias", () => {
+    const sent: string[] = [];
+    const statuses: string[] = [];
+    const sync = new TerminalSync(true, (command) => sent.push(command), (status) => statuses.push(status), "1234567890abcdef1234567890abcdef");
+    sync.setTarget("C:\\Users\\RUNNER~1\\project");
+    sync.prompt("C:\\Users\\runneradmin\\project");
+    expect(sent).toHaveLength(1);
+    sync.acknowledge();
+    sync.prompt("C:\\Users\\runneradmin\\project");
+    expect(statuses.at(-1)).toBe("synced");
+    sync.prompt("C:\\Users\\runneradmin\\project");
+    expect(sent).toHaveLength(1);
+  });
+
   it("quotes paths and refuses terminal control characters", () => {
     expect(directoryCommand("C:\\O'Brien", true)).toBe("Set-Location -LiteralPath 'C:\\O''Brien'\r");
     expect(directoryCommand("/a'b", false)).toBe("cd -- '/a'\\''b'\r");

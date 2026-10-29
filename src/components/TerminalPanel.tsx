@@ -126,13 +126,17 @@ export function TerminalPanel({
     });
     const fit = new FitAddon();
     instance.current = term;
-    const follow = new TerminalSync(source === "local", send, setSyncStatus);
+    const follow = new TerminalSync(source === "local", send, setSyncStatus, marker);
     sync.current = follow;
     follow.setTarget(target.current);
     let seenPrompt = false;
     const promptMarker = term.parser.registerOscHandler(633, (data) => {
       const prefix = `SC:${marker}:`;
       if (!data.startsWith(prefix)) return false;
+      if (data === `${prefix}OK`) {
+        follow.acknowledge();
+        return true;
+      }
       try {
         const bytes = Uint8Array.from(atob(data.slice(prefix.length)), (value) =>
           value.charCodeAt(0),

@@ -8,12 +8,15 @@ export class TerminalSync {
   private ready = false;
   private dirty = false;
   private inFlight: string | null = null;
+  private acknowledged = false;
+  private confirmed: { target: string; cwd: string } | null = null;
   private failed: string | null = null;
   private supported = true;
   constructor(
     private readonly local: boolean,
     private readonly send: (command: string) => void,
     private readonly status: (status: TerminalSyncStatus) => void,
+    private readonly marker?: string,
   ) {}
 
   setTarget(path: string | null) {
@@ -39,10 +42,16 @@ export class TerminalSync {
     this.cwd = cwd;
     this.ready = true;
     if (this.inFlight) {
-      if (!samePath(this.inFlight, cwd, this.local)) this.failed = this.inFlight;
+      if (this.acknowledged) this.confirmed = { target: this.inFlight, cwd };
+      else if (!samePath(this.inFlight, cwd, this.local)) this.failed = this.inFlight;
       this.inFlight = null;
+      this.acknowledged = false;
     }
     this.pump();
+  }
+
+  acknowledge() {
+    if (this.inFlight) this.acknowledged = true;
   }
 
   unsupported() {
@@ -57,11 +66,16 @@ export class TerminalSync {
       this.status("failed");
       return;
     }
-    if (this.cwd && samePath(this.target, this.cwd, this.local)) {
+    if (this.inFlight) {
+      this.status("waiting");
+      return;
+    }
+    if (this.cwd && (samePath(this.target, this.cwd, this.local) ||
+      (this.confirmed?.target === this.target && samePath(this.confirmed.cwd, this.cwd, this.local)))) {
       this.status("synced");
       return;
     }
-    if (!this.ready || this.dirty || this.inFlight) {
+    if (!this.ready || this.dirty) {
       this.status("waiting");
       return;
     }
@@ -69,7 +83,7 @@ export class TerminalSync {
     this.inFlight = path;
     this.ready = false;
     this.status("waiting");
-    this.send(directoryCommand(path, this.local));
+    this.send(directoryCommand(path, this.local, this.marker));
   }
 }
 
@@ -79,9 +93,14 @@ function samePath(a: string, b: string, local: boolean) {
   return normalize(a) === normalize(b);
 }
 
-export function directoryCommand(path: string, local: boolean): string {
+export function directoryCommand(path: string, local: boolean, marker?: string): string {
   if (/[\x00-\x1f\x7f]/.test(path)) throw new Error("Invalid terminal path");
+  const command = local
+    ? `Set-Location -LiteralPath '${path.replace(/'/g, "''")}'`
+    : `cd -- '${path.replace(/'/g, "'\\''")}'`;
+  if (!marker) return `${command}\r`;
+  if (!/^[a-f\d]{32}$/i.test(marker)) throw new Error("Invalid terminal marker");
   return local
-    ? `Set-Location -LiteralPath '${path.replace(/'/g, "''")}'\r`
-    : `cd -- '${path.replace(/'/g, "'\\''")}'\r`;
+    ? `${command}; if ($?) { [Console]::Write(([char]27).ToString() + ']633;SC:${marker}:OK' + [char]7) }\r`
+    : `${command} && printf '\\033]633;SC:${marker}:OK\\007'\r`;
 }
