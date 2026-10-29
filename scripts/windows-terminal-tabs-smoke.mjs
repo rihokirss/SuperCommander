@@ -16,7 +16,7 @@ async function run(command) {
   await page.keyboard.press("Enter");
 }
 async function expectCwd(folder, token) {
-  await run(`Write-Output ('${token}:' + ((Get-Location).Path -eq '${quote(folder)}'))`);
+  await run(`Write-Output ('${token}:' + ((Get-Item -LiteralPath (Get-Location).Path).FullName -eq (Get-Item -LiteralPath '${quote(folder)}').FullName))`);
   await expect(visible().locator(".xterm-rows")).toContainText(`${token}:True`, { timeout: 30000 });
 }
 try {
