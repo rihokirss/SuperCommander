@@ -1242,8 +1242,13 @@ pub fn run() {
             });
             #[cfg(windows)]
             if let Some(window) = app.get_webview_window("main") {
-                window_state::install(&window);
+                let maximized = window_state::install(&window);
                 let _ = window_vibrancy::apply_acrylic(&window, Some((17, 23, 34, 210)));
+                window_state::show(&window, maximized);
+            }
+            #[cfg(not(windows))]
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
             }
             #[cfg(windows)]
             updates::start(app.handle());

@@ -10,8 +10,8 @@ use tauri::{WebviewWindow, WindowEvent};
 use windows_sys::Win32::{
     Foundation::{HWND, RECT},
     UI::WindowsAndMessaging::{
-        GetWindowPlacement, SetWindowPlacement, SW_SHOWMAXIMIZED, SW_SHOWMINIMIZED, SW_SHOWNORMAL,
-        WINDOWPLACEMENT,
+        GetWindowPlacement, SetWindowPlacement, ShowWindow, SW_HIDE, SW_SHOWMAXIMIZED,
+        SW_SHOWMINIMIZED, SW_SHOWNORMAL, WINDOWPLACEMENT,
     },
 };
 
@@ -80,11 +80,9 @@ fn capture(hwnd: HWND, previous: Option<&WindowState>) -> Option<WindowState> {
 fn restore(hwnd: HWND, value: &WindowState) {
     let placement = WINDOWPLACEMENT {
         length: size_of::<WINDOWPLACEMENT>() as u32,
-        showCmd: if value.maximized {
-            SW_SHOWMAXIMIZED as u32
-        } else {
-            SW_SHOWNORMAL as u32
-        },
+        // Restore the bounds while hidden. Showing here would expose the
+        // default-positioned window before its saved placement is applied.
+        showCmd: SW_HIDE as u32,
         rcNormalPosition: RECT {
             left: value.left,
             top: value.top,
@@ -98,10 +96,13 @@ fn restore(hwnd: HWND, value: &WindowState) {
     let _ = unsafe { SetWindowPlacement(hwnd, &placement) };
 }
 
-pub fn install(window: &WebviewWindow) {
-    let Ok(hwnd) = window.hwnd() else { return };
+pub fn install(window: &WebviewWindow) -> bool {
+    let Ok(hwnd) = window.hwnd() else {
+        return false;
+    };
     let hwnd = hwnd.0 as HWND;
     let previous = load();
+    let maximized = previous.as_ref().is_some_and(|value| value.maximized);
     if let Some(value) = &previous {
         restore(hwnd, value);
     }
@@ -135,4 +136,24 @@ pub fn install(window: &WebviewWindow) {
             _ => {}
         }
     });
+    maximized
+}
+
+pub fn show(window: &WebviewWindow, maximized: bool) {
+    if let Ok(hwnd) = window.hwnd() {
+        // SAFETY: hwnd belongs to the live application window; its placement
+        // and visual appearance have already been restored while hidden.
+        unsafe {
+            ShowWindow(
+                hwnd.0 as HWND,
+                if maximized {
+                    SW_SHOWMAXIMIZED
+                } else {
+                    SW_SHOWNORMAL
+                },
+            );
+        }
+    } else {
+        let _ = window.show();
+    }
 }

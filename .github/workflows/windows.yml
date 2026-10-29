@@ -52,6 +52,7 @@ jobs:
       - run: node scripts/windows-quit-smoke.mjs
       - run: powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File scripts/windows-updater-smoke.ps1
       - run: node scripts/windows-window-state-smoke.mjs
+      - run: powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File scripts/windows-first-show.ps1 -Executable target/release/supercommander.exe
       - run: node scripts/windows-theme-smoke.mjs
       - run: node scripts/windows-terminal-resize-smoke.mjs
       - run: node scripts/windows-terminal-tabs-smoke.mjs
