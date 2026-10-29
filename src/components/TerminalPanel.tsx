@@ -6,6 +6,7 @@ import { TerminalSquare, X, Plus, Maximize2, Minimize2 } from "lucide-react";
 import { command, desktop } from "../api";
 import { IconButton } from "./Primitives";
 import { TerminalSync, type TerminalSyncStatus } from "../terminalSync";
+import { TerminalEcho } from "../terminalEcho";
 import type { Text } from "../i18n";
 import "@xterm/xterm/css/xterm.css";
 export type TerminalTab = {
@@ -126,7 +127,19 @@ export function TerminalPanel({
     });
     const fit = new FitAddon();
     instance.current = term;
-    const follow = new TerminalSync(source === "local", send, setSyncStatus, marker);
+    const echo = new TerminalEcho(marker);
+    let echoTimeout: number | undefined;
+    const showBufferedOutput = () => {
+      window.clearTimeout(echoTimeout);
+      const buffered = echo.cancel();
+      if (buffered?.length) term.write(buffered);
+    };
+    const follow = new TerminalSync(source === "local", (data) => {
+      echo.begin(data);
+      window.clearTimeout(echoTimeout);
+      echoTimeout = window.setTimeout(showBufferedOutput, 5000);
+      send(data);
+    }, setSyncStatus, marker);
     sync.current = follow;
     follow.setTarget(target.current);
     let seenPrompt = false;
@@ -166,7 +179,10 @@ export function TerminalPanel({
     fit.fit();
     const channel = new Channel<number[]>();
     channel.onmessage = (data) => {
-      if (!disposed) term.write(Uint8Array.from(data));
+      if (!disposed) {
+        const output = echo.push(Uint8Array.from(data));
+        if (output?.length) term.write(output);
+      }
     };
     command<string>("terminal_open", { source, path, channel, marker })
       .then((session) => {
@@ -200,6 +216,7 @@ export function TerminalPanel({
     mount.addEventListener("paste", markPaste, true);
     mount.addEventListener("compositionstart", markComposition, true);
     const input = term.onData((data) => {
+      showBufferedOutput();
       send(data);
     });
     const observer = new ResizeObserver(() => {
@@ -217,6 +234,7 @@ export function TerminalPanel({
     return () => {
       disposed = true;
       window.clearTimeout(markerTimeout);
+      window.clearTimeout(echoTimeout);
       promptMarker.dispose();
       observer.disconnect();
       mount.removeEventListener("paste", markPaste, true);

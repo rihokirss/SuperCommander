@@ -43,6 +43,7 @@ try {
 
   await left.getByText("First folder", { exact: true }).dblclick();
   await expect(visible().locator(".terminal-sync-status")).toHaveCount(0, { timeout: 30000 });
+  await expect(visible().locator(".xterm-rows")).not.toContainText("Set-Location -LiteralPath");
   await expectCwd(first, "SC_FOLLOW");
   await run("$sc_tab = 'FIRST_TAB'");
   await visible().getByRole("button", { name: "New terminal tab" }).click();

@@ -48,6 +48,7 @@ try {
   await expect(visible()).toHaveAttribute("data-terminal-id", remoteTab, { timeout: 30000 });
   await left.getByText("First remote", { exact: true }).dblclick();
   await expect(visible().locator(".terminal-sync-status")).toHaveCount(0, { timeout: 30000 });
+  await expect(visible().locator(".xterm-rows")).not.toContainText("cd -- '");
   await expectCwd(`${fixture.path}/First remote`, "SC_REMOTE_FIRST");
   await run("sc_test=FIRST_REMOTE");
   await visible().getByRole("button", { name: "New terminal tab" }).click();
