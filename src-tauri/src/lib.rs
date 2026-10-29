@@ -17,6 +17,8 @@ use std::{
 use tauri::{ipc::Channel, Emitter, Manager, State};
 
 #[cfg(windows)]
+mod updates;
+#[cfg(windows)]
 mod window_state;
 
 struct AppState {
@@ -166,6 +168,32 @@ async fn blocking<T: Send + 'static>(
         .await
         .map_err(error)?
         .map_err(error)
+}
+
+#[tauri::command]
+fn pending_update(app: tauri::AppHandle) -> Option<String> {
+    #[cfg(windows)]
+    {
+        updates::pending_version(&app)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = app;
+        None
+    }
+}
+
+#[tauri::command]
+fn take_update_error(app: tauri::AppHandle) -> Option<String> {
+    #[cfg(windows)]
+    {
+        updates::take_error(&app)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = app;
+        None
+    }
 }
 
 #[derive(Serialize)]
@@ -1179,6 +1207,7 @@ async fn open_file(path: String, edit: bool) -> Reply<()> {
 
 pub fn run() {
     let app = tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             let sources = Arc::new(Sources::default());
             let handle = app.handle().clone();
@@ -1204,10 +1233,14 @@ pub fn run() {
                 window_state::install(&window);
                 let _ = window_vibrancy::apply_acrylic(&window, Some((17, 23, 34, 210)));
             }
+            #[cfg(windows)]
+            updates::start(app.handle());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             bootstrap,
+            pending_update,
+            take_update_error,
             set_window_appearance,
             read_ssh_config,
             save_ssh_config,
@@ -1270,6 +1303,8 @@ pub fn run() {
     app.run(|handle, event| {
         if let tauri::RunEvent::Exit = event {
             handle.state::<AppState>().terminals.close_all();
+            #[cfg(windows)]
+            updates::install_on_exit(handle);
         }
     });
 }

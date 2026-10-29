@@ -82,7 +82,11 @@ test("selection masks, inverse selection and clearing exclude the parent row", a
   await expect(left.locator(".parent-entry")).not.toHaveClass(/selected/);
   await page.keyboard.press("Control+Shift+a");
   await expect(left.locator(".file-row.selected")).toHaveCount(0);
-  await page.keyboard.press("Control+a");
+  await page.keyboard.press("NumpadMultiply");
+  await expect(left.locator(".file-row.selected")).toHaveCount(10);
+  await expect(left.locator(".parent-entry")).not.toHaveClass(/selected/);
+  await expect(page.locator('[data-pane="1"] .file-row.selected')).toHaveCount(0);
+  await page.keyboard.press("NumpadMultiply");
   await expect(left.locator(".file-row.selected")).toHaveCount(10);
   await page.keyboard.press("NumpadSubtract");
   await page

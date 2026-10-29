@@ -43,9 +43,9 @@ export function shortcutGroups(t: Text) {
       title: t.selection,
       items: [
         ["Insert / Space", t.toggleMark],
-        ["Ctrl+A", t.selectAll],
+        ["Ctrl+A / *", t.selectAll],
         ["Ctrl+Shift+A / Esc", t.clearSelection],
-        ["Ctrl+I / *", t.invertSelection],
+        ["Ctrl+I", t.invertSelection],
         ["+", t.selectPattern],
         ["−", t.deselectPattern],
       ],

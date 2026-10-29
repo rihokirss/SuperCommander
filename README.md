@@ -53,7 +53,7 @@ On Windows:
 npm run tauri build
 ```
 
-The per-user NSIS installer is written to `target/release/bundle/nsis/`. It downloads WebView2 when needed. Builds are currently unsigned; automatic application updates are not implemented.
+The per-user NSIS installer is written to `target/release/bundle/nsis/`. It downloads WebView2 when needed. Windows Authenticode signing is not currently configured.
 
 Cross-compile from WSL without installing Rust on Windows:
 
@@ -70,6 +70,14 @@ npm run build:windows
 - `target/x86_64-pc-windows-msvc/release/bundle/nsis/SuperCommander_0.4.1_x64-setup.exe`
 
 A successful cross-build does not replace testing the application on Windows.
+
+### Updates
+
+Builds containing the updater check GitHub at startup and every 12 hours while running. An available update is downloaded and its signature verified; the status bar announces that it will be applied when the application closes. Unsaved editor changes retain their normal close confirmation. The installed version uses the NSIS update installer; a portable executable is replaced in its current location after its process exits. A portable update requires write access to that location. A failure is shown in the status bar on the next launch. Offline checks and older releases without update manifests do not interrupt startup.
+
+The currently published 0.4.1 release predates this feature and cannot update itself. It must first be replaced with a build that includes the updater. Future releases need both `latest.json` and `portable.json` together with the matching signed installer and portable EXE; without those files the corresponding automatic update is unavailable.
+
+For release maintainers, keep the updater signing private key safe and backed up outside the repository. Configure `TAURI_SIGNING_PRIVATE_KEY` as a GitHub Actions secret. On main, the Windows workflow creates the signed installer, a version-bound signature for the portable EXE, and both manifests as build artifacts; pull requests and builds without the secret remain unsigned. Upload the manifests, `SuperCommander_<version>_x64-setup.exe` and `SuperCommander_<version>_x64.exe` to the GitHub release whose tag is `v<version>`. The embedded public key verifies updates and rejects a signature for a different version. Never commit the private key. Publishing a release remains a separate step.
 
 See the [dependency review](docs/dependencies.md) for the 0.3.0 updates and remaining upstream security advisories.
 
@@ -91,8 +99,8 @@ Each pane has independent tabs, history, sorting and filtering. Click its locati
 | Ctrl+X | Cut selected files to the clipboard |
 | Ctrl+V / Shift+Insert | Paste files into the active pane |
 | Ctrl+Shift+C | Copy full file paths (SSH URLs for remote files) |
-| Ctrl+A / Ctrl+Shift+A | Select all / clear visible marks |
-| Ctrl+I / * | Invert the visible selection |
+| Ctrl+A / * / Ctrl+Shift+A | Select all / clear visible marks |
+| Ctrl+I | Invert the visible selection |
 | + / - | Select / deselect by filename pattern |
 | Home / End | First / last row |
 | Page Up / Page Down | Move by one visible page |

@@ -8,6 +8,7 @@ import {
 } from "react";
 import { version } from "../package.json";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { listen } from "@tauri-apps/api/event";
 import {
   ArrowDownToLine,
   ArrowRight,
@@ -182,6 +183,8 @@ export function App() {
     () => matchMedia("(prefers-color-scheme: dark)").matches,
   );
   const [toast, setToast] = useState("");
+  const [pendingUpdate, setPendingUpdate] = useState<string>();
+  const [updateError, setUpdateError] = useState<string>();
   const [split, setSplit] = useState(50);
   const snapshots = useRef<PaneSnapshot[]>([emptySnapshot, emptySnapshot]);
   const paneControls = useRef<(PaneHandle | null)[]>([null, null]);
@@ -205,6 +208,22 @@ export function App() {
   activeRef.current = active;
   const layout = useRef<HTMLDivElement>(null);
   const t = dictionary(settings?.language || "en");
+  useEffect(() => {
+    if (!api.desktop) return;
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    void listen<string>("update-ready", (event) => setPendingUpdate(event.payload))
+      .then(async (stop) => {
+        if (disposed) { stop(); return; }
+        unlisten = stop;
+        const version = await api.command<string | null>("pending_update");
+        if (!disposed && version) setPendingUpdate(version);
+        const error = await api.command<string | null>("take_update_error");
+        if (!disposed && error) setUpdateError(error);
+      })
+      .catch(console.error);
+    return () => { disposed = true; unlisten?.(); };
+  }, []);
   const resolvedTheme =
     settings?.theme === "system"
       ? systemDark
@@ -2614,10 +2633,10 @@ export function App() {
         ) : (
           <div
             className="status-message"
-            data-tooltip={api.desktop ? t.ready : t.demoHint}
+            data-tooltip={pendingUpdate ? `${t.updateReady}: ${pendingUpdate}. ${t.updateOnClose}` : updateError ? `${t.updateFailed}: ${updateError}` : api.desktop ? t.ready : t.demoHint}
           >
             <span className="status-led" />
-            <span>{api.desktop ? t.ready : t.demoHint}</span>
+            <span>{pendingUpdate ? `${t.updateReady}: ${pendingUpdate}` : updateError ? t.updateFailed : api.desktop ? t.ready : t.demoHint}</span>
           </div>
         )}
         <div className="shortcut-bar" hidden={terminalView === "full"}>

@@ -580,15 +580,14 @@ export function FilePane(p: Props) {
       );
       return;
     }
-    if (
-      ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "i") ||
-      (!e.ctrlKey &&
-        !e.metaKey &&
-        !e.altKey &&
-        (e.key === "*" || e.code === "NumpadMultiply"))
-    ) {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "i") {
       e.preventDefault();
       invertSelection();
+      return;
+    }
+    if (!e.ctrlKey && !e.metaKey && !e.altKey && (e.key === "*" || e.code === "NumpadMultiply")) {
+      e.preventDefault();
+      setSelected(new Set(dataEntries.map((entry) => entry.path)));
       return;
     }
     if (!e.ctrlKey && !e.metaKey && !e.altKey && ["+", "-"].includes(e.key)) {

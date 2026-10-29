@@ -29,10 +29,27 @@ jobs:
       - run: npm run test:ui
       - name: Ensure WebView2 runtime for native tests
         run: ./scripts/ci-webview.ps1
-      - run: npm run tauri build
+      - name: Build Windows application
         id: windows_build
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && secrets.TAURI_SIGNING_PRIVATE_KEY || '' }}
+        run: |
+          if ($env:TAURI_SIGNING_PRIVATE_KEY) {
+            npm run tauri build -- --config src-tauri/tauri.updater.conf.json
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+            $portable = "target/release/bundle/nsis/SuperCommander_${version}_x64.exe"
+            Copy-Item target/release/supercommander.exe $portable
+            npx tauri signer sign $portable --app-version $version
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            node scripts/updater-manifest.mjs
+          } else {
+            npm run tauri build
+          }
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - run: node scripts/windows-clipboard-smoke.mjs
       - run: node scripts/windows-startup-smoke.mjs
+      - run: ./scripts/windows-updater-smoke.ps1
       - run: node scripts/windows-window-state-smoke.mjs
       - run: node scripts/windows-theme-smoke.mjs
       - run: node scripts/windows-terminal-resize-smoke.mjs
@@ -78,5 +95,10 @@ jobs:
           name: SuperCommander-windows-x64
           path: |
             target/release/bundle/nsis/*-setup.exe
+            target/release/bundle/nsis/*-setup.exe.sig
+            target/release/bundle/nsis/latest.json
+            target/release/bundle/nsis/portable.json
+            target/release/bundle/nsis/*_x64.exe
+            target/release/bundle/nsis/*_x64.exe.sig
             target/release/supercommander.exe
           if-no-files-found: error
