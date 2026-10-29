@@ -109,6 +109,7 @@ pub fn install_on_exit(app: &AppHandle) {
             }
         } else if is_registered_install() && !other_instance_running() {
             if let Err(error) = pending.update.install(pending.bytes) {
+                record_error(app, &error.to_string());
                 eprintln!("Could not launch the update installer: {error}");
             }
         }
