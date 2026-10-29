@@ -3,6 +3,7 @@
 export class TerminalEcho {
   private buffer: number[] | null = null;
   private command = "";
+  private previousCommand = "";
   private readonly prefix: number[];
   private readonly success: number[];
 
@@ -13,6 +14,7 @@ export class TerminalEcho {
   }
 
   begin(command: string) {
+    this.previousCommand = this.command;
     this.command = command.replace(/[\r\n]+$/, "");
     this.buffer = [];
   }
@@ -50,7 +52,7 @@ export class TerminalEcho {
       .replace(/[^\x08]\x08/g, "")
       .replace(/[\r\n]/g, "")
       .trim();
-    if (echoed !== this.command) return this.cancel();
+    if (!isRedrawOnly(echoed, this.command, this.previousCommand)) return this.cancel();
     const afterSuccess = this.buffer.slice(success + this.success.length);
     // The shell normally terminates the submitted command with a newline.
     // Replace the old prompt instead of leaving it on an empty line.
@@ -59,6 +61,29 @@ export class TerminalEcho {
     this.buffer = null;
     return Uint8Array.from([13, 27, 91, 50, 75, ...this.success, ...afterSuccess]);
   }
+}
+
+function isRedrawOnly(output: string, command: string, previous: string) {
+  if (output === command) return true;
+  // PSReadLine can redraw a prompt and several prefixes of the same command
+  // as a long input wraps. Accept only known command prefixes; otherwise keep
+  // all output so that messages from other processes are never hidden.
+  const text = output.replace(/^PS [^>\r\n]*> /, "");
+  const start = command.startsWith("Set-Location -LiteralPath ")
+    ? "Set-Location -LiteralPath "
+    : command.startsWith("cd -- '") ? "cd -- '" : "";
+  if (!start || !text.startsWith(start)) return false;
+  const segments: string[] = [];
+  let offset = 0;
+  while (offset < text.length) {
+    const next = text.indexOf(start, offset + start.length);
+    segments.push(text.slice(offset, next < 0 ? undefined : next));
+    if (next < 0) break;
+    offset = next;
+  }
+  return segments.at(-1) === command && segments.every((segment) =>
+    command.startsWith(segment) || (previous !== "" && previous.startsWith(segment)),
+  );
 }
 
 function find(haystack: number[], needle: number[], from = 0) {

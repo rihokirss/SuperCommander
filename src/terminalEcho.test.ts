@@ -37,4 +37,23 @@ describe("automatic terminal command output", () => {
     const output = `background message\r\ncd /a\r\n${prefix}OK\x07\r\n${prefix}L2E=\x07`;
     expect(text(echo.push(bytes(output)))).toBe(output);
   });
+
+  it("recognizes PowerShell prompt and repeated wrapped-line redraws", () => {
+    const echo = new TerminalEcho(marker);
+    const command = "Set-Location -LiteralPath 'C:\\dir'; if ($?) { ok }";
+    echo.begin(command + "\r");
+    const output = `PS C:\\old> ${command.slice(0, 30)}${command}${prefix}OK\x07\r\n${prefix}QzpcZGly\x07`;
+    expect(text(echo.push(bytes(output)))).toBe(`\r\x1b[2K${prefix}OK\x07${prefix}QzpcZGly\x07`);
+  });
+
+  it("recognizes a redraw of the previous directory command before the next one", () => {
+    const echo = new TerminalEcho(marker);
+    const old = "Set-Location -LiteralPath 'C:\\old'; if ($?) { ok }";
+    const next = "Set-Location -LiteralPath 'C:\\new'; if ($?) { ok }";
+    echo.begin(old + "\r");
+    echo.cancel();
+    echo.begin(next + "\r");
+    const output = `${old.slice(0, -1)}${next.slice(0, 40)}${next}${prefix}OK\x07\r\n${prefix}QzpcbmV3\x07`;
+    expect(text(echo.push(bytes(output)))).toBe(`\r\x1b[2K${prefix}OK\x07${prefix}QzpcbmV3\x07`);
+  });
 });
