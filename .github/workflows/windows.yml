@@ -49,7 +49,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - run: node scripts/windows-clipboard-smoke.mjs
       - run: node scripts/windows-startup-smoke.mjs
-      - run: ./scripts/windows-updater-smoke.ps1
+      - run: powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File scripts/windows-updater-smoke.ps1
       - run: node scripts/windows-window-state-smoke.mjs
       - run: node scripts/windows-theme-smoke.mjs
       - run: node scripts/windows-terminal-resize-smoke.mjs

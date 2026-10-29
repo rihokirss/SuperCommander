@@ -23,7 +23,10 @@ try {
   Start-Sleep -Seconds 2
   if ([IO.File]::ReadAllText($target) -ne 'old') { throw 'Updated before the application closed' }
   $child.WaitForExit(30000) | Out-Null
-  if (-not $child.HasExited -or [IO.File]::ReadAllText($target) -ne 'new') { throw 'Portable replacement failed' }
+  if (-not $child.HasExited -or [IO.File]::ReadAllText($target) -ne 'new') {
+    $detail = if (Test-Path -LiteralPath $env:SC_UPDATE_ERROR) { Get-Content -LiteralPath $env:SC_UPDATE_ERROR -Raw } else { 'No helper error was recorded' }
+    throw "Portable replacement failed: $detail"
+  }
 
   # A modified staging file must never replace the original.
   [IO.File]::WriteAllText($target, 'original')

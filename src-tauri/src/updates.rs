@@ -236,7 +236,14 @@ try {
   Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public static class SCUpdater { [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)] public static extern bool MoveFileEx(string source, string destination, uint flags); }'
   Wait-Process -Id ([int]$env:SC_UPDATE_PID) -ErrorAction SilentlyContinue
   if ((Get-FileHash -LiteralPath $env:SC_UPDATE_STAGE -Algorithm SHA256).Hash -ne $env:SC_UPDATE_HASH) { throw 'Update file changed' }
-  if (-not [SCUpdater]::MoveFileEx($env:SC_UPDATE_STAGE, $env:SC_UPDATE_TARGET, 9)) { throw 'Could not replace executable' }
+  $replaced = $false
+  $lastError = 0
+  for ($attempt = 0; $attempt -lt 20; $attempt++) {
+    if ([SCUpdater]::MoveFileEx($env:SC_UPDATE_STAGE, $env:SC_UPDATE_TARGET, 9)) { $replaced = $true; break }
+    $lastError = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
+    Start-Sleep -Milliseconds 250
+  }
+  if (-not $replaced) { throw "Could not replace executable: $([ComponentModel.Win32Exception]::new($lastError).Message)" }
 } catch {
   $message = $_.Exception.Message
   Remove-Item -LiteralPath $env:SC_UPDATE_STAGE -Force -ErrorAction SilentlyContinue
