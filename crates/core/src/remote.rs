@@ -221,18 +221,9 @@ impl RemoteFs {
     ) -> Result<String> {
         let integration = match marker {
             Some(marker) if marker.len() == 32 && marker.bytes().all(|b| b.is_ascii_hexdigit()) => {
-                match self.login_shell().await.as_deref() {
-                    Some("bash") => Some(format!(
-                        r#"__sc_prompt() {{ local __sc_status=$?; printf '\033]633;SC:{marker}:%s\007' "$(printf %s "$PWD" | base64 | tr -d '\n')"; return "$__sc_status"; }}; if [[ $(declare -p PROMPT_COMMAND 2>/dev/null) == "declare -a"* ]]; then PROMPT_COMMAND+=(__sc_prompt); else PROMPT_COMMAND="${{PROMPT_COMMAND:+$PROMPT_COMMAND; }}__sc_prompt"; fi"#
-                    )),
-                    Some("zsh") => Some(format!(
-                        r#"__sc_prompt() {{ local __sc_status=$?; printf '\033]633;SC:{marker}:%s\007' "$(printf %s "$PWD" | base64 | tr -d '\n')"; return "$__sc_status"; }}; typeset -ga precmd_functions; precmd_functions+=(__sc_prompt)"#
-                    )),
-                    Some("fish") => Some(format!(
-                        r#"function __sc_prompt --on-event fish_prompt; printf '\033]633;SC:{marker}:%s\007' (printf %s "$PWD" | base64 | tr -d '\n'); end"#
-                    )),
-                    _ => None,
-                }
+                self.login_shell()
+                    .await
+                    .and_then(|shell| crate::shell_integration::remote(&shell, marker))
             }
             Some(_) => bail!("Invalid terminal integration marker"),
             None => None,
@@ -271,9 +262,7 @@ impl RemoteFs {
         if let Some(script) = integration {
             // This is a newly opened shell; user keystrokes cannot be sent until
             // the open request returns. No existing terminal is modified.
-            writer
-                .data_bytes(format!("{script}\r").into_bytes())
-                .await?;
+            writer.data_bytes(script.into_bytes()).await?;
         }
         let close_writer = writer.clone();
         let task = tokio::spawn(async move {

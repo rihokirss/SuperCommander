@@ -72,4 +72,37 @@ describe("terminal directory following", () => {
     expect(directoryCommand("/a'b", false)).toBe("cd -- '/a'\\''b'\r");
     expect(() => directoryCommand("/a\nrm", false)).toThrow();
   });
+
+  it("adopts a manual shell directory change without sending it back", () => {
+    const sent: string[] = [], changed: string[] = [];
+    const sync = new TerminalSync(false, (data) => sent.push(data), () => {}, undefined, (cwd) => changed.push(cwd));
+    sync.setTarget("/old");
+    sync.prompt("/old");
+    sync.input("cd /new\r");
+    sync.prompt("/new");
+    expect(changed).toEqual(["/new"]);
+    sync.setTarget("/new");
+    sync.prompt("/new");
+    expect(sent).toEqual([]);
+  });
+
+  it("keeps a pane navigation requested while a shell command was running", () => {
+    const sent: string[] = [], changed: string[] = [];
+    const sync = new TerminalSync(false, (data) => sent.push(data), () => {}, undefined, (cwd) => changed.push(cwd));
+    sync.setTarget("/old");
+    sync.prompt("/old");
+    sync.input("sleep 2; cd /shell\r");
+    sync.setTarget("/pane");
+    sync.prompt("/shell");
+    expect(changed).toEqual([]);
+    expect(sent).toEqual(["cd -- '/pane'\r"]);
+  });
+
+  it("sends path data to a widget instead of a history-producing command", () => {
+    const marker = "1234567890abcdef1234567890abcdef";
+    const data = directoryCommand("/tmp/O'Brien õ", false, marker);
+    expect(data).toMatch(/^SC[a-f0-9]{32}:[A-Za-z0-9+/=]+\x18\x07$/);
+    expect(new TextDecoder().decode(Uint8Array.from(atob(data.slice(35, -2)), c => c.charCodeAt(0)))).toBe("/tmp/O'Brien õ");
+    expect(data).not.toContain("cd -- ");
+  });
 });

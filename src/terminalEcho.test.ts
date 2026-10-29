@@ -7,6 +7,13 @@ const bytes = (value: string) => new TextEncoder().encode(value);
 const text = (value?: Uint8Array) => value && new TextDecoder().decode(value);
 
 describe("automatic terminal command output", () => {
+  it("replaces a cleared widget input without leaving a blank prompt", () => {
+    const echo = new TerminalEcho(marker);
+    const payload = `SC${marker}:L2E=`;
+    echo.begin(payload + "\x18\x07");
+    const output = `${prefix}OK\x07\r\n${prefix}L2E=\x07new prompt`;
+    expect(text(echo.push(bytes(output)))).toBe(`\r\x1b[2K${prefix}OK\x07${prefix}L2E=\x07new prompt`);
+  });
   it("hides a successful command even when its markers span output chunks", () => {
     const echo = new TerminalEcho(marker);
     echo.begin("cd '/a'\r");

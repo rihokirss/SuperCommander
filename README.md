@@ -6,13 +6,13 @@ Browse local drives, UNC paths, ZIP archives and SSH/SFTP servers. Work with fam
 
 ## Download
 
-The latest release is **[SuperCommander 0.4.4](https://github.com/rihokirss/SuperCommander/releases/tag/v0.4.4)**.
+The latest release is **[SuperCommander 0.4.5](https://github.com/rihokirss/SuperCommander/releases/tag/v0.4.5)**.
 
-Version 0.4.4 restores window placement before showing the window and keeps successful automatic terminal folder changes out of the console while preserving error output and typed input. Version 0.4.3 adds independent terminal tabs, prompt-aware directory following for local and SSH shells, F10 to quit, and Midnight classic blue as the default dark palette. Version 0.4.2 adds signed automatic updates for installed and portable builds and lets `*` select all visible entries. Version 0.4.1 remembers window position, size and maximized state, uses a slimmer titlebar, fixes clipped terminal rows and puts compact F-key buttons on the status bar. Version 0.4.0 adds faster startup, selectable blue and dark red palettes, a category-based F1 reference, next-match quick finding and folder sizes in the file list. It includes keyboard-accessible menus, bookmarks, file properties, native file clipboard support, quick editing, content search, reviewed folder synchronization, recovery of saved copies and safe ZIP operations.
+Version 0.4.5 adds two-way terminal/pane directory following and uses shell widgets so automatic changes create no command history entries. Version 0.4.4 restores window placement before showing the window and keeps successful automatic terminal folder changes out of the console while preserving error output and typed input. Version 0.4.3 adds independent terminal tabs, prompt-aware directory following for local and SSH shells, F10 to quit, and Midnight classic blue as the default dark palette. Version 0.4.2 adds signed automatic updates for installed and portable builds and lets `*` select all visible entries. Version 0.4.1 remembers window position, size and maximized state, uses a slimmer titlebar, fixes clipped terminal rows and puts compact F-key buttons on the status bar. Version 0.4.0 adds faster startup, selectable blue and dark red palettes, a category-based F1 reference, next-match quick finding and folder sizes in the file list. It includes keyboard-accessible menus, bookmarks, file properties, native file clipboard support, quick editing, content search, reviewed folder synchronization, recovery of saved copies and safe ZIP operations.
 
-- [Windows x64 installer](https://github.com/rihokirss/SuperCommander/releases/download/v0.4.4/SuperCommander_0.4.4_x64-setup.exe) — recommended.
-- [Portable Windows x64 executable](https://github.com/rihokirss/SuperCommander/releases/download/v0.4.4/SuperCommander_0.4.4_x64_portable.exe) — requires WebView2.
-- [SHA-256 checksums](https://github.com/rihokirss/SuperCommander/releases/download/v0.4.4/SHA256SUMS.txt).
+- [Windows x64 installer](https://github.com/rihokirss/SuperCommander/releases/download/v0.4.5/SuperCommander_0.4.5_x64-setup.exe) — recommended.
+- [Portable Windows x64 executable](https://github.com/rihokirss/SuperCommander/releases/download/v0.4.5/SuperCommander_0.4.5_x64_portable.exe) — requires WebView2.
+- [SHA-256 checksums](https://github.com/rihokirss/SuperCommander/releases/download/v0.4.5/SHA256SUMS.txt).
 
 ## Screenshots
 
@@ -82,7 +82,7 @@ npm run build:windows
 `cargo-xwin` downloads the Windows SDK and CRT. Outputs:
 
 - `target/x86_64-pc-windows-msvc/release/supercommander.exe`
-- `target/x86_64-pc-windows-msvc/release/bundle/nsis/SuperCommander_0.4.4_x64-setup.exe`
+- `target/x86_64-pc-windows-msvc/release/bundle/nsis/SuperCommander_0.4.5_x64-setup.exe`
 
 A successful cross-build does not replace testing the application on Windows.
 
@@ -313,7 +313,7 @@ The catalog resolves concrete aliases, Host patterns, first-value-wins defaults,
 
 The terminal has independent tabs; **+** or **Ctrl+Shift+backtick** opens another shell in the active pane's folder, and each tab has its own close button. Local panes use PowerShell 7, falling back to Windows PowerShell. SSH panes open the server's interactive shell with a PTY through the existing authenticated SSH connection. Switching between local and SSH panes selects a matching shell or opens one when needed. Shell sessions survive Ctrl+O toggling.
 
-The active shell follows the active file pane's folder. When a command is running or text has already been typed, the folder change waits until the next empty prompt so it does not interrupt the command or alter the typed input. PowerShell and SSH Bash, Zsh and Fish provide prompt integration; other remote shells remain usable and show when automatic following is unavailable. Drag the docked terminal’s top edge or use the focused separator’s Up/Down keys to change its height; the choice is remembered. Closing a shell leaves SFTP connected; disconnecting SSH closes its shells and tunnels.
+The active shell and active file pane follow each other's folder. Running `cd` in the terminal updates that pane; browsing in the pane updates the shell. When a command is running or text has already been typed, the folder change waits until the next empty prompt so it does not interrupt the command or alter the typed input. Automatic changes use per-session input widgets, create no shell history entry, and preserve normal Up-arrow recall. Bash also filters identifiable automatic commands from older SuperCommander versions out of its in-memory recall list without rewriting a shared history file. Existing terminal tabs must be reopened after updating to load the new integration. PowerShell and SSH Bash, Zsh and Fish provide prompt integration; other remote shells remain usable and show when automatic following is unavailable. Drag the docked terminal’s top edge or use the focused separator’s Up/Down keys to change its height; the choice is remembered. Closing a shell leaves SFTP connected; disconnecting SSH closes its shells and tunnels.
 
 A remote shell follows its matching pane through prompt-aware directory changes. If a server denies a shell or PTY, the error is shown.
 

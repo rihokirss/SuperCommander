@@ -82,6 +82,23 @@ try {
   await run("Write-Output ('SC_PENDING:' + $sc_pending)");
   await expect(visible().locator(".xterm-rows")).toContainText("SC_PENDING:PRESERVED");
   await expectCwd(first, "SC_AFTER_PENDING");
+  await run("Write-Output ('SC_' + 'HISTORY_SENTINEL')");
+  await expect(visible().locator(".xterm-rows")).toContainText("SC_HISTORY_SENTINEL");
+  await left.getByRole("grid").focus();
+  await page.keyboard.press("Backspace");
+  await expect(left.getByText("O'Brien folder", { exact: true })).toBeVisible();
+  await left.getByText("O'Brien folder", { exact: true }).dblclick();
+  await expect(visible().locator(".terminal-sync-status")).toHaveCount(0, { timeout: 30000 });
+  await visible().locator(".xterm-helper-textarea").focus();
+  await page.keyboard.press("ArrowUp");
+  await page.keyboard.press("Enter");
+  await expect.poll(async () => ((await visible().locator(".xterm-rows").textContent())?.match(/SC_HISTORY_SENTINEL/g) || []).length).toBe(2);
+  await run("cd ..");
+  await expect(left.getByText("First folder", { exact: true })).toBeVisible();
+  await expectCwd(root, "SC_REVERSE");
+  await run(`Write-Output ('SC_HISTORY_CLEAN:' + (([Microsoft.PowerShell.PSConsoleReadLine]::GetHistoryItems() | Where-Object { $_.CommandLine -match '^SC[0-9a-f]{32}:' -or $_.CommandLine -match '^Set-Location -LiteralPath.*633;SC:' }).Count -eq 0))`);
+  await expect(visible().locator(".xterm-rows")).toContainText("SC_HISTORY_CLEAN:True");
+  console.log("PASS reverse shell navigation and clean Up-arrow history");
   console.log("PASS independent terminal tabs, directory following, busy and typed-input deferral, and quoted paths");
 } catch (error) {
   console.error("Terminal status:", await visible().locator(".terminal-sync-status").allTextContents().catch(() => []));

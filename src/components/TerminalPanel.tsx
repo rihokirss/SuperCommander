@@ -25,6 +25,7 @@ export function TerminalPanel({
   onSelectTab,
   onNewTab,
   onCloseTab,
+  onDirectoryChange,
   t,
   onClose,
   theme,
@@ -44,6 +45,7 @@ export function TerminalPanel({
   onSelectTab: (id: string) => void;
   onNewTab: () => void;
   onCloseTab: (id: string) => void;
+  onDirectoryChange: (path: string) => void;
   t: Text;
   onClose: () => void;
   theme: "dark" | "light";
@@ -63,6 +65,8 @@ export function TerminalPanel({
   const sync = useRef<TerminalSync | null>(null);
   const target = useRef(syncPath);
   target.current = syncPath;
+  const directoryChanged = useRef(onDirectoryChange);
+  directoryChanged.current = onDirectoryChange;
   const visible = useRef(!hidden);
   visible.current = !hidden;
   function resize(height: number) {
@@ -139,7 +143,7 @@ export function TerminalPanel({
       window.clearTimeout(echoTimeout);
       echoTimeout = window.setTimeout(showBufferedOutput, 5000);
       send(data);
-    }, setSyncStatus, marker);
+    }, setSyncStatus, marker, (cwd) => directoryChanged.current(cwd));
     sync.current = follow;
     follow.setTarget(target.current);
     let seenPrompt = false;
@@ -150,6 +154,7 @@ export function TerminalPanel({
         follow.acknowledge();
         return true;
       }
+      if (data === `${prefix}FAIL`) return true;
       try {
         const bytes = Uint8Array.from(atob(data.slice(prefix.length)), (value) =>
           value.charCodeAt(0),

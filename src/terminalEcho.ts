@@ -15,7 +15,7 @@ export class TerminalEcho {
 
   begin(command: string) {
     this.previousCommand = this.command;
-    this.command = command.replace(/[\r\n]+$/, "");
+    this.command = command.replace(/\x18\x07\r?$/, "").replace(/[\r\n]+$/, "");
     this.buffer = [];
   }
 
@@ -69,9 +69,11 @@ function isRedrawOnly(output: string, command: string, previous: string) {
   // as a long input wraps. Accept only known command prefixes; otherwise keep
   // all output so that messages from other processes are never hidden.
   const text = output.replace(/^PS [^>\r\n]*> /, "");
+  if (/^SC[a-f\d]{32}:/.test(command) && text.trim() === "") return true;
   const start = command.startsWith("Set-Location -LiteralPath ")
     ? "Set-Location -LiteralPath "
-    : command.startsWith("cd -- '") ? "cd -- '" : "";
+    : command.startsWith("cd -- '") ? "cd -- '"
+    : /^SC[a-f\d]{32}:/.exec(command)?.[0] || "";
   if (!start || !text.startsWith(start)) return false;
   const segments: string[] = [];
   let offset = 0;

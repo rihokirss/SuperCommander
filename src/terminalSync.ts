@@ -17,6 +17,7 @@ export class TerminalSync {
     private readonly send: (command: string) => void,
     private readonly status: (status: TerminalSyncStatus) => void,
     private readonly marker?: string,
+    private readonly changed?: (path: string) => void,
   ) {}
 
   setTarget(path: string | null) {
@@ -38,6 +39,8 @@ export class TerminalSync {
   }
 
   prompt(cwd: string) {
+    const previous = this.cwd;
+    const followingPrevious = previous && this.target && this.matches(previous);
     this.supported = true;
     this.cwd = cwd;
     this.ready = true;
@@ -46,6 +49,14 @@ export class TerminalSync {
       else if (!samePath(this.inFlight, cwd, this.local)) this.failed = this.inFlight;
       this.inFlight = null;
       this.acknowledged = false;
+    } else if (previous && followingPrevious && !samePath(previous, cwd, this.local)) {
+      // A user command changed directories while the pane still followed the
+      // old one. Adopt that location before React updates the pane, avoiding
+      // a feedback loop that would send the shell back to its previous folder.
+      this.target = cwd;
+      this.failed = null;
+      this.confirmed = null;
+      this.changed?.(cwd);
     }
     this.pump();
   }
@@ -70,8 +81,7 @@ export class TerminalSync {
       this.status("waiting");
       return;
     }
-    if (this.cwd && (samePath(this.target, this.cwd, this.local) ||
-      (this.confirmed?.target === this.target && samePath(this.confirmed.cwd, this.cwd, this.local)))) {
+    if (this.cwd && this.matches(this.cwd)) {
       this.status("synced");
       return;
     }
@@ -85,6 +95,11 @@ export class TerminalSync {
     this.status("waiting");
     this.send(directoryCommand(path, this.local, this.marker));
   }
+
+  private matches(cwd: string) {
+    return this.target !== null && (samePath(this.target, cwd, this.local) ||
+      (this.confirmed?.target === this.target && samePath(this.confirmed.cwd, cwd, this.local)));
+  }
 }
 
 function samePath(a: string, b: string, local: boolean) {
@@ -95,12 +110,15 @@ function samePath(a: string, b: string, local: boolean) {
 
 export function directoryCommand(path: string, local: boolean, marker?: string): string {
   if (/[\x00-\x1f\x7f]/.test(path)) throw new Error("Invalid terminal path");
+  if (marker) {
+    if (!/^[a-f\d]{32}$/i.test(marker)) throw new Error("Invalid terminal marker");
+    const encoded = btoa(Array.from(new TextEncoder().encode(path), (byte) => String.fromCharCode(byte)).join(""));
+    // The widget consumes and clears this data before the empty line is
+    // submitted. No shell command, expansion, or history entry is created.
+    return `SC${marker}:${encoded}\x18\x07`;
+  }
   const command = local
     ? `Set-Location -LiteralPath '${path.replace(/'/g, "''")}'`
     : `cd -- '${path.replace(/'/g, "'\\''")}'`;
-  if (!marker) return `${command}\r`;
-  if (!/^[a-f\d]{32}$/i.test(marker)) throw new Error("Invalid terminal marker");
-  return local
-    ? `${command}; if ($?) { [Console]::Write(([char]27).ToString() + ']633;SC:${marker}:OK' + [char]7) }\r`
-    : `${command} && printf '\\033]633;SC:${marker}:OK\\007'\r`;
+  return `${command}\r`;
 }

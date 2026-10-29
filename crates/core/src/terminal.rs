@@ -57,9 +57,7 @@ impl Terminals {
         if let Some(marker) = marker {
             // Install the hook in this shell only, after the user's profile has
             // loaded. Preserve the existing prompt rather than replacing it.
-            let script = format!(
-                r#"$global:__sc_original_prompt = (Get-Item function:prompt).ScriptBlock; function global:prompt {{ $sc_result = & $global:__sc_original_prompt; $sc_path = [string](Get-Location).ProviderPath; $sc_encoded = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($sc_path)); [Console]::Write(([char]27).ToString() + ']633;SC:{marker}:' + $sc_encoded + [char]7); $sc_result }}"#
-            );
+            let script = crate::shell_integration::powershell(marker);
             command.args(["-NoExit", "-Command", &script]);
         }
         #[cfg(not(windows))]

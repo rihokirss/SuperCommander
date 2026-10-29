@@ -80,6 +80,20 @@ try {
   await run('printf "SC_PENDING:%s\\n" "$sc_pending"');
   await expect(visible().locator(".xterm-rows")).toContainText("SC_PENDING:KEPT_REMOTE");
   await expectCwd(`${fixture.path}/First remote`, "SC_REMOTE_AFTER_PENDING");
+  await run("printf '%s%s\\n' 'SC_' 'REMOTE_HISTORY'");
+  await expect(visible().locator(".xterm-rows")).toContainText("SC_REMOTE_HISTORY");
+  await left.getByRole("grid").focus();
+  await page.keyboard.press("Backspace");
+  await left.getByText("O'Brien remote", { exact: true }).dblclick();
+  await expect(visible().locator(".terminal-sync-status")).toHaveCount(0, { timeout: 30000 });
+  await visible().locator(".xterm-helper-textarea").focus();
+  await page.keyboard.press("ArrowUp");
+  await page.keyboard.press("Enter");
+  await expect.poll(async () => ((await visible().locator(".xterm-rows").textContent())?.match(/SC_REMOTE_HISTORY/g) || []).length).toBe(2);
+  await run("cd ..");
+  await expect(left.getByText("First remote", { exact: true })).toBeVisible();
+  await expectCwd(fixture.path, "SC_REMOTE_REVERSE");
+  console.log("PASS remote cd updates pane and Up recalls only a user command");
   console.log("PASS SSH shell tabs, initial path, following, busy and typed-input deferral, and quoted paths");
 } catch (error) {
   console.error("SSH terminal status:", await visible().locator(".terminal-sync-status").allTextContents().catch(() => []));

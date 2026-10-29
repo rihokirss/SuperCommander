@@ -11,6 +11,7 @@ pub mod remote;
 pub mod rename;
 pub mod search;
 pub mod settings;
+pub mod shell_integration;
 pub mod ssh_config;
 pub mod tasks;
 pub mod terminal;

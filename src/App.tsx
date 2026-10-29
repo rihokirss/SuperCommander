@@ -2631,6 +2631,12 @@ export function App() {
               }}
               onNewTab={() => ensureTerminal(true)}
               onCloseTab={closeTerminal}
+              onDirectoryChange={(path) => {
+                if (terminalActiveRef.current !== terminal.id) return;
+                const location = locationAt(activeRef.current);
+                if (location?.source === terminal.source && !location.source.startsWith("zip:"))
+                  navigate({ source: terminal.source, path }, activeRef.current);
+              }}
               t={t}
               theme={resolvedTheme}
               palette={resolvedPalette}

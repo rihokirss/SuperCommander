@@ -37,7 +37,7 @@ fn start() -> Server {
     drop(listener);
     let username = std::env::var("USER").unwrap();
     let config = directory.path().join("sshd_config");
-    fs::write(&config,format!("Port {port}\nListenAddress 127.0.0.1\nHostKey {}\nPidFile {}/sshd.pid\nAuthorizedKeysFile {}.pub\nStrictModes no\nUsePAM no\nPasswordAuthentication no\nKbdInteractiveAuthentication no\nPubkeyAuthentication yes\nAllowUsers {username}\nSubsystem sftp internal-sftp\nLogLevel ERROR\n",host.display(),directory.path().display(),key.display())).unwrap();
+    fs::write(&config,format!("Port {port}\nListenAddress 127.0.0.1\nHostKey {}\nPidFile {}/sshd.pid\nAuthorizedKeysFile {}.pub\nStrictModes no\nUsePAM no\nPasswordAuthentication no\nKbdInteractiveAuthentication no\nPubkeyAuthentication yes\nAllowUsers {username}\nSubsystem sftp internal-sftp\nLogLevel ERROR\nSetEnv HISTFILE={}/shell-history\n",host.display(),directory.path().display(),key.display(),directory.path().display())).unwrap();
     let child = Command::new("/usr/sbin/sshd")
         .arg("-D")
         .arg("-e")
@@ -791,6 +791,44 @@ async fn remote_terminal_prompt_markers_follow_the_real_shell() {
     })
     .await
     .expect("shell did not report its next prompt");
+    use base64::Engine as _;
+    let folder = server._directory.path().join("O'Brien õ folder");
+    std::fs::create_dir(&folder).unwrap();
+    let target = folder.to_string_lossy();
+    fs.write_terminal(
+        &shell,
+        b"printf 'SC_%s\\n' USER_HISTORY_SENTINEL\r".to_vec(),
+    )
+    .await
+    .unwrap();
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    let encoded = base64::engine::general_purpose::STANDARD.encode(target.as_bytes());
+    fs.write_terminal(&shell, format!("SC{marker}:{encoded}\x18\x07").into_bytes())
+        .await
+        .unwrap();
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while !String::from_utf8_lossy(&output.lock().unwrap())
+            .contains(&format!("{prefix}{encoded}\x07"))
+        {
+            tokio::time::sleep(Duration::from_millis(30)).await;
+        }
+    })
+    .await
+    .expect("widget did not change directories");
+    fs.write_terminal(&shell, b"\x1b[A\r".to_vec())
+        .await
+        .unwrap();
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while String::from_utf8_lossy(&output.lock().unwrap())
+            .matches("SC_USER_HISTORY_SENTINEL\r\n")
+            .count()
+            < 2
+        {
+            tokio::time::sleep(Duration::from_millis(30)).await;
+        }
+    })
+    .await
+    .expect("Up recalled an automatic command instead of the user command");
     fs.close_terminal(&shell).await.unwrap();
     fs.close().await.unwrap();
 }

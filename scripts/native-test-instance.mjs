@@ -83,6 +83,8 @@ export async function startNativeTest(name, executable) {
     env: {
       ...process.env,
       SUPERCOMMANDER_DATA_DIR: path.join(root, "Settings"),
+      APPDATA: path.join(root, "Roaming"),
+      SUPERCOMMANDER_TERMINAL_HISTORY: path.join(root, "terminal-history.txt"),
       WEBVIEW2_USER_DATA_FOLDER: path.join(root, "WebView"),
       WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS:
         "--remote-debugging-port=9224 --remote-debugging-address=127.0.0.1",
