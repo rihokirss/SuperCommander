@@ -16,13 +16,28 @@ Version 0.4.3 adds independent terminal tabs, prompt-aware directory following f
 
 ## Screenshots
 
-Dark theme with sample files. The keyboard cursor and marked files have separate highlights:
+Default Midnight classic blue theme with sample files. The keyboard cursor and marked files have separate highlights:
 
-![Dark theme with two independent file panes](docs/screenshots/dark.png)
+![Midnight classic blue theme with two independent file panes](docs/screenshots/dark.png)
 
 Light theme:
 
 ![Light theme](docs/screenshots/light.png)
+
+<details>
+<summary>More color palettes</summary>
+
+| Midnight blue | Graphite backdrop, blue panels |
+| --- | --- |
+| ![Midnight blue palette](docs/screenshots/palette-midnight.png) | ![Graphite and blue palette](docs/screenshots/palette-graphite-blue.png) |
+| Midnight red | Midnight classic red |
+| ![Midnight red palette](docs/screenshots/palette-midnight-red.png) | ![Midnight classic red palette](docs/screenshots/palette-classic-red.png) |
+| Graphite backdrop, red panels | Ice blue |
+| ![Graphite and red palette](docs/screenshots/palette-graphite-red.png) | ![Ice blue palette](docs/screenshots/palette-ice.png) |
+| Azure | |
+| ![Azure palette](docs/screenshots/palette-azure.png) | |
+
+</details>
 
 Compact port forwarding table, using a local test server:
 
