@@ -6,7 +6,7 @@ use commander_core::{
     *,
 };
 use notify::{RecommendedWatcher, Watcher};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     sync::{
@@ -24,6 +24,7 @@ mod window_state;
 struct AppState {
     sources: Arc<Sources>,
     connections: Mutex<HashMap<String, Arc<core::remote::RemoteFs>>>,
+    forward_lock: tokio::sync::Mutex<()>,
     engine: Engine,
     terminals: Terminals,
     searches: core::tasks::Tasks,
@@ -922,15 +923,44 @@ async fn save_ssh_host(
     .await
 }
 #[tauri::command]
-async fn save_ssh_forward(
+async fn list_saved_forwards(
+    state: State<'_, AppState>,
+    source: String,
+) -> Reply<Vec<core::ssh_config::LocalForward>> {
+    let profile = forward_connection(&state, &source)?.profile().clone();
+    blocking(move || core::forward_settings::Store::application()?.list(&profile)).await
+}
+#[tauri::command]
+async fn save_forward(
+    state: State<'_, AppState>,
+    source: String,
+    forward: core::ssh_config::LocalForward,
+    enabled: bool,
+) -> Reply<Vec<core::ssh_config::LocalForward>> {
+    let profile = forward_connection(&state, &source)?.profile().clone();
+    blocking(move || core::forward_settings::Store::application()?.set(&profile, &forward, enabled))
+        .await
+}
+#[tauri::command]
+async fn move_ssh_forward(
+    state: State<'_, AppState>,
+    source: String,
     path: String,
     alias: String,
     forward: core::ssh_config::LocalForward,
-    enabled: bool,
     revision: Option<String>,
 ) -> Reply<core::ssh_config::Catalog> {
+    let profile = forward_connection(&state, &source)?.profile().clone();
     blocking(move || {
-        core::ssh_config::set_forward(&path, &alias, &forward, enabled, revision.as_deref())
+        let catalog = core::ssh_config::read(Some(&path))?;
+        anyhow::ensure!(catalog.hosts.iter().any(|h| h.alias == alias && h.profile.id == profile.id
+            && h.profile.host == profile.host && h.profile.port == profile.port
+            && h.profile.username == profile.username), "The SSH catalog no longer matches this connection. Reload it first.");
+        let text = core::ssh_config::forward_removal(&path, &alias, &forward, revision.as_deref())?;
+        // Persist a safe copy before removing anything from the shared catalog.
+        core::forward_settings::Store::application()?.set(&profile, &forward, true)?;
+        core::ssh_config::save(&path, &text, revision.as_deref()).map_err(|e|
+            anyhow::anyhow!("Port saved in SuperCommander, but could not remove it from SSH config: {e:#}. Reload the SSH catalog and try again."))
     })
     .await
 }
@@ -960,18 +990,86 @@ async fn start_forward(
     local_port: u16,
     remote_host: String,
     remote_port: u16,
+    replace: Option<ForwardReplacement>,
 ) -> Reply<core::remote::ForwardInfo> {
-    let connection = state
+    core::remote::RemoteFs::validate_forward_target(&remote_host, remote_port).map_err(error)?;
+    let _guard = state.forward_lock.lock().await;
+    let connection = forward_connection(&state, &source)?;
+    let previous = if let Some(replace) = replace {
+        let owner = forward_connection(&state, &replace.source)?;
+        let old = owner
+            .forwards()
+            .into_iter()
+            .find(|f| f.id == replace.id && f.local_port == local_port)
+            .ok_or("The previous tunnel changed. Check the port and try again.")?;
+        if source == replace.source
+            && old.remote_host == remote_host
+            && old.remote_port == remote_port
+        {
+            return Ok(old);
+        }
+        owner.stop_forward(&old.id).await.map_err(error)?;
+        Some((owner, old))
+    } else {
+        None
+    };
+    let result = connection
+        .start_forward(local_port, remote_host, remote_port)
+        .await
+        .map_err(error);
+    if let Err(failure) = &result {
+        if let Some((owner, old)) = previous {
+            if let Err(restore) = owner
+                .start_forward(old.local_port, old.remote_host, old.remote_port)
+                .await
+            {
+                return Err(format!(
+                    "{}; restoring the previous tunnel also failed: {restore:#}",
+                    failure
+                ));
+            }
+        }
+    }
+    result
+}
+#[derive(Deserialize)]
+struct ForwardReplacement {
+    source: String,
+    id: String,
+}
+#[derive(Serialize)]
+struct ForwardOwner {
+    source: String,
+    name: String,
+    forward: core::remote::ForwardInfo,
+}
+fn forward_connection(state: &AppState, source: &str) -> Reply<Arc<core::remote::RemoteFs>> {
+    state
         .connections
         .lock()
         .unwrap()
-        .get(&source)
+        .get(source)
         .cloned()
-        .ok_or("Open an SSH connection first")?;
-    connection
-        .start_forward(local_port, remote_host, remote_port)
-        .await
-        .map_err(error)
+        .ok_or_else(|| "Open an SSH connection first".into())
+}
+#[tauri::command]
+fn forward_port_owner(state: State<AppState>, local_port: u16) -> Option<ForwardOwner> {
+    state
+        .connections
+        .lock()
+        .unwrap()
+        .iter()
+        .find_map(|(source, connection)| {
+            connection
+                .forwards()
+                .into_iter()
+                .find(|f| f.local_port == local_port)
+                .map(|forward| ForwardOwner {
+                    source: source.clone(),
+                    name: connection.profile().name.clone(),
+                    forward,
+                })
+        })
 }
 #[tauri::command]
 fn list_forwards(state: State<AppState>, source: String) -> Reply<Vec<core::remote::ForwardInfo>> {
@@ -985,6 +1083,7 @@ fn list_forwards(state: State<AppState>, source: String) -> Reply<Vec<core::remo
 }
 #[tauri::command]
 async fn stop_forward(state: State<'_, AppState>, source: String, id: String) -> Reply<()> {
+    let _guard = state.forward_lock.lock().await;
     let connection = state
         .connections
         .lock()
@@ -1001,7 +1100,6 @@ async fn connect_sftp(
     profile: SftpProfile,
     secret: String,
     expected: Option<String>,
-    config_path: Option<String>,
 ) -> Reply<core::remote::ConnectionResult> {
     let secret = if secret.is_empty() {
         let id = profile.id.clone();
@@ -1028,24 +1126,11 @@ async fn connect_sftp(
         }
         state.sources.insert(id.clone(), fs.clone());
         state.connections.lock().unwrap().insert(id, fs.clone());
-        let saved_profile = profile.clone();
-        let saved = blocking(move || {
-            let catalog = core::ssh_config::read(config_path.as_deref())?;
-            Ok(catalog
-                .hosts
-                .into_iter()
-                .find(|h| {
-                    h.profile.id == saved_profile.id
-                        && h.profile.host == saved_profile.host
-                        && h.profile.port == saved_profile.port
-                        && h.profile.username == saved_profile.username
-                })
-                .map(|h| h.forwards)
-                .unwrap_or_default())
-        })
-        .await;
+        let saved =
+            blocking(move || core::forward_settings::Store::application()?.list(&profile)).await;
         match saved {
             Ok(forwards) => {
+                let _guard = state.forward_lock.lock().await;
                 for forward in forwards {
                     if let Err(e) = fs
                         .start_forward(forward.local_port, forward.remote_host, forward.remote_port)
@@ -1256,6 +1341,7 @@ pub fn run() {
             app.manage(AppState {
                 sources,
                 connections: Mutex::default(),
+                forward_lock: tokio::sync::Mutex::new(()),
                 engine,
                 terminals: Terminals::default(),
                 searches: core::tasks::Tasks::default(),
@@ -1286,7 +1372,10 @@ pub fn run() {
             read_ssh_config,
             save_ssh_config,
             save_ssh_host,
-            save_ssh_forward,
+            list_saved_forwards,
+            save_forward,
+            move_ssh_forward,
+            forward_port_owner,
             has_connection_secret,
             save_connection_secret,
             start_forward,

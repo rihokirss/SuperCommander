@@ -1017,7 +1017,6 @@ export function ConnectDialog({
         profile: { ...value, name: value.name || value.host },
         secret,
         expected: trust || known || null,
-        configPath: settings.sshConfigPath || null,
       });
       if (result.needsTrust) setFingerprint(result.fingerprint);
       else {

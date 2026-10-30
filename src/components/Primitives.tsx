@@ -101,16 +101,41 @@ export function Modal({
   useLayoutEffect(() => {
     const previous = previousFocus.current;
     const node = ref.current;
+    const available = (selector: string) =>
+      Array.from(node?.querySelectorAll<HTMLElement>(selector) || []).filter(
+        (element) => element.getClientRects().length && !element.closest("[hidden],[inert]"),
+      );
+    const fields = 'button[role="combobox"]:not(:disabled),input:not(:disabled):not([type="checkbox"]):not([type="hidden"]),textarea:not(:disabled),select:not(:disabled)';
+    const defaults = ".modal-actions button.primary:not(:disabled),.modal-actions button.danger-button:not(:disabled),.modal-actions button.danger:not(:disabled)";
     (
-      node?.querySelector<HTMLElement>(
-        'button[role="combobox"],input:not([type="checkbox"]),textarea,select',
-      ) || node?.querySelector<HTMLElement>("button")
+      available(fields)[0] ||
+      available(defaults)[0] ||
+      available(".modal-actions button:not(:disabled)").at(-1) ||
+      available("button:not(:disabled)")[0]
     )?.focus();
     const key = (e: KeyboardEvent) => {
       const dialogs = document.querySelectorAll(
         '[role="dialog"][aria-modal="true"]',
       );
       if (dialogs[dialogs.length - 1] !== node) return;
+      if (
+        !e.ctrlKey && !e.altKey && !e.metaKey &&
+        ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)
+      ) {
+        const focused = document.activeElement;
+        const row = focused?.closest(".modal-actions,.forward-conflict-actions");
+        if (focused instanceof HTMLButtonElement && focused.getAttribute("role") !== "combobox" && row && node?.contains(row)) {
+          const buttons = Array.from(row.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'))
+            .filter((button) => button.getClientRects().length && !button.closest('[hidden],[inert]'));
+          const index = buttons.indexOf(focused);
+          if (index >= 0 && buttons.length) {
+            e.preventDefault();
+            e.stopPropagation();
+            const step = e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 1;
+            buttons[(index + step + buttons.length) % buttons.length].focus();
+          }
+        }
+      }
       if (e.key === "Escape") {
         if (document.querySelector('[data-select-open="true"]')) return;
         e.preventDefault();

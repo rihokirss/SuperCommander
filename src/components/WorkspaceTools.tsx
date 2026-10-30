@@ -52,7 +52,7 @@ export function WorkspaceTools({
       <span className="toolbar-separator" />
       <IconButton
         title={t.terminal}
-        shortcut="Ctrl+`"
+        shortcut="Ctrl+J"
         className={terminal ? "pressed" : ""}
         onClick={onTerminal}
       >

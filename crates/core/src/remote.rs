@@ -170,23 +170,27 @@ pub async fn connect(
         forward_errors: vec![],
     };
     let fs = RemoteFs {
+        profile: profile.clone(),
         connection_id: uuid::Uuid::new_v4().to_string(),
         sftp: Arc::new(sftp),
         runtime: Handle::current(),
         _ssh: ssh,
         forwards: Mutex::new(HashMap::new()),
         terminals: Mutex::new(HashMap::new()),
+        shell_setup: tokio::sync::Mutex::new(()),
     };
     Ok((result, Some(Arc::new(fs))))
 }
 
 pub struct RemoteFs {
+    profile: SftpProfile,
     connection_id: String,
     sftp: Arc<SftpSession>,
     runtime: Handle,
     _ssh: client::Handle<Verify>,
     forwards: Mutex<HashMap<String, Forward>>,
     terminals: Mutex<HashMap<String, RemoteTerminal>>,
+    shell_setup: tokio::sync::Mutex<()>,
 }
 struct RemoteTerminal {
     writer: Arc<russh::ChannelWriteHalf<client::Msg>>,
@@ -212,6 +216,9 @@ struct Forward {
     error: Arc<Mutex<Option<String>>>,
 }
 impl RemoteFs {
+    pub fn profile(&self) -> &SftpProfile {
+        &self.profile
+    }
     pub async fn open_terminal(
         &self,
         output: Arc<dyn Fn(Vec<u8>) + Send + Sync>,
@@ -347,15 +354,46 @@ impl RemoteFs {
         shell: &str,
         marker: &str,
     ) -> Result<Option<(String, ShellStartup)>> {
+        let _guard = self.shell_setup.lock().await;
         let home = self.sftp.canonicalize(".").await?;
-        let directory = format!(
-            "{}/.supercommander-shell-{}",
-            home.trim_end_matches('/'),
-            uuid::Uuid::new_v4()
-        );
+        let root = format!("{}/.cache/supercommander/shell", home.trim_end_matches('/'));
+        let directory = format!("{}/{}", root, uuid::Uuid::new_v4());
         let Some(plan) = crate::shell_integration::remote(shell, marker, &directory) else {
             return Ok(None);
         };
+        let home_uid = self.sftp.metadata(&home).await?.uid;
+        for (path, private) in [
+            (format!("{}/.cache", home.trim_end_matches('/')), false),
+            (
+                format!("{}/.cache/supercommander", home.trim_end_matches('/')),
+                true,
+            ),
+            (root, true),
+        ] {
+            if self.sftp.create_dir(&path).await.is_ok() {
+                self.sftp
+                    .set_metadata(
+                        &path,
+                        russh_sftp::client::fs::Metadata {
+                            permissions: Some(0o700),
+                            ..Default::default()
+                        },
+                    )
+                    .await?;
+            }
+            let metadata = if private {
+                self.sftp.symlink_metadata(&path).await?
+            } else {
+                self.sftp.metadata(&path).await?
+            };
+            anyhow::ensure!(metadata.is_dir(), "Shell cache is not a directory: {path}");
+            anyhow::ensure!(
+                !private
+                    || (metadata.uid == home_uid
+                        && metadata.permissions.is_some_and(|mode| mode & 0o077 == 0)),
+                "Shell cache must be private to this user: {path}"
+            );
+        }
         self.sftp.create_dir(&directory).await?;
         let files = ShellStartup {
             directory: directory.clone(),
@@ -465,17 +503,30 @@ impl RemoteFs {
         }
         Ok(())
     }
+    pub fn validate_forward_target(remote_host: &str, remote_port: u16) -> Result<()> {
+        if remote_host.trim().is_empty()
+            || remote_host.contains(['\0', '\n', '\r'])
+            || remote_port == 0
+        {
+            bail!("A target host and valid target port are required");
+        }
+        Ok(())
+    }
     pub async fn start_forward(
         self: &Arc<Self>,
         local_port: u16,
         remote_host: String,
         remote_port: u16,
     ) -> Result<ForwardInfo> {
-        if remote_host.trim().is_empty()
-            || remote_host.contains(['\0', '\n', '\r'])
-            || remote_port == 0
-        {
-            bail!("A target host and valid target port are required");
+        Self::validate_forward_target(&remote_host, remote_port)?;
+        if local_port != 0 {
+            if let Some(existing) = self.forwards().into_iter().find(|f| {
+                f.local_port == local_port
+                    && f.remote_host == remote_host
+                    && f.remote_port == remote_port
+            }) {
+                return Ok(existing);
+            }
         }
         let listener = tokio::net::TcpListener::bind(("127.0.0.1", local_port))
             .await

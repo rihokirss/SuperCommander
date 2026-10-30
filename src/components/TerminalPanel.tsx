@@ -175,6 +175,7 @@ export function TerminalPanel({
         !(
           event.ctrlKey &&
           (event.key.toLowerCase() === "o" ||
+            (!event.altKey && event.key.toLowerCase() === "j") ||
             event.key === "`" ||
             event.code === "Backquote")
         ),
@@ -379,7 +380,7 @@ export function TerminalPanel({
               </div>
             ))}
           </div>
-          <IconButton title={t.newTerminalTab} shortcut="Ctrl+Shift+`" onClick={onNewTab}>
+          <IconButton title={t.newTerminalTab} shortcut="Ctrl+Shift+J" onClick={onNewTab}>
             <Plus size={14} />
           </IconButton>
         </div>

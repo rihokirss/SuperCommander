@@ -20,6 +20,13 @@ test("new editor protects changes and nested Save As keeps Escape local", async 
     exact: true,
   });
   await expect(prompt).toBeVisible();
+  await expect(prompt.getByRole("button", { name: "Save changes", exact: true })).toBeFocused();
+  await page.keyboard.press("ArrowLeft");
+  await expect(prompt.getByRole("button", { name: "Discard changes", exact: true })).toBeFocused();
+  await page.keyboard.press("ArrowLeft");
+  await expect(prompt.locator(".modal-actions").getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
+  await page.keyboard.press("ArrowRight");
+  await expect(prompt.getByRole("button", { name: "Discard changes", exact: true })).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(prompt).toHaveCount(0);
   await expect(editor).toHaveValue("Unsaved Õunad\n");

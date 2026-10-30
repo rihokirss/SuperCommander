@@ -620,6 +620,39 @@ p {
   line-height: 1.6;
   font-size: 10px;
 }
+.forward-migration,
+.forward-conflict {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--input-surface);
+  font-size: 11px;
+}
+.forward-migration > div,
+.forward-conflict-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+.forward-migration > div {
+  justify-content: space-between;
+}
+.forward-migration button,
+.forward-conflict button {
+  min-height: 28px;
+  padding: 4px 9px;
+  font-size: 11px;
+}
+.forward-conflict p {
+  line-height: 1.5;
+  margin: 6px 0;
+}
+.forward-conflict-actions {
+  justify-content: flex-end;
+}
 .forward-hint .text-button {
   color: var(--accent);
   font-size: 10px;

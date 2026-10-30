@@ -100,6 +100,20 @@ test("Ctrl+O swaps full terminal and panels while preserving the session element
   await page.keyboard.press("Control+o");
   await expect(page.locator(".terminal-fullscreen")).toBeVisible();
 });
+test("Ctrl+J works independently of the backtick key and opens additional tabs", async ({ page }) => {
+  await page.locator('[data-pane="0"] .file-grid').focus();
+  await page.keyboard.press("Control+j");
+  const panel = page.locator(".terminal-panel:visible");
+  await expect(panel).toHaveCount(1);
+  const first = await panel.getAttribute("data-terminal-id");
+  await panel.getByRole("tab").first().focus();
+  await page.keyboard.press("Control+j");
+  await expect(page.locator(".terminal-panel:visible")).toHaveCount(0);
+  await page.keyboard.press("Control+j");
+  await expect(panel).toHaveAttribute("data-terminal-id", first!);
+  await page.keyboard.press("Control+Shift+j");
+  await expect(page.locator(".terminal-panel")).toHaveCount(2);
+});
 test("terminal tabs keep independent sessions when switching or closing", async ({ page }) => {
   await page.keyboard.press("Control+Backquote");
   let panel = page.locator(".terminal-panel:visible");
@@ -229,6 +243,49 @@ test("F8 and Shift+F8 use the corresponding deletion confirmations", async ({
   await expect(
     page.getByRole("dialog", { name: "Delete permanently?" }),
   ).toBeVisible();
+});
+test("confirmation buttons use Enter and arrow navigation", async ({ page }) => {
+  const left = page.locator('[data-pane="0"]');
+  await left.getByText("README.md", { exact: true }).click();
+  for (const [shortcut, title] of [["F8", "Move to the Recycle Bin?"], ["Shift+F8", "Delete permanently?"]]) {
+    await left.getByRole("grid").focus();
+    await page.keyboard.press(shortcut);
+    const dialog = page.getByRole("dialog", { name: title });
+    const confirm = dialog.locator('button[type="submit"]');
+    const cancel = dialog.getByRole("button", { name: "Cancel", exact: true });
+    await expect(confirm).toBeFocused();
+    await page.keyboard.press("ArrowLeft");
+    await expect(cancel).toBeFocused();
+    await page.keyboard.press("ArrowLeft");
+    await expect(confirm).toBeFocused();
+    await page.keyboard.press("ArrowDown");
+    await expect(cancel).toBeFocused();
+    await page.keyboard.press("ArrowUp");
+    await expect(confirm).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(dialog).toHaveCount(0);
+  }
+});
+test("dialog fields keep editing keys and footer buttons use arrows", async ({ page }) => {
+  await page.locator('[data-pane="0"] .file-grid').focus();
+  await page.keyboard.press("F7");
+  const dialog = page.getByRole("dialog", { name: "New folder", exact: true });
+  const input = dialog.getByRole("textbox");
+  await expect(input).toBeFocused();
+  await input.fill("New folder");
+  await page.keyboard.press("End");
+  await page.keyboard.press("ArrowLeft");
+  await expect(input).toBeFocused();
+  expect(await input.evaluate((el) => (el as HTMLInputElement).selectionStart)).toBe(9);
+  await page.keyboard.press("Tab");
+  const cancel = dialog.getByRole("button", { name: "Cancel", exact: true });
+  await expect(cancel).toBeFocused();
+  await page.keyboard.press("ArrowRight");
+  await expect(dialog.locator('button[type="submit"]')).toBeFocused();
+  await page.keyboard.press("ArrowRight");
+  await expect(cancel).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(dialog).toHaveCount(0);
 });
 test("SSH paths open authentication for the requested panel", async ({
   page,

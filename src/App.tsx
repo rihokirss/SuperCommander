@@ -1142,7 +1142,7 @@ export function App() {
         id: "terminal",
         label: t.terminal,
         icon: <TerminalSquare size={15} />,
-        key: "Ctrl+`",
+        key: "Ctrl+J",
         run: toggleTerminal,
       },
     ];
@@ -1640,7 +1640,7 @@ export function App() {
       id: "terminal",
       label: t.terminal,
       icon: <TerminalSquare size={16} />,
-      key: "Ctrl `",
+      key: "Ctrl+J",
       run: toggleTerminal,
     },
     {
@@ -1701,7 +1701,7 @@ export function App() {
         toggleFullTerminal();
         return;
       }
-      if (!dialog && ctrl && (e.key === "`" || e.code === "Backquote")) {
+      if (!dialog && ctrl && !e.altKey && (e.key.toLowerCase() === "j" || e.key === "`" || e.code === "Backquote")) {
         e.preventDefault();
         if (e.shiftKey) {
           if (ensureTerminal(true))
@@ -2061,7 +2061,6 @@ export function App() {
         expected:
           stateRef.current?.trustedHosts[`${profile.host}:${profile.port}`] ||
           null,
-        configPath: stateRef.current?.sshConfigPath || null,
       });
       if (result.needsTrust) ask({ initialFingerprint: result.fingerprint });
       else {
@@ -3077,12 +3076,6 @@ export function App() {
           title={dialog.title}
           catalog={catalog}
           onCatalog={setCatalog}
-          onSaveConnection={() =>
-            setDialog({
-              kind: "connect",
-              profile: sessions.find((p) => `sftp:${p.id}` === dialog.source),
-            })
-          }
           t={t}
           onClose={closeDialog}
         />

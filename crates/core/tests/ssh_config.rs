@@ -191,59 +191,35 @@ fn new_form_connections_precede_general_defaults_and_check_revisions() {
 }
 
 #[test]
-fn saves_multiple_forwards_without_duplicates_and_preserves_comments() {
+fn moving_a_forward_preserves_other_hosts_comments_and_line_endings() {
     let tmp = TempDir::new().unwrap();
     let config = tmp.path().join("config");
     let original = "# keep\r\nHost work\r\n User alice\r\n LocalForward 8080 localhost:80 # web\r\n ServerAliveInterval 15\r\nHost other\r\n LocalForward 9090 localhost:90\r\n";
     fs::write(&config, original).unwrap();
     let before = ssh_config::read(config.to_str()).unwrap();
-    assert_eq!(before.hosts[0].forwards[0].local_port, 8080);
-    let forward = ssh_config::LocalForward {
-        local_port: 5432,
-        remote_host: "::1".into(),
-        remote_port: 5432,
-    };
-    let saved = ssh_config::set_forward(
+    let forward = &before.hosts[0].forwards[0];
+    let text = ssh_config::forward_removal(
         config.to_str().unwrap(),
         "work",
-        &forward,
-        true,
+        forward,
         before.revision.as_deref(),
     )
     .unwrap();
-    assert_eq!(saved.hosts[0].forwards.len(), 2);
-    assert!(saved
-        .text
-        .contains("LocalForward 127.0.0.1:5432 [::1]:5432\r\n"));
-    let again = ssh_config::set_forward(
-        config.to_str().unwrap(),
-        "work",
-        &forward,
-        true,
-        saved.revision.as_deref(),
-    )
-    .unwrap();
-    assert_eq!(again.hosts[0].forwards.len(), 2);
-    let removed = ssh_config::set_forward(
-        config.to_str().unwrap(),
-        "work",
-        &before.hosts[0].forwards[0],
-        false,
-        again.revision.as_deref(),
-    )
-    .unwrap();
-    assert_eq!(removed.hosts[0].forwards, vec![forward.clone()]);
-    assert!(removed.text.contains("# web"));
+    // Planning the move leaves the shared configuration untouched.
+    assert_eq!(fs::read_to_string(&config).unwrap(), original);
+    let removed =
+        ssh_config::save(config.to_str().unwrap(), &text, before.revision.as_deref()).unwrap();
+    assert!(removed.hosts[0].forwards.is_empty());
+    assert!(removed.text.contains("    # web\r\n"));
     assert!(removed.text.contains("ServerAliveInterval 15"));
     assert!(removed
         .text
         .contains("Host other\r\n LocalForward 9090 localhost:90"));
-    assert!(ssh_config::set_forward(
+    assert!(ssh_config::forward_removal(
         config.to_str().unwrap(),
         "work",
-        &forward,
-        false,
-        before.revision.as_deref()
+        forward,
+        before.revision.as_deref(),
     )
     .is_err());
 }
@@ -259,19 +235,17 @@ fn inherited_shared_and_unsupported_forward_options_are_not_silently_changed() {
     assert_eq!(catalog.hosts[0].warnings.len(), 2);
     assert!(!catalog.hosts[0].disabled);
     let forward = &catalog.hosts[0].forwards[0];
-    assert!(ssh_config::set_forward(
+    assert!(ssh_config::forward_removal(
         config.to_str().unwrap(),
         "work",
         forward,
-        false,
         catalog.revision.as_deref()
     )
     .is_err());
-    assert!(ssh_config::set_forward(
+    assert!(ssh_config::forward_removal(
         config.to_str().unwrap(),
         "shared",
         forward,
-        true,
         catalog.revision.as_deref()
     )
     .is_err());

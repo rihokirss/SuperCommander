@@ -36,10 +36,22 @@ try {
   const left = page.locator('[data-pane="0"]');
   await expect(left.getByText("First folder", { exact: true })).toBeVisible();
   await left.getByRole("grid").focus();
-  await page.keyboard.press("Control+Backquote");
+  await page.keyboard.press("Control+j");
   await expect(visible().locator(".xterm-rows")).toContainText("PS ", { timeout: 30000 });
   await expect(visible().locator(".terminal-sync-status")).toHaveCount(0, { timeout: 30000 });
   await expectCwd(root, "SC_INITIAL");
+  const initialTab = await visible().getAttribute("data-terminal-id");
+  await visible().locator(".xterm-helper-textarea").focus();
+  await page.keyboard.type("Write-Output ('SC_SHORTCUT_' + 'EXECUTED')");
+  await page.keyboard.press("Control+j");
+  await expect(visible()).toHaveCount(0);
+  await page.keyboard.press("Control+j");
+  await expect(visible()).toHaveAttribute("data-terminal-id", initialTab);
+  await expect(visible().locator(".xterm-rows")).not.toContainText("SC_SHORTCUT_EXECUTED");
+  await visible().locator(".xterm-helper-textarea").focus();
+  await page.keyboard.press("Enter");
+  await expect(visible().locator(".xterm-rows")).toContainText("SC_SHORTCUT_EXECUTED");
+
 
   // A shell with an unfamiliar initial redraw may safely fall back to showing
   // that command. Check that the subsequent navigation adds no visible echo.
@@ -50,7 +62,7 @@ try {
   await expect.poll(echoCount).toBe(previousEchoes);
   await expectCwd(first, "SC_FOLLOW");
   await run("$sc_tab = 'FIRST_TAB'");
-  await visible().getByRole("button", { name: "New terminal tab" }).click();
+  await page.keyboard.press("Control+Shift+j");
   await expect(page.locator(".terminal-panel")).toHaveCount(2);
   await expect(visible().locator(".xterm-rows")).toContainText("PS ", { timeout: 30000 });
   await expect(visible().locator(".terminal-sync-status")).toHaveCount(0, { timeout: 30000 });

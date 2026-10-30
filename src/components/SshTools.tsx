@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   Check,
   ClipboardCopy,
@@ -231,7 +231,6 @@ export function ForwardDialog({
   t,
   onClose,
   onCatalog,
-  onSaveConnection,
 }: {
   source: string;
   title: string;
@@ -239,17 +238,29 @@ export function ForwardDialog({
   t: Text;
   onClose: () => void;
   onCatalog: (catalog: SshCatalog) => void;
-  onSaveConnection: () => void;
 }) {
   const [forwards, setForwards] = useState<ForwardInfo[]>([]);
+  const [saved, setSaved] = useState<SavedForward[]>([]);
+  type Owner = { source: string; name: string; forward: ForwardInfo };
+  const [conflict, setConflict] = useState<{
+    request: SavedForward;
+    owner: Owner | null;
+    error: string;
+  } | null>(null);
+  const conflictRef = useRef<HTMLDivElement>(null);
   const [localPort, setLocalPort] = useState("0");
   const [remoteHost, setRemoteHost] = useState("127.0.0.1");
   const [remotePort, setRemotePort] = useState("80");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
   const [copied, setCopied] = useState("");
+  useLayoutEffect(() => {
+    if (!conflict || busy) return;
+    const node = conflictRef.current;
+    (node?.querySelector<HTMLButtonElement>(".primary") ||
+      node?.querySelector<HTMLButtonElement>("button[data-free-port]"))?.focus();
+  }, [conflict, busy]);
   const host = catalog?.hosts.find((h) => `sftp:${h.profile.id}` === source);
-  const saved = host?.forwards || [];
   const key = (f: SavedForward) =>
     `${f.localPort}/${f.remoteHost}/${f.remotePort}`;
   const active = new Map(forwards.map((f) => [key(f), f]));
@@ -260,41 +271,69 @@ export function ForwardDialog({
       .map((f) => ({ ...f, saved: false, live: f })),
   ];
   async function refresh() {
-    setForwards(await command<ForwardInfo[]>("list_forwards", { source }));
+    const [live, remembered] = await Promise.all([
+      command<ForwardInfo[]>("list_forwards", { source }),
+      command<SavedForward[]>("list_saved_forwards", { source }),
+    ]);
+    setForwards(live);
+    setSaved(remembered);
   }
   async function changeSaved(forward: SavedForward, enabled: boolean) {
-    if (!catalog || !host) throw new Error(t.saveConnectionFirst);
-    const value = await command<SshCatalog>("save_ssh_forward", {
-      path: catalog.path,
-      alias: host.alias,
+    const value = await command<SavedForward[]>("save_forward", {
+      source,
       forward: {
         localPort: forward.localPort,
         remoteHost: forward.remoteHost,
         remotePort: forward.remotePort,
       },
       enabled,
-      revision: catalog.revision,
     });
-    onCatalog(value);
+    setSaved(value);
+  }
+  async function start(forward: SavedForward, owner?: Owner) {
+    try {
+      await command("start_forward", {
+        source,
+        localPort: forward.localPort,
+        remoteHost: forward.remoteHost,
+        remotePort: forward.remotePort,
+        replace: owner ? { source: owner.source, id: owner.forward.id } : null,
+      });
+    } catch (e) {
+      if (!forward.localPort) throw e;
+      const owner = await command<Owner | null>("forward_port_owner", {
+        localPort: forward.localPort,
+      });
+      // Only offer port choices for a bind failure or an app-owned listener.
+      if (!owner && !String(e).includes("Cannot bind local port")) throw e;
+      setConflict({ request: forward, owner, error: String(e) });
+    }
   }
   async function action(id: string, run: () => Promise<void>) {
     setBusy(id);
     setError("");
+    setConflict(null);
     try {
       await run();
-      await refresh();
     } catch (e) {
       setError(String(e));
     } finally {
+      await refresh().catch((e) => setError(String(e)));
       setBusy("");
     }
   }
   useEffect(() => {
     let active = true;
     const refresh = () =>
-      command<ForwardInfo[]>("list_forwards", { source })
-        .then((v) => {
-          if (active) setForwards(v);
+      Promise.all([
+        command<ForwardInfo[]>("list_forwards", { source }),
+        command<SavedForward[]>("list_saved_forwards", { source }),
+      ])
+        .then(([live, remembered]) => {
+          if (active) {
+            setForwards(live);
+            setSaved(remembered);
+          }
         })
         .catch((e) => {
           if (active) setError(String(e));
@@ -363,11 +402,9 @@ export function ForwardDialog({
                   <input
                     type="checkbox"
                     aria-label={`${t.rememberForward} ${row.localPort}`}
-                    data-tooltip={
-                      host ? t.rememberForwardHint : t.saveConnectionFirst
-                    }
+                    data-tooltip={t.rememberForwardHint}
                     checked={row.saved}
-                    disabled={!!busy || !host}
+                    disabled={!!busy}
                     onChange={(e) => {
                       void action(key(row), () =>
                         changeSaved(row, e.target.checked),
@@ -399,12 +436,7 @@ export function ForwardDialog({
                               id: row.live.id,
                             });
                           else
-                            await command("start_forward", {
-                              source,
-                              localPort: row.localPort,
-                              remoteHost: row.remoteHost,
-                              remotePort: row.remotePort,
-                            });
+                            await start(row);
                         });
                       }}
                     >
@@ -440,13 +472,31 @@ export function ForwardDialog({
         </table>
         {!rows.length && <p className="helper">{t.noForwards}</p>}
       </div>
+      {!!host?.forwards.length && catalog && (
+        <div className="forward-migration">
+          <p className="helper">{t.moveForwardHint}</p>
+          {host.forwards.map((forward) => (
+            <div key={key(forward)}>
+              <code>127.0.0.1:{forward.localPort} → {forward.remoteHost}:{forward.remotePort}</code>
+              <button disabled={!!busy} onClick={() => {
+                void action("move", async () => {
+                  const updated = await command<SshCatalog>("move_ssh_forward", {
+                    source, path: catalog.path, alias: host.alias, forward,
+                    revision: catalog.revision,
+                  });
+                  onCatalog(updated);
+                });
+              }}>{t.moveForward}</button>
+            </div>
+          ))}
+        </div>
+      )}
       <form
         className="forward-add"
         onSubmit={(e) => {
           e.preventDefault();
           void action("add", async () => {
-            await command("start_forward", {
-              source,
+            await start({
               localPort: Number(localPort),
               remoteHost,
               remotePort: Number(remotePort),
@@ -491,13 +541,27 @@ export function ForwardDialog({
         </button>
       </form>
       <p className="helper forward-hint">
-        {t.rememberForwardHint}{" "}
-        {!host && (
-          <button className="text-button" onClick={onSaveConnection}>
-            {t.saveConnectionFirst}
-          </button>
-        )}
+        {t.rememberForwardHint}
       </p>
+      {conflict && (
+        <div ref={conflictRef} className="forward-conflict" role="alertdialog" aria-label={t.portInUse} aria-describedby="forward-conflict-description">
+          <strong>{t.portInUse}: {conflict.request.localPort}</strong>
+          <p id="forward-conflict-description">
+            {conflict.owner
+              ? `${conflict.owner.name} · ${conflict.owner.forward.remoteHost}:${conflict.owner.forward.remotePort}. ${t.replaceForwardHint}`
+              : t.externalPortHint}
+          </p>
+          <div className="forward-conflict-actions">
+            <button disabled={!!busy} onClick={() => setConflict(null)}>{t.cancel}</button>
+            <button data-free-port disabled={!!busy} onClick={() => {
+              void action("free", () => start({ ...conflict.request, localPort: 0 }));
+            }}>{t.useFreePort}</button>
+            {conflict.owner && <button className="primary" disabled={!!busy} onClick={() => {
+              void action("replace", () => start(conflict.request, conflict.owner!));
+            }}>{t.replaceForward}</button>}
+          </div>
+        </div>
+      )}
       {error && (
         <p className="inline-error" role="alert">
           {error}

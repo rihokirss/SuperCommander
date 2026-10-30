@@ -148,13 +148,15 @@ Each pane has independent tabs, history, sorting and filtering. Click its locati
 | Ctrl+K / Ctrl+P | Command palette |
 | Ctrl+B | Collapse / expand Workspace |
 | Ctrl+O | Full terminal / file panes, preserving the shell session |
-| Ctrl+backtick | Show / hide the docked terminal |
-| Ctrl+Shift+backtick | Open another terminal tab |
+| Ctrl+J / Ctrl+backtick | Show / hide the docked terminal |
+| Ctrl+Shift+J / Ctrl+Shift+backtick | Open another terminal tab |
 | Ctrl+, | Settings |
 | F1 | Searchable shortcut reference |
 | F9 | Actions menu |
 | F10 | Quit SuperCommander |
 | Shift+F10 / Menu key | File context menu |
+
+Confirmation dialogs focus their main action, so **Enter** confirms immediately. Use the **arrow keys** to move between footer buttons, **Tab / Shift+Tab** for fields and controls, and **Esc** to cancel. Text fields retain normal cursor movement.
 
 The `..` row opens the parent folder; at a ZIP root it returns to the archive's local parent. ZIP creation and extraction are available in the Actions menu. Double-click a ZIP to browse its read-only contents. Buttons expose tooltips with their shortcuts. In the viewer and editor, F10 closes that tool; an editor with unsaved changes asks what to do first.
 
@@ -308,27 +310,29 @@ The catalog resolves concrete aliases, Host patterns, first-value-wins defaults,
 
 ### Server shells
 
-The terminal has independent tabs; **+** or **Ctrl+Shift+backtick** opens another shell in the active pane's folder, and each tab has its own close button. Local panes use PowerShell 7, falling back to Windows PowerShell. SSH panes open the server's interactive shell with a PTY through the existing authenticated SSH connection. Switching between local and SSH panes selects a matching shell or opens one when needed. Shell sessions survive Ctrl+O toggling. The docked terminal remembers whether it was open, and opens a fresh shell in the active pane’s folder after restarting the app. SSH integration is loaded from a private per-session startup file before the first prompt, without pasting initialization code into the terminal or changing user profile files. The temporary files are removed after startup.
+**Ctrl+J** shows or hides the docked terminal and works with Estonian keyboard layouts; **Ctrl+O** switches between the full terminal and file panels. The terminal has independent tabs; **+** or **Ctrl+Shift+J** opens another shell in the active pane's folder, and each tab has its own close button. Local panes use PowerShell 7, falling back to Windows PowerShell. SSH panes open the server's interactive shell with a PTY through the existing authenticated SSH connection. Switching between local and SSH panes selects a matching shell or opens one when needed. Shell sessions survive Ctrl+O toggling. The docked terminal remembers whether it was open, and opens a fresh shell in the active pane’s folder after restarting the app. SSH integration is loaded from a private per-session startup file before the first prompt, without pasting initialization code into the terminal or changing user profile files. The temporary files are removed after startup.
 
 Minimizing keeps the window in the Windows taskbar. Launching the app again restores and focuses the existing window, preserving its shell sessions; separate `SUPERCOMMANDER_DATA_DIR` profiles remain independent.
 
 The active shell and active file pane follow each other's folder. Running `cd` in the terminal updates that pane; browsing in the pane updates the shell. When a command is running or text has already been typed, the folder change waits until the next empty prompt so it does not interrupt the command or alter the typed input. Automatic changes use per-session input widgets, create no shell history entry, and preserve normal Up-arrow recall. Bash also filters identifiable automatic commands from older SuperCommander versions out of its in-memory recall list without rewriting a shared history file. Existing terminal tabs must be reopened after updating to load the new integration. PowerShell and SSH Bash, Zsh and Fish provide prompt integration; other remote shells remain usable and show when automatic following is unavailable. Drag the docked terminal’s top edge or use the focused separator’s Up/Down keys to change its height; the choice is remembered. Closing a shell leaves SFTP connected; disconnecting SSH closes its shells and tunnels.
 
-A remote shell follows its matching pane through prompt-aware directory changes. If a server denies a shell or PTY, the error is shown.
+A remote shell follows its matching pane through prompt-aware directory changes. Temporary integration files live under `~/.cache/supercommander/shell/` on the server, inside a private per-session directory, and are removed after startup. If a server denies a shell or PTY, the error is shown.
 
 ### Remembered port forwards
 
 Open **Actions → Port forwarding** from an SSH pane. Add multiple tunnels to the same connection. The compact table shows local addresses, destinations, status and whether each port is remembered. Each row supports copying its address, starting/stopping and removing the forward.
 
-Listeners bind to `127.0.0.1` only. Local port `0` selects a free port. **Remember** writes a `LocalForward` directive with the actual local port into the connection's SSH config block. Remembered ports reopen automatically on the next connection. Stopping preserves the saved entry; removing deletes it. Binding and tunnel errors are displayed, and disconnecting closes active tunnels.
+Listeners bind to `127.0.0.1` only. Local port `0` selects a free port. **Remember** stores the actual local port in `%APPDATA%/SuperCommander/forwards.json`, separately for each SSH connection. It does not write forwarding directives into shared SSH config, so other clients such as Codex do not open SuperCommander's tunnels. Remembered ports reopen when that connection opens. Stopping preserves the saved entry; removing deletes it. Disconnecting closes active tunnels.
 
-Inherited or shared forwarding directives can be changed in the config text editor. Unsupported bindings are preserved in the file and are not opened by the app.
+If another SuperCommander tunnel occupies a port, the dialog offers **Switch tunnel**, which closes that tunnel's forwarded connections while keeping its SSH session open. **Use a free port** leaves the existing listener running. Listeners owned by other programs are not stopped.
+
+Existing `LocalForward` directives are no longer opened automatically by SuperCommander. In the forwarding dialog, **Move from SSH config** copies an explicitly selected entry into the app's settings, then removes that directive from its original Host block and backs up the config. Other hosts, comments and options are preserved. Inherited, included and shared directives must be moved through the SSH catalog editor.
 
 ## Data and operation behavior
 
 Local panes and settings load first at startup. Explorer network locations load in the background; their loading or failure does not block the file panes. Drive letters are enumerated without probing mapped shares.
 
-Settings, pane tabs, bookmarks and trusted fingerprints are stored in `%APPDATA%/SuperCommander/settings.json`, with a backup of the previous settings. Window placement is stored separately in `window-state.json`; Windows keeps the window visible if the monitor configuration changes. Secrets are stored separately in Windows Credential Manager.
+Settings, pane tabs, bookmarks and trusted fingerprints are stored in `%APPDATA%/SuperCommander/settings.json`, with a backup of the previous settings. Remembered SSH tunnels are in `forwards.json`, with a backup of the previous version. Window placement is stored separately in `window-state.json`; Windows keeps the window visible if the monitor configuration changes. Secrets are stored separately in Windows Credential Manager.
 
 File operations run in a queue. Copy/move directory listings are captured in a private disk-backed manifest before output starts, so an alias cannot cause recursive copying of newly created output. Copies are staged in temporary `.part` files. Replacements check the destination's metadata and contents, preserve its original in a backup, and publish without overwriting a concurrently created file.
 

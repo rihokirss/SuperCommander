@@ -50,6 +50,7 @@ jobs:
       - run: node scripts/windows-clipboard-smoke.mjs
       - run: node scripts/windows-startup-smoke.mjs
       - run: node scripts/windows-quit-smoke.mjs
+      - run: node scripts/windows-dialog-smoke.mjs
       - run: powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File scripts/windows-updater-smoke.ps1
       - run: node scripts/windows-window-state-smoke.mjs
       - run: node scripts/windows-taskbar-smoke.mjs

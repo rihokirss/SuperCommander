@@ -1030,6 +1030,21 @@ async fn verifies_host_authenticates_and_transfers_over_real_sftp() {
         .await
         .unwrap();
     assert_eq!(fs.forwards().len(), 1);
+    let reused = fs
+        .start_forward(tunnel.local_port, "127.0.0.1".into(), echo_port)
+        .await
+        .unwrap();
+    assert_eq!(reused.id, tunnel.id);
+    assert_eq!(fs.forwards().len(), 1);
+    assert!(fs
+        .start_forward(
+            tunnel.local_port,
+            "127.0.0.1".into(),
+            echo_port.saturating_sub(1)
+        )
+        .await
+        .is_err());
+    assert_eq!(fs.forwards().len(), 1);
     let mut stream = tokio::net::TcpStream::connect(("127.0.0.1", tunnel.local_port))
         .await
         .unwrap();

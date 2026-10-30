@@ -346,20 +346,19 @@ fn resolve(path: &Path, text: &str) -> Result<(Vec<ConfigHost>, Vec<String>)> {
     Ok((hosts, warnings))
 }
 
-/// Change only one forward in one unshared Host block; never rewrite inherited/include options.
-pub fn set_forward(
+/// Remove one explicitly selected forward; never rewrite inherited/include options.
+pub fn forward_removal(
     path: &str,
     alias: &str,
     forward: &LocalForward,
-    enabled: bool,
     revision: Option<&str>,
-) -> Result<Catalog> {
+) -> Result<String> {
     forward.validate()?;
     let catalog = read(Some(path))?;
     if catalog.revision.as_deref() != revision {
         bail!("SSH configuration changed outside SuperCommander. Reload before saving.");
     }
-    let host = catalog
+    let _host = catalog
         .hosts
         .iter()
         .find(|h| h.alias == alias)
@@ -398,29 +397,14 @@ pub fn set_forward(
             })
         })
         .collect::<Vec<_>>();
-    if !enabled && found.is_empty() && host.forwards.contains(forward) {
+    if found.is_empty() {
         bail!("This forward is inherited. Edit its original Host or Include block in the SSH catalog editor.");
     }
-    if enabled && !host.forwards.contains(forward) {
-        let target = if forward.remote_host.contains(':') {
-            format!("[{}]", forward.remote_host)
-        } else {
-            forward.remote_host.clone()
-        };
-        lines.insert(
-            start + 1,
-            format!(
-                "    LocalForward 127.0.0.1:{} {}:{}",
-                forward.local_port, target, forward.remote_port
-            ),
-        );
-    } else if !enabled {
-        for i in found.into_iter().rev() {
-            let line = lines.remove(i);
-            // Keep inline comments when removing the directive.
-            if let Some((_, comment)) = line.split_once('#') {
-                lines.insert(i, format!("    #{comment}"));
-            }
+    for i in found.into_iter().rev() {
+        let line = lines.remove(i);
+        // Keep inline comments when removing the directive.
+        if let Some((_, comment)) = line.split_once('#') {
+            lines.insert(i, format!("    #{comment}"));
         }
     }
     let newline = if catalog.text.contains("\r\n") {
@@ -428,7 +412,7 @@ pub fn set_forward(
     } else {
         "\n"
     };
-    save(path, &(lines.join(newline) + newline), revision)
+    Ok(lines.join(newline) + newline)
 }
 
 pub fn read(path: Option<&str>) -> Result<Catalog> {

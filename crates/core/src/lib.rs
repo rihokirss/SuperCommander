@@ -4,6 +4,7 @@ pub mod comparison;
 pub mod editor;
 pub mod engine;
 pub mod filesystem;
+pub mod forward_settings;
 pub mod network;
 pub mod properties;
 pub mod recovery;

@@ -43,6 +43,9 @@ try {
   await expect(visible().locator(".xterm-rows")).not.toContainText("__sc_prompt");
   await expect(visible().locator(".xterm-rows")).not.toContainText("SC_INIT_");
   await expectCwd(fixture.path, "SC_REMOTE_ROOT");
+  await run("if [ -d \"$HOME/.cache/supercommander/shell\" ] && [ \"$(stat -c %a \"$HOME/.cache/supercommander/shell\")\" = 700 ]; then printf '%s%s\\n' 'SC_CACHE_' 'PRIVATE_OK'; fi");
+  await expect(visible().locator(".xterm-rows")).toContainText("SC_CACHE_PRIVATE_OK");
+
   const remoteTab = await visible().getAttribute("data-terminal-id");
   await page.locator('[data-pane="1"] .file-grid').focus();
   await expect(visible()).toHaveAttribute("data-terminal-source", "local", { timeout: 30000 });

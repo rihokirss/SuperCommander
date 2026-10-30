@@ -605,8 +605,7 @@ try {
     await expect
       .poll(
         async () =>
-          (await fs.readFile(sshConfig, "utf8")).match(/LocalForward/g)
-            ?.length || 0,
+          (await rpc("list_saved_forwards", { source: `sftp:${savedCatalog.hosts.find((host) => host.alias === "sc-form").profile.id}` })).length,
       )
       .toBe(1);
     await expect(forward.getByRole("checkbox").nth(1)).toBeEnabled();
@@ -614,10 +613,10 @@ try {
     await expect
       .poll(
         async () =>
-          (await fs.readFile(sshConfig, "utf8")).match(/LocalForward/g)
-            ?.length || 0,
+          (await rpc("list_saved_forwards", { source: `sftp:${savedCatalog.hosts.find((host) => host.alias === "sc-form").profile.id}` })).length,
       )
       .toBe(2);
+    assert.equal(await fs.readFile(sshConfig, "utf8"), savedConfig);
     const ports = await forward
       .locator(".forward-row")
       .evaluateAll((rows) => rows.map((r) => Number(r.dataset.localPort)));
