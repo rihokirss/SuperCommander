@@ -231,6 +231,7 @@ export function ForwardDialog({
   t,
   onClose,
   onCatalog,
+  onSaveConnection,
 }: {
   source: string;
   title: string;
@@ -238,6 +239,7 @@ export function ForwardDialog({
   t: Text;
   onClose: () => void;
   onCatalog: (catalog: SshCatalog) => void;
+  onSaveConnection: () => void;
 }) {
   const [forwards, setForwards] = useState<ForwardInfo[]>([]);
   const [saved, setSaved] = useState<SavedForward[]>([]);
@@ -402,9 +404,9 @@ export function ForwardDialog({
                   <input
                     type="checkbox"
                     aria-label={`${t.rememberForward} ${row.localPort}`}
-                    data-tooltip={t.rememberForwardHint}
+                    data-tooltip={host ? t.rememberForwardHint : t.saveConnectionFirst}
                     checked={row.saved}
-                    disabled={!!busy}
+                    disabled={!!busy || !host}
                     onChange={(e) => {
                       void action(key(row), () =>
                         changeSaved(row, e.target.checked),
@@ -542,6 +544,7 @@ export function ForwardDialog({
       </form>
       <p className="helper forward-hint">
         {t.rememberForwardHint}
+        {!host && <> {" "}<button className="text-button" onClick={onSaveConnection}>{t.saveConnectionFirst}</button></>}
       </p>
       {conflict && (
         <div ref={conflictRef} className="forward-conflict" role="alertdialog" aria-label={t.portInUse} aria-describedby="forward-conflict-description">

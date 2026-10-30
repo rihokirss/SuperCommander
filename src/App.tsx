@@ -3076,6 +3076,12 @@ export function App() {
           title={dialog.title}
           catalog={catalog}
           onCatalog={setCatalog}
+          onSaveConnection={() =>
+            setDialog({
+              kind: "connect",
+              profile: sessions.find((p) => `sftp:${p.id}` === dialog.source),
+            })
+          }
           t={t}
           onClose={closeDialog}
         />
