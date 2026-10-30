@@ -21,8 +21,22 @@ pub fn remote(shell: &str, marker: &str, directory: &str) -> Option<RemoteShell>
         "zsh" => include_str!("shell/zsh.sh"),
         "fish" => include_str!("shell/fish.fish"),
         _ => return None,
-    }
-    .replace("__SC_MARKER__", marker);
+    };
+    Some(remote_with_script(shell, marker, directory, integration))
+}
+
+fn remote_with_script(
+    shell: &str,
+    marker: &str,
+    directory: &str,
+    integration: &str,
+) -> RemoteShell {
+    let kind = shell.rsplit('/').next().unwrap_or(shell);
+    // include_str! preserves Windows checkout line endings. Shell startup
+    // files are Unix input regardless of the platform that builds the app.
+    let integration = integration
+        .replace("\r\n", "\n")
+        .replace("__SC_MARKER__", marker);
     let mut files = Vec::new();
     let command = match kind {
         "bash" => {
@@ -81,10 +95,39 @@ pub fn remote(shell: &str, marker: &str, directory: &str) -> Option<RemoteShell>
         "\ncommand rm -f -- {paths}\ncommand rmdir -- {} 2>/dev/null\n",
         path_quote(directory)
     );
-    files.last_mut()?.1.push_str(&cleanup);
-    Some(RemoteShell { command, files })
+    files.last_mut().unwrap().1.push_str(&cleanup);
+    RemoteShell { command, files }
 }
 
 pub fn powershell(marker: &str) -> String {
     include_str!("shell/powershell.ps1").replace("__SC_MARKER__", marker)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn windows_templates_produce_unix_startup_files() {
+        for (shell, template) in [
+            ("bash", include_str!("shell/bash.sh")),
+            ("zsh", include_str!("shell/zsh.sh")),
+            ("fish", include_str!("shell/fish.fish")),
+        ] {
+            let windows_template = template.replace("\r\n", "\n").replace('\n', "\r\n");
+            let plan = remote_with_script(
+                shell,
+                "1234567890abcdef1234567890abcdef",
+                "/tmp/sc-init",
+                &windows_template,
+            );
+            for (name, contents) in plan.files {
+                assert!(
+                    !contents.contains('\r'),
+                    "{shell}/{name} contains Windows line endings"
+                );
+                assert!(contents.ends_with('\n'));
+            }
+        }
+    }
 }

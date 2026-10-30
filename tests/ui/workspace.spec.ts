@@ -165,7 +165,7 @@ test("docked terminal can be resized and keeps its height", async ({
     .toBe(resized);
   await page.reload();
   await expect(page.locator(".file-row").first()).toBeVisible();
-  await page.keyboard.press("Control+Backquote");
+  await expect(terminal).toBeVisible();
   await expect
     .poll(async () => (await terminal.boundingBox())!.height)
     .toBe(resized);
@@ -178,6 +178,41 @@ test("docked terminal can be resized and keeps its height", async ({
   expect(
     (await terminal.boundingBox())!.y + (await terminal.boundingBox())!.height,
   ).toBeLessThanOrEqual(600);
+});
+test("docked terminal remembers both open and closed states", async ({ page }) => {
+  const savedOpen = () => page.evaluate(() => JSON.parse(localStorage.getItem("supercommander-preview") || "{}").terminalOpen);
+  await page.keyboard.press("Control+Backquote");
+  await expect(page.locator(".terminal-panel:visible")).toHaveCount(1);
+  await expect.poll(savedOpen).toBe(true);
+  await page.reload();
+  await expect(page.locator(".terminal-panel:visible")).toHaveCount(1);
+  await page.locator('[data-pane="0"] .file-grid').focus();
+  await page.keyboard.press("Control+Backquote");
+  await expect(page.locator(".terminal-panel:visible")).toHaveCount(0);
+  await expect.poll(savedOpen).toBe(false);
+  await page.reload();
+  await expect(page.locator(".file-row").first()).toBeVisible();
+  await expect(page.locator(".terminal-panel:visible")).toHaveCount(0);
+});
+
+test("titlebar tooltips follow their buttons and stay within the window", async ({ page }) => {
+  for (const width of [960, 1440]) {
+    await page.setViewportSize({ width, height: 920 });
+    for (const name of ["Maximize", "Close"]) {
+      await page.mouse.move(400, 300);
+      const button = page.locator(".window-controls").getByRole("button", { name, exact: true });
+      await button.hover();
+      const tooltip = page.getByRole("tooltip");
+      await expect(tooltip).toHaveText(name);
+      const anchor = (await button.boundingBox())!;
+      const box = (await tooltip.boundingBox())!;
+      expect(box.x).toBeGreaterThanOrEqual(7.5);
+      expect(box.x + box.width).toBeLessThanOrEqual(width - 7.5);
+      expect(box.x).toBeLessThan(anchor.x + anchor.width);
+      expect(box.x + box.width).toBeGreaterThan(anchor.x);
+      expect(Math.abs(box.y - anchor.y - anchor.height - 8)).toBeLessThan(1);
+    }
+  }
 });
 test("F8 and Shift+F8 use the corresponding deletion confirmations", async ({
   page,

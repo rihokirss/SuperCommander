@@ -77,6 +77,7 @@ export type Settings = {
   glass: boolean;
   transparency?: number;
   terminalHeight?: number;
+  terminalOpen?: boolean;
   workspaceCollapsed?: boolean;
   collapsedGroups?: string[];
   networkLocations?: Place[];

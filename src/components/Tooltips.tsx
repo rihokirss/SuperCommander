@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 export function Tooltips() {
+  const popup = useRef<HTMLDivElement>(null);
   const [tip, setTip] = useState<{
     text: string;
     shortcut: string;
@@ -9,7 +10,17 @@ export function Tooltips() {
     y: number;
     above: boolean;
     theme: string;
+    anchor: { x: number; top: number; bottom: number };
   }>();
+  useLayoutEffect(() => {
+    if (!tip || !popup.current) return;
+    const { width, height } = popup.current.getBoundingClientRect();
+    const x = Math.max(8 + width / 2, Math.min(innerWidth - 8 - width / 2, tip.anchor.x));
+    const above = tip.anchor.bottom + 8 + height > innerHeight - 8 && tip.anchor.top - 8 - height >= 8;
+    const y = above ? tip.anchor.top - 8 : Math.max(8, Math.min(innerHeight - 8 - height, tip.anchor.bottom + 8));
+    if (x !== tip.x || y !== tip.y || above !== tip.above)
+      setTip((current) => current === tip ? { ...tip, x, y, above } : current);
+  }, [tip]);
   useEffect(() => {
     let target: HTMLElement | null = null;
     let timer: ReturnType<typeof setTimeout>;
@@ -96,14 +107,12 @@ export function Tooltips() {
         setTip({
           text,
           shortcut: node.dataset.shortcut || "",
-          x: Math.max(
-            150,
-            Math.min(innerWidth - 150, rect.left + rect.width / 2),
-          ),
+          x: rect.left + rect.width / 2,
           y: above ? rect.top - 8 : rect.bottom + 8,
           above,
           theme:
             node.closest<HTMLElement>(".app-shell")?.dataset.theme || "dark",
+          anchor: { x: rect.left + rect.width / 2, top: rect.top, bottom: rect.bottom },
         });
       }, 350);
     };
@@ -118,6 +127,7 @@ export function Tooltips() {
     document.addEventListener("pointerdown", hide);
     document.addEventListener("keydown", hide);
     window.addEventListener("scroll", hide, true);
+    window.addEventListener("resize", hide);
     return () => {
       clearTimeout(timer);
       nativeHints?.disconnect();
@@ -128,11 +138,13 @@ export function Tooltips() {
       document.removeEventListener("pointerdown", hide);
       document.removeEventListener("keydown", hide);
       window.removeEventListener("scroll", hide, true);
+      window.removeEventListener("resize", hide);
     };
   }, []);
   return tip
     ? createPortal(
         <div
+          ref={popup}
           role="tooltip"
           className={`app-tooltip ${tip.above ? "above" : ""}`}
           data-theme={tip.theme}

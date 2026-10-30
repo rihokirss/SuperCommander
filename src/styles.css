@@ -643,12 +643,13 @@ p {
 .app-tooltip {
   position: fixed;
   z-index: 1000;
+  width: max-content;
   transform: translateX(-50%);
   display: flex;
   align-items: center;
   gap: 14px;
   padding: 8px 11px;
-  max-width: 300px;
+  max-width: min(300px, calc(100vw - 16px));
   border: 1px solid #93a8d330;
   border-radius: 6px;
   background: var(--menu-surface);
@@ -664,6 +665,10 @@ p {
 }
 .app-tooltip kbd {
   color: #adc9df;
+}
+.app-tooltip > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .app-tooltip[data-theme="light"] {
   background: #f8fafff5;

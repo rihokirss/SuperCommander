@@ -181,6 +181,11 @@ export function App() {
     "hidden" | "docked" | "full"
   >("hidden");
   const terminalReturnView = useRef<"hidden" | "docked">("hidden");
+  useEffect(() => {
+    if (terminalView === "full") return;
+    const terminalOpen = terminalView === "docked";
+    setSettings((current) => current && current.terminalOpen !== terminalOpen ? { ...current, terminalOpen } : current);
+  }, [terminalView]);
   const [systemDark, setSystemDark] = useState(
     () => matchMedia("(prefers-color-scheme: dark)").matches,
   );
@@ -311,6 +316,7 @@ export function App() {
         density: "compact",
         profiles: [],
         trustedHosts: {},
+        terminalOpen: false,
       };
       const validPanes =
         saved?.panes?.length === 2 &&
@@ -363,6 +369,7 @@ export function App() {
       } as Settings;
       setBoot(api.desktop ? { ...data, network: undefined } : data);
       setSettings(restored);
+      setTerminalView(restored.terminalOpen ? "docked" : "hidden");
     } catch (e) {
       setBootError(String(e));
     }

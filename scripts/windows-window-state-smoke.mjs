@@ -186,7 +186,11 @@ function assertNormal(actual, expected) {
     );
 }
 try {
-  await start();
+  const firstPage = await start();
+  await firstPage.locator('[data-pane="0"] .file-grid').focus();
+  await firstPage.keyboard.press("Control+Backquote");
+  await expect(firstPage.locator(".terminal-panel:visible .xterm-rows")).toContainText("PS ", { timeout: 30000 });
+  await expect.poll(async () => JSON.parse(await fs.readFile(path.join(settingsDir, "settings.json"), "utf8")).terminalOpen).toBe(true);
   await win("move");
   await delay(400);
   const normal = await win("snapshot");
@@ -194,7 +198,13 @@ try {
   await stop();
   const statePath = path.join(settingsDir, "window-state.json");
   await fs.access(statePath);
-  await start();
+  const reopened = await start();
+  await expect(reopened.locator(".terminal-panel:visible .xterm-rows")).toContainText("PS ", { timeout: 30000 });
+  await reopened.locator('[data-pane="0"] .file-grid').focus();
+  await reopened.keyboard.press("Control+Backquote");
+  await expect(reopened.locator(".terminal-panel:visible")).toHaveCount(0);
+  await expect.poll(async () => JSON.parse(await fs.readFile(path.join(settingsDir, "settings.json"), "utf8")).terminalOpen).toBe(false);
+  console.log("PASS docked terminal open state survives process restart");
   let current = await win("snapshot");
   assert.equal(current.show, 1);
   assertNormal(current, normal);

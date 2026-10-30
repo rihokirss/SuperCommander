@@ -6,13 +6,11 @@ Browse local drives, UNC paths, ZIP archives and SSH/SFTP servers. Work with fam
 
 ## Download
 
-The latest release is **[SuperCommander 0.4.6](https://github.com/rihokirss/SuperCommander/releases/tag/v0.4.6)**.
+The latest release is **[SuperCommander 0.4.7](https://github.com/rihokirss/SuperCommander/releases/tag/v0.4.7)**.
 
-Version 0.4.6 keeps minimized windows in the taskbar, restores the existing window on relaunch, and loads SSH shell integration without typing a startup script into the terminal. Version 0.4.5 adds two-way terminal/pane directory following and uses shell widgets so automatic changes create no command history entries. Version 0.4.4 restores window placement before showing the window and keeps successful automatic terminal folder changes out of the console while preserving error output and typed input. Version 0.4.3 adds independent terminal tabs, prompt-aware directory following for local and SSH shells, F10 to quit, and Midnight classic blue as the default dark palette. Version 0.4.2 adds signed automatic updates for installed and portable builds and lets `*` select all visible entries. Version 0.4.1 remembers window position, size and maximized state, uses a slimmer titlebar, fixes clipped terminal rows and puts compact F-key buttons on the status bar. Version 0.4.0 adds faster startup, selectable blue and dark red palettes, a category-based F1 reference, next-match quick finding and folder sizes in the file list. It includes keyboard-accessible menus, bookmarks, file properties, native file clipboard support, quick editing, content search, reviewed folder synchronization, recovery of saved copies and safe ZIP operations.
-
-- [Windows x64 installer](https://github.com/rihokirss/SuperCommander/releases/download/v0.4.6/SuperCommander_0.4.6_x64-setup.exe) — recommended.
-- [Portable Windows x64 executable](https://github.com/rihokirss/SuperCommander/releases/download/v0.4.6/SuperCommander_0.4.6_x64_portable.exe) — requires WebView2.
-- [SHA-256 checksums](https://github.com/rihokirss/SuperCommander/releases/download/v0.4.6/SHA256SUMS.txt).
+- [Windows x64 installer](https://github.com/rihokirss/SuperCommander/releases/download/v0.4.7/SuperCommander_0.4.7_x64-setup.exe) — recommended.
+- [Portable Windows x64 executable](https://github.com/rihokirss/SuperCommander/releases/download/v0.4.7/SuperCommander_0.4.7_x64_portable.exe) — requires WebView2.
+- [SHA-256 checksums](https://github.com/rihokirss/SuperCommander/releases/download/v0.4.7/SHA256SUMS.txt).
 
 ## Screenshots
 
@@ -82,7 +80,7 @@ npm run build:windows
 `cargo-xwin` downloads the Windows SDK and CRT. Outputs:
 
 - `target/x86_64-pc-windows-msvc/release/supercommander.exe`
-- `target/x86_64-pc-windows-msvc/release/bundle/nsis/SuperCommander_0.4.6_x64-setup.exe`
+- `target/x86_64-pc-windows-msvc/release/bundle/nsis/SuperCommander_0.4.7_x64-setup.exe`
 
 A successful cross-build does not replace testing the application on Windows.
 
@@ -90,7 +88,6 @@ A successful cross-build does not replace testing the application on Windows.
 
 Builds containing the updater check GitHub at startup and every 12 hours while running. An available update is downloaded and its signature verified; the status bar announces that it will be applied when the application closes. Unsaved editor changes retain their normal close confirmation. The installed version uses the NSIS update installer; a portable executable is replaced in its current location after its process exits. A portable update requires write access to that location. A failure is shown in the status bar on the next launch. Offline checks and older releases without update manifests do not interrupt startup.
 
-Version 0.4.1 and earlier predate this feature and cannot update themselves. They must first be replaced with a build that includes the updater. Releases need both `latest.json` and `portable.json` together with the matching signed installer and portable EXE; without those files the corresponding automatic update is unavailable.
 
 For release maintainers, keep the updater signing private key safe and backed up outside the repository. Configure `TAURI_SIGNING_PRIVATE_KEY` as a GitHub Actions secret. On main, the Windows workflow creates the signed installer, a version-bound signature for the portable EXE, and both manifests as build artifacts; pull requests and builds without the secret remain unsigned. Upload the manifests, `SuperCommander_<version>_x64-setup.exe` and `SuperCommander_<version>_x64_portable.exe` to the GitHub release whose tag is `v<version>`. The embedded public key verifies updates and rejects a signature for a different version. Never commit the private key. Publishing a release remains a separate step.
 
@@ -311,7 +308,7 @@ The catalog resolves concrete aliases, Host patterns, first-value-wins defaults,
 
 ### Server shells
 
-The terminal has independent tabs; **+** or **Ctrl+Shift+backtick** opens another shell in the active pane's folder, and each tab has its own close button. Local panes use PowerShell 7, falling back to Windows PowerShell. SSH panes open the server's interactive shell with a PTY through the existing authenticated SSH connection. Switching between local and SSH panes selects a matching shell or opens one when needed. Shell sessions survive Ctrl+O toggling. SSH integration is loaded from a private per-session startup file before the first prompt, without pasting initialization code into the terminal or changing user profile files. The temporary files are removed after startup.
+The terminal has independent tabs; **+** or **Ctrl+Shift+backtick** opens another shell in the active pane's folder, and each tab has its own close button. Local panes use PowerShell 7, falling back to Windows PowerShell. SSH panes open the server's interactive shell with a PTY through the existing authenticated SSH connection. Switching between local and SSH panes selects a matching shell or opens one when needed. Shell sessions survive Ctrl+O toggling. The docked terminal remembers whether it was open, and opens a fresh shell in the active pane’s folder after restarting the app. SSH integration is loaded from a private per-session startup file before the first prompt, without pasting initialization code into the terminal or changing user profile files. The temporary files are removed after startup.
 
 Minimizing keeps the window in the Windows taskbar. Launching the app again restores and focuses the existing window, preserving its shell sessions; separate `SUPERCOMMANDER_DATA_DIR` profiles remain independent.
 

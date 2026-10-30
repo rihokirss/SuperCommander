@@ -50,6 +50,21 @@ try {
     .getByRole("button", { name: "Expand workspace", exact: true })
     .click();
   await expect(tooltip).toHaveCount(0);
+  for (const name of ["Minimize", "Maximize", "Close"]) {
+    await page.mouse.move(500, 400);
+    const button = page.locator(".window-controls").getByRole("button", { name, exact: true });
+    await button.hover();
+    await expect(tooltip).toHaveText(name);
+    const anchor = await button.boundingBox();
+    const box = await tooltip.boundingBox();
+    const width = await page.evaluate(() => innerWidth);
+    expect(box.x).toBeGreaterThanOrEqual(7.5);
+    expect(box.x + box.width).toBeLessThanOrEqual(width - 7.5);
+    expect(box.x).toBeLessThan(anchor.x + anchor.width);
+    expect(box.x + box.width).toBeGreaterThan(anchor.x);
+    expect(Math.abs(box.y - anchor.y - anchor.height - 8)).toBeLessThan(1);
+  }
+  console.log("Windows WebView2: titlebar hints stay under their buttons and inside the window.");
   console.log(
     "Windows WebView2: collapsed workspace has one tooltip; native HTML/SVG hints take precedence for hover and keyboard focus.",
   );
