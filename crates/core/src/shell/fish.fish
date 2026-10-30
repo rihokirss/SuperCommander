@@ -1,9 +1,4 @@
-set -g __sc_initial 1
 function __sc_prompt --on-event fish_prompt
-    if test "$__sc_initial" = 1
-        set -g __sc_initial 0
-        return
-    end
     printf '\033]633;SC:__SC_MARKER__:%s\007' (printf %s "$PWD" | base64 | tr -d '\n')
 end
 function __sc_change

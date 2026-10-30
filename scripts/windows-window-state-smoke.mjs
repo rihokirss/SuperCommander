@@ -47,6 +47,7 @@ public static class SCWindowTest {
   [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int w, int h, uint flags);
   [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hwnd, int command);
   [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr hwnd);
+  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hwnd);
   [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam);
   [DllImport("user32.dll")] public static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint flags);
 }
@@ -63,7 +64,7 @@ switch ($Action) {
    $placement = New-Object SCWindowTest+Placement
    $placement.length = [uint32][Runtime.InteropServices.Marshal]::SizeOf([type]'SCWindowTest+Placement')
    if (-not [SCWindowTest]::GetWindowPlacement($window, [ref]$placement)) { throw 'GetWindowPlacement failed' }
-   [pscustomobject]@{ handle = $window.ToInt64(); show = $placement.showCmd; minimized = [SCWindowTest]::IsIconic($window); left = $placement.normal.left; top = $placement.normal.top; right = $placement.normal.right; bottom = $placement.normal.bottom; onScreen = ([SCWindowTest]::MonitorFromWindow($window,0) -ne [IntPtr]::Zero) } | ConvertTo-Json -Compress
+   [pscustomobject]@{ handle = $window.ToInt64(); show = $placement.showCmd; minimized = [SCWindowTest]::IsIconic($window); visible = [SCWindowTest]::IsWindowVisible($window); left = $placement.normal.left; top = $placement.normal.top; right = $placement.normal.right; bottom = $placement.normal.bottom; onScreen = ([SCWindowTest]::MonitorFromWindow($window,0) -ne [IntPtr]::Zero) } | ConvertTo-Json -Compress
  }
 }
 `,
@@ -212,8 +213,10 @@ try {
   );
   await win("maximize");
   await expect.poll(async () => (await win("snapshot")).show).toBe(3);
-  await win("minimize");
+  const currentPage = browser.contexts()[0].pages().find((page) => page.url().includes("tauri.localhost"));
+  await currentPage.getByRole("button", { name: "Minimize", exact: true }).click();
   await expect.poll(async () => (await win("snapshot")).minimized).toBe(true);
+  assert.equal((await win("snapshot")).visible, true, "Minimizing hid the window from the taskbar");
   await stop();
   await start();
   await expect.poll(async () => (await win("snapshot")).show).toBe(3);

@@ -171,7 +171,7 @@ pub async fn connect(
     };
     let fs = RemoteFs {
         connection_id: uuid::Uuid::new_v4().to_string(),
-        sftp,
+        sftp: Arc::new(sftp),
         runtime: Handle::current(),
         _ssh: ssh,
         forwards: Mutex::new(HashMap::new()),
@@ -182,7 +182,7 @@ pub async fn connect(
 
 pub struct RemoteFs {
     connection_id: String,
-    sftp: SftpSession,
+    sftp: Arc<SftpSession>,
     runtime: Handle,
     _ssh: client::Handle<Verify>,
     forwards: Mutex<HashMap<String, Forward>>,
@@ -191,6 +191,11 @@ pub struct RemoteFs {
 struct RemoteTerminal {
     writer: Arc<russh::ChannelWriteHalf<client::Msg>>,
     task: tokio::task::JoinHandle<()>,
+    startup: Arc<Mutex<Option<ShellStartup>>>,
+}
+struct ShellStartup {
+    directory: String,
+    files: Vec<String>,
 }
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -221,55 +226,97 @@ impl RemoteFs {
     ) -> Result<String> {
         let integration = match marker {
             Some(marker) if marker.len() == 32 && marker.bytes().all(|b| b.is_ascii_hexdigit()) => {
-                self.login_shell()
-                    .await
-                    .and_then(|shell| crate::shell_integration::remote(&shell, marker))
+                let shell = self.login_shell().await;
+                if let Some(shell) = shell {
+                    match self.prepare_shell(&shell, marker).await {
+                        Ok(plan) => plan,
+                        Err(error) => {
+                            output(
+                                format!("[Shell integration unavailable: {error}]\r\n")
+                                    .into_bytes(),
+                            );
+                            None
+                        }
+                    }
+                } else {
+                    None
+                }
             }
             Some(_) => bail!("Invalid terminal integration marker"),
             None => None,
         };
-        let mut channel = self._ssh.channel_open_session().await?;
-        // Wait for the replies: sending a request alone does not mean the server accepted it.
-        channel
-            .request_pty(true, "xterm-256color", 100, 24, 0, 0, &[])
-            .await?;
-        async fn accepted(channel: &mut russh::Channel<client::Msg>) -> Result<()> {
-            tokio::time::timeout(Duration::from_secs(15), async {
-                loop {
-                    match channel.wait().await {
-                        Some(russh::ChannelMsg::Success) => return Ok(()),
-                        Some(russh::ChannelMsg::Failure) | None => {
-                            bail!("The SSH server denied an interactive shell or PTY")
+        let startup = Arc::new(Mutex::new(integration.as_ref().map(|(_, files)| {
+            ShellStartup {
+                directory: files.directory.clone(),
+                files: files.files.clone(),
+            }
+        })));
+        let opened = async {
+            let mut channel = self._ssh.channel_open_session().await?;
+            channel
+                .request_pty(true, "xterm-256color", 100, 24, 0, 0, &[])
+                .await?;
+            async fn accepted(channel: &mut russh::Channel<client::Msg>) -> Result<()> {
+                tokio::time::timeout(Duration::from_secs(15), async {
+                    loop {
+                        match channel.wait().await {
+                            Some(russh::ChannelMsg::Success) => return Ok(()),
+                            Some(russh::ChannelMsg::Failure) | None => {
+                                bail!("The SSH server denied an interactive shell or PTY")
+                            }
+                            _ => {}
                         }
-                        _ => {}
                     }
+                })
+                .await
+                .context("SSH shell request timed out")?
+            }
+            accepted(&mut channel).await?;
+            if let Some((command, _)) = &integration {
+                channel.exec(true, command.as_str()).await?;
+            } else {
+                channel.request_shell(true).await?;
+            }
+            accepted(&mut channel).await?;
+            Ok::<_, anyhow::Error>(channel)
+        }
+        .await;
+        let channel = match opened {
+            Ok(channel) => channel,
+            Err(error) => {
+                let files = { startup.lock().unwrap().take() };
+                if let Some(files) = files {
+                    Self::cleanup_shell(&self.sftp, files).await;
                 }
-            })
-            .await
-            .context("SSH shell request timed out")?
-        }
-        if let Err(e) = accepted(&mut channel).await {
-            let _ = channel.close().await;
-            return Err(e);
-        }
-        channel.request_shell(true).await?;
-        if let Err(e) = accepted(&mut channel).await {
-            let _ = channel.close().await;
-            return Err(e);
-        }
+                return Err(error);
+            }
+        };
         let (mut reader, writer) = channel.split();
         let writer = Arc::new(writer);
-        if let Some(script) = integration {
-            // This is a newly opened shell; user keystrokes cannot be sent until
-            // the open request returns. No existing terminal is modified.
-            writer.data_bytes(script.into_bytes()).await?;
-        }
+        let cleanup = startup.clone();
+        let sftp = self.sftp.clone();
+        let prompt = marker.map(|value| format!("\x1b]633;SC:{value}:").into_bytes());
         let close_writer = writer.clone();
         let task = tokio::spawn(async move {
+            let mut tail = Vec::new();
             while let Some(message) = reader.wait().await {
                 match message {
                     russh::ChannelMsg::Data { data }
-                    | russh::ChannelMsg::ExtendedData { data, .. } => output(data.to_vec()),
+                    | russh::ChannelMsg::ExtendedData { data, .. } => {
+                        output(data.to_vec());
+                        if let Some(prefix) = &prompt {
+                            tail.extend_from_slice(&data);
+                            if tail.windows(prefix.len()).any(|window| window == prefix) {
+                                let files = { cleanup.lock().unwrap().take() };
+                                if let Some(files) = files {
+                                    Self::cleanup_shell(&sftp, files).await;
+                                }
+                            }
+                            if tail.len() > prefix.len() {
+                                tail.drain(..tail.len() - prefix.len());
+                            }
+                        }
+                    }
                     russh::ChannelMsg::ExitStatus { exit_status } => {
                         output(format!("\r\n[SSH shell exited: {exit_status}]\r\n").into_bytes());
                     }
@@ -278,13 +325,84 @@ impl RemoteFs {
                 }
             }
             let _ = close_writer.close().await;
+            let files = { cleanup.lock().unwrap().take() };
+            if let Some(files) = files {
+                Self::cleanup_shell(&sftp, files).await;
+            }
         });
         let id = uuid::Uuid::new_v4().to_string();
-        self.terminals
-            .lock()
-            .unwrap()
-            .insert(id.clone(), RemoteTerminal { writer, task });
+        self.terminals.lock().unwrap().insert(
+            id.clone(),
+            RemoteTerminal {
+                writer,
+                task,
+                startup,
+            },
+        );
         Ok(id)
+    }
+
+    async fn prepare_shell(
+        &self,
+        shell: &str,
+        marker: &str,
+    ) -> Result<Option<(String, ShellStartup)>> {
+        let home = self.sftp.canonicalize(".").await?;
+        let directory = format!(
+            "{}/.supercommander-shell-{}",
+            home.trim_end_matches('/'),
+            uuid::Uuid::new_v4()
+        );
+        let Some(plan) = crate::shell_integration::remote(shell, marker, &directory) else {
+            return Ok(None);
+        };
+        self.sftp.create_dir(&directory).await?;
+        let files = ShellStartup {
+            directory: directory.clone(),
+            files: plan.files.iter().map(|(name, _)| name.clone()).collect(),
+        };
+        let result = async {
+            self.sftp
+                .set_metadata(
+                    &directory,
+                    russh_sftp::client::fs::Metadata {
+                        permissions: Some(0o700),
+                        ..Default::default()
+                    },
+                )
+                .await?;
+            for (name, contents) in plan.files {
+                let mut file = self
+                    .sftp
+                    .open_with_flags_and_attributes(
+                        format!("{directory}/{name}"),
+                        OpenFlags::CREATE | OpenFlags::EXCLUDE | OpenFlags::WRITE,
+                        russh_sftp::protocol::FileAttributes {
+                            permissions: Some(0o600),
+                            ..Default::default()
+                        },
+                    )
+                    .await?;
+                file.write_all(contents.as_bytes()).await?;
+                file.shutdown().await?;
+            }
+            Ok::<_, anyhow::Error>(())
+        }
+        .await;
+        if let Err(error) = result {
+            Self::cleanup_shell(&self.sftp, files).await;
+            return Err(error);
+        }
+        Ok(Some((plan.command, files)))
+    }
+
+    async fn cleanup_shell(sftp: &SftpSession, files: ShellStartup) {
+        for name in files.files {
+            let _ = sftp
+                .remove_file(format!("{}/{name}", files.directory))
+                .await;
+        }
+        let _ = sftp.remove_dir(files.directory).await;
     }
 
     async fn login_shell(&self) -> Option<String> {
@@ -312,7 +430,10 @@ impl RemoteFs {
         .await
         .ok()??;
         let shell = std::str::from_utf8(&bytes).ok()?.trim();
-        Some(shell.rsplit('/').next()?.to_string())
+        if shell.is_empty() || shell.chars().any(char::is_control) {
+            return None;
+        }
+        Some(shell.to_string())
     }
     fn terminal_writer(&self, id: &str) -> Result<Arc<russh::ChannelWriteHalf<client::Msg>>> {
         self.terminals
@@ -337,6 +458,10 @@ impl RemoteFs {
         if let Some(session) = session {
             session.task.abort();
             let _ = session.writer.close().await;
+            let files = { session.startup.lock().unwrap().take() };
+            if let Some(files) = files {
+                Self::cleanup_shell(&self.sftp, files).await;
+            }
         }
         Ok(())
     }

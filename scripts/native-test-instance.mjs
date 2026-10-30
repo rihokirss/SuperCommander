@@ -156,7 +156,7 @@ export async function startNativeTest(name, executable) {
         { timeout: 30000 },
       )
       .toBe(2);
-    return { browser, page, root, close };
+    return { browser, page, root, close, child, exe };
   } catch (error) {
     console.error(`Native test startup: ${error}\n${output}`);
     await close();

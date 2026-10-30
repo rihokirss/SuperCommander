@@ -10,8 +10,8 @@ use tauri::{WebviewWindow, WindowEvent};
 use windows_sys::Win32::{
     Foundation::{HWND, RECT},
     UI::WindowsAndMessaging::{
-        GetWindowPlacement, SetWindowPlacement, ShowWindow, SW_HIDE, SW_SHOWMAXIMIZED,
-        SW_SHOWMINIMIZED, SW_SHOWNORMAL, WINDOWPLACEMENT,
+        GetWindowPlacement, SetWindowPlacement, SW_HIDE, SW_SHOWMAXIMIZED, SW_SHOWMINIMIZED,
+        WINDOWPLACEMENT,
     },
 };
 
@@ -140,20 +140,11 @@ pub fn install(window: &WebviewWindow) -> bool {
 }
 
 pub fn show(window: &WebviewWindow, maximized: bool) {
-    if let Ok(hwnd) = window.hwnd() {
-        // SAFETY: hwnd belongs to the live application window; its placement
-        // and visual appearance have already been restored while hidden.
-        unsafe {
-            ShowWindow(
-                hwnd.0 as HWND,
-                if maximized {
-                    SW_SHOWMAXIMIZED
-                } else {
-                    SW_SHOWNORMAL
-                },
-            );
-        }
-    } else {
-        let _ = window.show();
+    // Keep Tauri's visibility flags in sync with Win32. A direct ShowWindow
+    // leaves the runtime believing this window is hidden, so minimizing it
+    // later removes WS_VISIBLE and its taskbar button.
+    if maximized {
+        let _ = window.maximize();
     }
+    let _ = window.show();
 }

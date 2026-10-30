@@ -40,6 +40,8 @@ try {
   await left.getByRole("grid").focus();
   await page.keyboard.press("Control+Backquote");
   await expect(visible().locator(".terminal-sync-status")).toHaveCount(0, { timeout: 30000 });
+  await expect(visible().locator(".xterm-rows")).not.toContainText("__sc_prompt");
+  await expect(visible().locator(".xterm-rows")).not.toContainText("SC_INIT_");
   await expectCwd(fixture.path, "SC_REMOTE_ROOT");
   const remoteTab = await visible().getAttribute("data-terminal-id");
   await page.locator('[data-pane="1"] .file-grid').focus();

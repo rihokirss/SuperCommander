@@ -1,11 +1,5 @@
-__sc_initial=1
-__sc_was_ignore_space=$options[histignorespace]
-setopt HIST_IGNORE_SPACE
 __sc_prompt() {
     local __sc_status=$?
-    if [[ $__sc_initial == 1 ]]; then __sc_initial=0; return "$__sc_status"; fi
-    if [[ $__sc_was_ignore_space == off ]]; then unsetopt HIST_IGNORE_SPACE; fi
-    unset __sc_was_ignore_space
     printf '\033]633;SC:__SC_MARKER__:%s\007' "$(printf %s "$PWD" | base64 | tr -d '\n')"
     return "$__sc_status"
 }

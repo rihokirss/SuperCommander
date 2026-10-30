@@ -1,6 +1,6 @@
 [package]
 name = "supercommander"
-version = "0.4.5"
+version = "0.4.6"
 edition = "2021"
 
 [build-dependencies]
@@ -23,3 +23,4 @@ windows-registry = "0.6"
 sha2 = "0.11"
 tempfile = "3"
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_System_Diagnostics_ToolHelp", "Win32_System_Threading"] }
+tauri-plugin-single-instance = "2"

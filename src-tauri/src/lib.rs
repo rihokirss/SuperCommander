@@ -1218,7 +1218,31 @@ async fn open_file(path: String, edit: bool) -> Reply<()> {
 }
 
 pub fn run() {
-    let app = tauri::Builder::default()
+    let mut context = tauri::generate_context!();
+    #[cfg(windows)]
+    if let Some(directory) = std::env::var_os("SUPERCOMMANDER_DATA_DIR") {
+        use sha2::{Digest, Sha256};
+        let path = std::path::PathBuf::from(directory);
+        let name = path.to_string_lossy().replace('/', "\\").to_lowercase();
+        let digest = Sha256::digest(name.as_bytes());
+        let digest = digest
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>();
+        // Independent settings profiles (including native tests) have their
+        // own instance lock and never activate the user's normal app.
+        context.config_mut().identifier = format!("ee.supercommander.desktop.profile.{digest}");
+    }
+    let builder = tauri::Builder::default();
+    #[cfg(windows)]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _, _| {
+        if let Some(window) = app.get_webview_window("main") {
+            let _ = window.show();
+            let _ = window.unminimize();
+            let _ = window.set_focus();
+        }
+    }));
+    let app = builder
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             let sources = Arc::new(Sources::default());
@@ -1315,7 +1339,7 @@ pub fn run() {
             watch_directory,
             open_file
         ])
-        .build(tauri::generate_context!())
+        .build(context)
         .expect("Could not start SuperCommander");
     app.run(|handle, event| {
         if let tauri::RunEvent::Exit = event {

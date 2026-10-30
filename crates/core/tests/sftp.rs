@@ -762,6 +762,19 @@ async fn remote_terminal_prompt_markers_follow_the_real_shell() {
     })
     .await
     .expect("interactive shell did not emit its prompt marker");
+    let startup_output = String::from_utf8_lossy(&output.lock().unwrap()).into_owned();
+    assert!(
+        !startup_output.contains("__sc_prompt"),
+        "startup script was echoed"
+    );
+    assert!(
+        !startup_output.contains("SC_INIT_"),
+        "initialization was typed into the shell"
+    );
+    assert!(
+        !startup_output.contains("supercommander-shell-"),
+        "startup file command was echoed"
+    );
     let initial = count();
     fs.write_terminal(
         &shell,
