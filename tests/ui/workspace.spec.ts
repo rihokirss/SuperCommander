@@ -137,6 +137,20 @@ test("terminal tabs keep independent sessions when switching or closing", async 
   await page.keyboard.press("Control+Shift+Backquote");
   await expect(page.locator(".terminal-panel")).toHaveCount(2);
 });
+test("Tab keeps alternating file panes with a docked terminal open", async ({ page }) => {
+  await page.keyboard.press("Control+j");
+  const terminal = page.locator(".terminal-panel:visible");
+  await expect(terminal).toBeVisible();
+  const id = await terminal.getAttribute("data-terminal-id");
+  await page.locator('[data-pane="0"] .file-grid').focus();
+  for (let index = 0; index < 8; index++) {
+    await page.keyboard.press(index % 2 ? "Shift+Tab" : "Tab");
+    const pane = page.locator(`[data-pane="${1 - index % 2}"]`);
+    await expect(pane).toHaveClass(/active/);
+    await expect(pane.getByRole("grid")).toBeFocused();
+    await expect(terminal).toHaveAttribute("data-terminal-id", id!);
+  }
+});
 test("docked terminal can be resized and keeps its height", async ({
   page,
 }) => {

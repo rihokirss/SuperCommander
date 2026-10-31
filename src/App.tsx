@@ -175,6 +175,7 @@ export function App() {
   const terminalsRef = useRef(terminals);
   terminalsRef.current = terminals;
   const [terminalActive, setTerminalActive] = useState<string>();
+  const [terminalFocus, setTerminalFocus] = useState<{ id: string; request: number }>();
   const terminalActiveRef = useRef(terminalActive);
   terminalActiveRef.current = terminalActive;
   const [terminalView, setTerminalView] = useState<
@@ -1243,7 +1244,10 @@ export function App() {
       v === "docked" && selected === terminalActive ? "hidden" : "docked",
     );
   }
-  function ensureTerminal(createNew = false) {
+  function focusTerminal(id: string) {
+    setTerminalFocus((previous) => ({ id, request: (previous?.request || 0) + 1 }));
+  }
+  function ensureTerminal(createNew = false, focus = true) {
     if (!terminalLocation) return;
     const location = terminalLocation;
     const profile = [
@@ -1271,6 +1275,7 @@ export function App() {
     }
     terminalActiveRef.current = selected.id;
     setTerminalActive(selected.id);
+    if (focus) focusTerminal(selected.id);
     return selected.id;
   }
   function closeTerminal(id: string) {
@@ -1285,6 +1290,7 @@ export function App() {
       terminalActiveRef.current = nextId;
       setTerminalActive(nextId);
       if (!nextId) setTerminalView("hidden");
+      else focusTerminal(nextId);
     }
   }
   function toggleFullTerminal() {
@@ -1296,6 +1302,7 @@ export function App() {
             .querySelector<HTMLElement>(`[data-pane="${active}"] .file-grid`)
             ?.focus(),
         );
+      else if (terminalActiveRef.current) focusTerminal(terminalActiveRef.current);
       return;
     }
     if (!ensureTerminal()) return;
@@ -1307,7 +1314,7 @@ export function App() {
     const selected = terminalsRef.current.find(
       (tab) => tab.id === terminalActiveRef.current,
     );
-    if (selected?.source !== terminalLocation.source) ensureTerminal();
+    if (selected?.source !== terminalLocation.source) ensureTerminal(false, false);
   }, [terminalLocation?.source, terminalView]);
   function bookmarkFor(index = active): Bookmark | null {
     const location = locationAt(index);
@@ -2631,9 +2638,11 @@ export function App() {
               }
               tabs={terminals}
               activeTab={terminal.id}
-              onSelectTab={(id) => {
+              focusRequest={terminalFocus?.id === terminal.id ? terminalFocus.request : null}
+              onSelectTab={(id, focus = true) => {
                 terminalActiveRef.current = id;
                 setTerminalActive(id);
+                if (focus) focusTerminal(id);
               }}
               onNewTab={() => ensureTerminal(true)}
               onCloseTab={closeTerminal}

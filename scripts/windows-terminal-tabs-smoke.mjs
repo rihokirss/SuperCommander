@@ -2,7 +2,7 @@
 import { expect } from "@playwright/test";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { startNativeTest } from "./native-test-instance.mjs";
+import { holdNativeCommand, startNativeTest } from "./native-test-instance.mjs";
 
 const instance = await startNativeTest("terminal-tabs", process.argv[2]);
 const { page, root } = instance;
@@ -36,9 +36,25 @@ try {
   const left = page.locator('[data-pane="0"]');
   await expect(left.getByText("First folder", { exact: true })).toBeVisible();
   await left.getByRole("grid").focus();
+  // Slow shell startup must not reclaim focus after Tab selects a file pane.
+  const opening = await holdNativeCommand(page, "terminal_open");
   await page.keyboard.press("Control+j");
+  await opening.entered();
+  await expect(visible().locator(".xterm-helper-textarea")).toBeFocused();
+  await left.getByRole("grid").focus();
+  for (let index = 0; index < 6; index++) {
+    await page.keyboard.press("Tab");
+    await expect(page.locator(`[data-pane="${1 - index % 2}"] .file-grid`)).toBeFocused();
+  }
+  await opening.release();
   await expect(visible().locator(".xterm-rows")).toContainText("PS ", { timeout: 30000 });
   await expect(visible().locator(".terminal-sync-status")).toHaveCount(0, { timeout: 30000 });
+  await expect(left.getByRole("grid")).toBeFocused();
+  for (let index = 0; index < 6; index++) {
+    await page.keyboard.press(index % 2 ? "Shift+Tab" : "Tab");
+    await expect(page.locator(`[data-pane="${1 - index % 2}"] .file-grid`)).toBeFocused();
+  }
+  console.log("PASS Tab stays between file panes while the docked shell starts and after it is ready");
   await expectCwd(root, "SC_INITIAL");
   const initialTab = await visible().getAttribute("data-terminal-id");
   await visible().locator(".xterm-helper-textarea").focus();

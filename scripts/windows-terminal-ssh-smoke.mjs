@@ -47,10 +47,22 @@ try {
   await expect(visible().locator(".xterm-rows")).toContainText("SC_CACHE_PRIVATE_OK");
 
   const remoteTab = await visible().getAttribute("data-terminal-id");
+  const remoteSource = await visible().getAttribute("data-terminal-source");
   await page.locator('[data-pane="1"] .file-grid').focus();
   await expect(visible()).toHaveAttribute("data-terminal-source", "local", { timeout: 30000 });
-  await left.getByRole("grid").focus();
+  await expect(visible().locator(".terminal-sync-status")).toHaveCount(0, { timeout: 30000 });
+  await expect(page.locator('[data-pane="1"] .file-grid')).toBeFocused();
+  for (let index = 0; index < 4; index++) {
+    const pane = index % 2;
+    await page.keyboard.press("Tab");
+    await expect(visible()).toHaveAttribute("data-terminal-source", pane === 0 ? remoteSource : "local", { timeout: 30000 });
+    await expect(visible().locator(".terminal-sync-status")).toHaveCount(0, { timeout: 30000 });
+    await expect(page.locator(`[data-pane="${pane}"] .file-grid`)).toBeFocused();
+  }
+  await page.keyboard.press("Tab");
+  await expect(left.getByRole("grid")).toBeFocused();
   await expect(visible()).toHaveAttribute("data-terminal-id", remoteTab, { timeout: 30000 });
+  console.log("PASS Tab keeps file-pane focus when switching between SSH and local shells");
   await left.getByText("First remote", { exact: true }).dblclick();
   await expect(visible().locator(".terminal-sync-status")).toHaveCount(0, { timeout: 30000 });
   await expect(visible().locator(".xterm-rows")).not.toContainText("cd -- '");

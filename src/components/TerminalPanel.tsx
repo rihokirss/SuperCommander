@@ -22,6 +22,7 @@ export function TerminalPanel({
   syncPath,
   tabs,
   activeTab,
+  focusRequest,
   onSelectTab,
   onNewTab,
   onCloseTab,
@@ -42,7 +43,8 @@ export function TerminalPanel({
   syncPath: string | null;
   tabs: TerminalTab[];
   activeTab: string;
-  onSelectTab: (id: string) => void;
+  focusRequest: number | null;
+  onSelectTab: (id: string, focus?: boolean) => void;
   onNewTab: () => void;
   onCloseTab: (id: string) => void;
   onDirectoryChange: (path: string) => void;
@@ -62,13 +64,12 @@ export function TerminalPanel({
   const [error, setError] = useState("");
   const [syncStatus, setSyncStatus] = useState<TerminalSyncStatus>("waiting");
   const instance = useRef<Terminal | null>(null);
+  const focusedRequest = useRef<number | null>(null);
   const sync = useRef<TerminalSync | null>(null);
   const target = useRef(syncPath);
   target.current = syncPath;
   const directoryChanged = useRef(onDirectoryChange);
   directoryChanged.current = onDirectoryChange;
-  const visible = useRef(!hidden);
-  visible.current = !hidden;
   function resize(height: number) {
     const section = panel.current;
     const pane =
@@ -207,7 +208,6 @@ export function TerminalPanel({
           send(pendingInput);
           pendingInput = "";
         }
-        if (visible.current) term.focus();
       })
       .catch((e) => {
         if (!disposed) setError(String(e));
@@ -264,8 +264,11 @@ export function TerminalPanel({
     sync.current?.setTarget(syncPath);
   }, [syncPath]);
   useEffect(() => {
-    if (!hidden) requestAnimationFrame(() => instance.current?.focus());
-  }, [hidden, fullscreen]);
+    // Apply each user focus request once; following a file pane is passive.
+    if (hidden || focusRequest === null || focusRequest === focusedRequest.current) return;
+    focusedRequest.current = focusRequest;
+    instance.current?.focus();
+  }, [hidden, focusRequest]);
   return (
     <section
       ref={panel}
@@ -355,7 +358,7 @@ export function TerminalPanel({
                           : (index + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) %
                             tabs.length;
                     const id = tabs[next].id;
-                    onSelectTab(id);
+                    onSelectTab(id, false);
                     requestAnimationFrame(() =>
                       requestAnimationFrame(() =>
                         document

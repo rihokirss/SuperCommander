@@ -6,11 +6,11 @@ Browse local drives, UNC paths, ZIP archives and SSH/SFTP servers. Work with fam
 
 ## Download
 
-The latest release is **[SuperCommander 0.4.7](https://github.com/rihokirss/SuperCommander/releases/tag/v0.4.7)**.
+The latest release is **[SuperCommander 0.4.8](https://github.com/rihokirss/SuperCommander/releases/tag/v0.4.8)**.
 
-- [Windows x64 installer](https://github.com/rihokirss/SuperCommander/releases/download/v0.4.7/SuperCommander_0.4.7_x64-setup.exe) — recommended.
-- [Portable Windows x64 executable](https://github.com/rihokirss/SuperCommander/releases/download/v0.4.7/SuperCommander_0.4.7_x64_portable.exe) — requires WebView2.
-- [SHA-256 checksums](https://github.com/rihokirss/SuperCommander/releases/download/v0.4.7/SHA256SUMS.txt).
+- [Windows x64 installer](https://github.com/rihokirss/SuperCommander/releases/download/v0.4.8/SuperCommander_0.4.8_x64-setup.exe) — recommended.
+- [Portable Windows x64 executable](https://github.com/rihokirss/SuperCommander/releases/download/v0.4.8/SuperCommander_0.4.8_x64_portable.exe) — requires WebView2.
+- [SHA-256 checksums](https://github.com/rihokirss/SuperCommander/releases/download/v0.4.8/SHA256SUMS.txt).
 
 ## Screenshots
 
@@ -80,7 +80,7 @@ npm run build:windows
 `cargo-xwin` downloads the Windows SDK and CRT. Outputs:
 
 - `target/x86_64-pc-windows-msvc/release/supercommander.exe`
-- `target/x86_64-pc-windows-msvc/release/bundle/nsis/SuperCommander_0.4.7_x64-setup.exe`
+- `target/x86_64-pc-windows-msvc/release/bundle/nsis/SuperCommander_0.4.8_x64-setup.exe`
 
 A successful cross-build does not replace testing the application on Windows.
 
@@ -99,7 +99,7 @@ F1 opens a category sidebar with global search and keyboard navigation.
 
 ![Categorized keyboard reference](docs/screenshots/shortcuts.png)
 
-Each pane has independent tabs, history, sorting and filtering. Click its location bar to enter a local path, UNC path, SSH URL or SSH config alias. Click selects a file; Ctrl-click toggles a mark and Shift-click selects a range. Drag between panes to copy, or hold Shift to move. Dragging from Explorer copies into the destination pane.
+Each pane has independent tabs, history, sorting and filtering. **Tab / Shift+Tab** alternate the two file panes even when the docked terminal is visible or still starting. Automatic terminal selection follows the pane without taking keyboard focus; opening or selecting a terminal explicitly focuses its input. Click its location bar to enter a local path, UNC path, SSH URL or SSH config alias. Click selects a file; Ctrl-click toggles a mark and Shift-click selects a range. Drag between panes to copy, or hold Shift to move. Dragging from Explorer copies into the destination pane.
 
 | Shortcut | Action |
 | --- | --- |
